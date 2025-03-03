@@ -103,7 +103,7 @@ class OpenRouter:
         return model
     
     def get_key(self):
-        return c.module('apikey')(module=self).get_key()
+        return c.module('apikey')().get_key()
 
     def authenticate(
         self,
@@ -123,6 +123,7 @@ class OpenRouter:
         """
         if api_key == None:
             api_key = self.get_key()
+            print('Using api key', api_key)
         self.client = openai.OpenAI(
             base_url=base_url,
             api_key=api_key,

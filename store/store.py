@@ -4,7 +4,8 @@ import commune as c
 import os
 
 class Store:
-    expose = ['put', 'get']
+    free = False
+    endpoints = ['put', 'get']
     def __init__(self, path='~/.commune/storage/'):
         self.path = os.path.abspath(os.path.expanduser(path))
     
@@ -13,6 +14,9 @@ class Store:
     
     def get_item_path(self, item):
         return self.resolve_path(item + '.json')
+
+    def get_amazon_items(self):
+        return [1,2,3,4]
 
     def put(self, k, v):
         k = self.get_item_path(k)
