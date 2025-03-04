@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any, Optional
 import bittensor as bt
 
-class SubtensorModule:
+class Bittensor:
     """Interface module for Subtensor network operations and wallet management"""
     
     def __init__(self, network: str = "finney"):
@@ -12,24 +12,14 @@ class SubtensorModule:
             network (str): Network to connect to (e.g. finney, test)
         """
         self.network = network
-        self.net = c.obj('bittensor.core.subtensor.Subtensor')(network=network)
+        self.subtensor = c.obj('bittensor.core.subtensor.Subtensor')(network=network)
         
-
-        self.get_all_subnets_info = self.net.get_all_subnets_info
-
-    def neurons(self, netuid=0, block=None) -> List[str]:
-        return self.net.neurons(netuid=netuid, block=block)
-    
-    
-
-    def subnets(self, block=None) -> List[str]:
-        return self.net.get_all_subnets_info(block=block)
     def wallets(self) -> List[str]:
         """List all available wallets
         Returns:
             List of wallet names
         """
-        return bt.wallet.wallets()
+        return 
     def create_wallet(self, name: str, hotkey: str = None) -> Dict:
         """Create a new wallet
         Args:

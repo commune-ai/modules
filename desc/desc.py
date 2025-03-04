@@ -16,6 +16,9 @@ class Desc:
     def resolve_path(self, path):
         return os.path.join(self.path, path)
 
+    def forward(self, module, fn , params,key):
+        return c.call(module + '/' + fn, params, key=key)
+
     def forward(self,   
                 module='store', 
                 task= 'summarize the following in the core pieces of info and ignore the rest',
