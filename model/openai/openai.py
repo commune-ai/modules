@@ -23,7 +23,6 @@ class OpenAILLM(c.Module):
         
 
         self.set_config(locals())
-        self.usage = c.module('model.openai.usage_tracker')(tokenizer=tokenizer, max_output_tokens=max_output_tokens, max_input_tokens=max_input_tokens)
         self.birth_time = c.time()
         self.set_api_key(api_key)
         self.set_prompt(prompt)
@@ -70,9 +69,7 @@ class OpenAILLM(c.Module):
                 **kwargs) -> str:
         
         t = c.time()
-
-        self.usage.register_tokens(prompt, mode='input')
-
+        
         openai.api_key = api_key or self.api_key
 
         params = dict(
@@ -96,12 +93,10 @@ class OpenAILLM(c.Module):
             def stream_response(response):
                 for r in response:
                     token = r.choices[choice_idx].delta.content
-                    self.usage.register_tokens(token, mode='output')
                     yield token
             return stream_response(response)
         else:
             output_text = response = response.choices[choice_idx].message.content
-            self.usage.register_tokens(output_text, mode='output')
             return output_text
 
     

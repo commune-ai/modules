@@ -5,7 +5,7 @@ import json
 class Agent:
     public_functions = ["generate", "info"]
     def __init__(self, 
-                 model='anthropic/claude-3.5-sonnet',
+                 model='anthropic/claude-3.7-sonnet:beta',
                  max_tokens=420000, 
                  prompt = 'The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.',
                 **kwargs):
