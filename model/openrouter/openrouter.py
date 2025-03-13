@@ -42,7 +42,7 @@ class OpenRouter:
         prompt: str =  None,
         system_prompt: str = None,
         stream: bool = False,
-        model:str = 'anthropic/claude-3.5-sonnet',
+        model:str = 'anthropic/claude-3.7-sonnet',
         max_tokens: int = 10000000,
         temperature: float = 1.0,
         **kwargs
@@ -102,8 +102,14 @@ class OpenRouter:
 
         return model
     
+    api_key_path = 'api/model.openrouter'
     def get_key(self):
-        return c.module('apikey')().get_key()
+        keys = c.get(self.api_key_path, [])
+        assert len(keys) > 0, 'No api key found'
+        return keys[0]
+    def add_key(self, key):
+        keys = c.get(self.api_key_path, [])
+        return c.module('apikey')().get()
 
     def authenticate(
         self,

@@ -1230,7 +1230,7 @@ class Subspace(c.Module):
         subnet = self.resolve_subnet(subnet)
         address = c.namespace().get(name, '0.0.0.0:8888')
         address = url if public else ('0.0.0.0:' + url.split(':')[-1])
-        module = self.get_module(key.ss58_url, subnet=subnet)
+        module = self.module(key.ss58_url, subnet=subnet)
         validator_weight_fee = validator_weight_fee or module.get('validator_weight_fee', 0)
         delegation_fee = delegation_fee or module.get('stake_delegation_fee', 0)
         params = {
@@ -2511,7 +2511,7 @@ class Subspace(c.Module):
                 for k in keys:
                     if k in address2key:
                         my_keys += [k]
-                modules = self.get_modules(my_keys, subnet=subnet)
+                modules = self.modules(my_keys, subnet=subnet)
                 for i,m in enumerate(modules):
                     if not 'name' in m:
                         continue
@@ -2692,11 +2692,11 @@ class Subspace(c.Module):
         keys = self.keys(subnet, max_age=max_age)
         return key.ss58_address in keys
     
-    def get_modules(self, keys, subnet=0, max_age=60):
-        futures = [ c.submit(self.get_module, kwargs=dict(module=k, subnet=subnet, max_age=max_age)) for k in keys]
+    def modules(self, keys, subnet=0, max_age=60):
+        futures = [ c.submit(self.module, kwargs=dict(module=k, subnet=subnet, max_age=max_age)) for k in keys]
         return c.wait(futures, timeout=30)
 
-    def get_module(self, 
+    def module(self, 
                    module, 
                    subnet=0,
                    fmt='j', 

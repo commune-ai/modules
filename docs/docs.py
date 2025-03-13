@@ -1,17 +1,26 @@
 import commune as c
 import os
 class Docs:
-    def forward(self, *question, 
+    def forward(self, module='module', 
                 model='anthropic/claude-3.5-sonnet', 
-                **kwargs ) -> int:
-        question = ' '.join(list(map(str, question)))
-        context = c.file2text(os.path.dirname(__file__) )
+                fmt='DICT(key=topic:str, value=data:str)', 
+                goal=" summarize the following into object level descriptions get the core functions of the modules and give some examples", 
+
+    **kwargs ) -> int:
+        context = c.code(module)
         prompt = f"""
-        QUESTION:
-            {question}
+        GOAL:
+            {goal}
         CONTEXT:
             {context}
+        OUTPUT:
+
         """
-        return c.ask(prompt, model=model, **kwargs)
+        output = ''
+        for ch in c.ask(prompt, model=model, process_text=False, **kwargs):
+            print(ch, end='')
+            output += ch
+        return output   
+
     
     

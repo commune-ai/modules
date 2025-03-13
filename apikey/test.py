@@ -35,7 +35,7 @@ class Test:
     def test_get_key(self):
         test_keys = ['key1', 'key2']
         self.api.set_keys(test_keys)
-        key = self.api.get_key()
+        key = self.api.get()
         assert key in test_keys
 
     def test_get_api_path(self):

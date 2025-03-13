@@ -14,11 +14,59 @@ class Agent:
         self.prompt = prompt
         self.model = c.module('model.openrouter')(model=model, **kwargs)
 
-    def forward(self, text = 'whats 2+2?' ,  temperature= 0.5, max_tokens= 1000000, stream=True , process_text=True, **kwargs):
+    def forward(self, text = 'whats 2+2?' ,  
+                    temperature= 0.5,
+                    max_tokens= 1000000, 
+                    stream=True , 
+                    process_text=True, **kwargs):
         text = self.process_text(text) if process_text else text
         return self.model.forward(text, stream=stream,max_tokens=max_tokens,temperature=temperature,  **kwargs)
 
 
+
+    def verifyfn(self, fn='module/ls'):
+        code = c.code(fn)
+        prompt = {
+            'goal': 'make the params from the following  and respond in JSON format as kwargs to the function and make sure the params are legit',
+            'code': code, 
+            'output_format': '<JSON_START>DICT(params:dict)</JSON_END>',
+        }
+        response =  c.ask(prompt, process_text=False)
+        output = ''
+        for ch in response:
+            print(ch, end='')
+            output += ch
+            if '</JSON_END>' in output:
+                break
+        params_str = output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip()
+        params = json.loads(params_str)['params']
+
+        result =  c.fn(fn)(**params)
+
+        ## SCORE THE RESULT
+        prompt = {
+            'goal': '''score the code given the result, params 
+            and code out of 100 if the result is indeed the result of the code
+            make sure to only respond in the output format''',
+            'code': code, 
+            'result': result,
+            'params': params,
+            'output_format': '<JSON_START>DICT(score:int, feedback:str, suggestions=List[dict(improvement:str, delta:int)]</JSON_END>',
+        }
+
+        response =  c.ask(prompt, process_text=False)
+
+        output = ''
+        for ch in response:
+            print(ch, end='')
+            output += ch
+            if '</JSON_END>' in output:
+                break
+            
+        return json.loads(output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip())
+
+
+    
     def generate(self, text, **kwargs):
         return self.forward(text, **kwargs)
 
@@ -240,9 +288,6 @@ class Agent:
     def edit(self, *args, **kwargs):
         return c.module('edit')().forward(*args, **kwargs)
 
-    def api_key(self, module):
-        return c.module('apikey')(module=module).get_key()
-
     def plan(self, text, *extra_text, path='./', run=False, **kwargs):
         text = text + ' '.join(list(map(str, extra_text)))
         anchors= ['<START_OUTPUT>','<END_OUTPUT>']
@@ -271,6 +316,7 @@ class Agent:
         plan =  json.loads(output.split(anchors[0])[1].split(anchors[1])[0])
 
         if run:
+            c.print(plan)
             input_response = input(f'Run plan? (y/n): {plan}')
             if input_response.lower() in ['y', 'yes']:
                 for p in plan:
@@ -278,3 +324,4 @@ class Agent:
                     c.cmd(p['cmd'])
 
         return plan
+

@@ -1,5 +1,6 @@
 import commune as c
-
+import anthropic
+            
 class Anthropic(c.Module):
     """
     Anthropic module for managing Claude API interactions within the commune framework
@@ -21,7 +22,7 @@ class Anthropic(c.Module):
         self.set_config(locals())
         self.api_key = api_key or c.get_api_key('anthropic')
         
-    def call(self, 
+    def forward(self, 
              prompt: str,
              system: str = None,
              stream: bool = False,
@@ -39,8 +40,7 @@ class Anthropic(c.Module):
         """
         try:
             # Import anthropic here to avoid dependency issues
-            import anthropic
-            
+
             client = anthropic.Anthropic(api_key=self.api_key)
             
             message = client.messages.create(
@@ -67,13 +67,13 @@ class Anthropic(c.Module):
             return message.content[0].text
             
         except Exception as e:
-            c.print(f"Error calling Anthropic API: {str(e)}")
+            c.print(f"Error forwarding Anthropic API: {str(e)}")
             return str(e)
             
     def test(self):
         """Test the Anthropic module"""
         prompt = "Write a haiku about AI"
-        response = self.call(prompt)
+        response = self.forward(prompt)
         c.print(f"Prompt: {prompt}")
         c.print(f"Response: {response}")
         return response

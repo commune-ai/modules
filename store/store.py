@@ -6,28 +6,25 @@ import os
 class Store:
     free = False
     endpoints = ['put', 'get']
-    def __init__(self, path='~/.commune/storage/'):
+    def __init__(self, path='~/.commune/module/'):
         self.path = os.path.abspath(os.path.expanduser(path))
     
     def resolve_path(self, path):
         return c.resolve_path(self.path + path)
     
-    def get_item_path(self, item):
+    def item_path(self, item):
         return self.resolve_path(item + '.json')
 
-    def get_amazon_items(self):
-        return [1,2,3,4]
-
     def put(self, k, v):
-        k = self.get_item_path(k)
+        k = self.item_path(k)
         return c.put_json(k, v)
 
     def get(self, k):
-        k = self.get_item_path(k)
+        k = self.item_path(k)
         return c.get_json(k)
 
     def rm(self, k):
-        k = self.get_item_path(k)
+        k = self.item_path(k)
         return c.rm(k)
 
     def ls(self, path = './'):
@@ -52,4 +49,5 @@ class Store:
         return {
             'status': 'pass'
         }
+
 
