@@ -98,10 +98,6 @@ class OpenAILLM(c.Module):
         else:
             output_text = response = response.choices[choice_idx].message.content
             return output_text
-
-    
-    
-
     
     
     _stats = None

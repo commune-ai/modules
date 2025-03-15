@@ -11,6 +11,7 @@ class OpenRouter:
         api_key = None,
         base_url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
+        prompt:str=None,
         max_retries: int = 10,
         **kwargs
     ):
@@ -25,16 +26,15 @@ class OpenRouter:
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
         """
 
-        self.prompt = None
-
-        self.authenticate(
-            api_key=api_key,
+        self.client = openai.OpenAI(
             base_url=base_url,
+            api_key=api_key or self.get_key(),
             timeout=timeout,
             max_retries=max_retries,
         )
+        self.prompt = prompt
 
-    def generate(
+    def forward(
         self,
         message: str,
         *extra_text , 
@@ -85,8 +85,7 @@ class OpenRouter:
         else:
             return result.choices[0].message.content
         
-    forward = generate
-
+    generate = forward
 
     def resolve_model(self, model=None):
         models =  self.models()
@@ -105,39 +104,18 @@ class OpenRouter:
     api_key_path = 'api/model.openrouter'
     def get_key(self):
         keys = c.get(self.api_key_path, [])
-        assert len(keys) > 0, 'No api key found'
-        return keys[0]
-    def add_key(self, key):
-        keys = c.get(self.api_key_path, [])
-        return c.module('apikey')().get()
+        if len(keys) > 0:
+            return keys[0]
+        else:
+            return 'password'
 
-    def authenticate(
-        self,
-        api_key: str = None,
-        base_url: None = None,
-        timeout: float = None,
-        max_retries: int = 5,
-    ) -> 'OpenAI':
-        """
-        Authenticate the client with the provided API key, timeout, and max retries.
+    @classmethod
+    def add_key(cls, key):
+        keys = c.get(cls.api_key_path, [])
+        keys.append(key)
+        c.put(cls.api_key_path, keys)
+        return keys
 
-        Args:
-            api_key (str): The API key for authentication.
-            timeout (float, optional): The timeout value for the client. Defaults to None.
-            max_retries (int, optional): The maximum number of retries for the client. Defaults to 0.
-
-        """
-        if api_key == None:
-            api_key = self.get_key()
-            print('Using api key', api_key)
-        self.client = openai.OpenAI(
-            base_url=base_url,
-            api_key=api_key,
-            timeout=timeout,
-            max_retries=max_retries,
-        )
-        return {"status": "success", "base_url": base_url}
-    
 
     @staticmethod
     def resolve_path(path):
@@ -180,11 +158,10 @@ class OpenRouter:
         models = [m for m in models if any([s in m['id'] for s in search])]
         return [m for m in models]
     
-    def pricing(self, search: str = None , **kwargs):
+    def pricing(self, search: str = None , ascending=False, sortby='completion',  **kwargs):
         pricing =  [{'name': k , **v['pricing']} for k,v in self.model2info(search=search, **kwargs).items()]
-        return c.df(pricing).sort_values('completion', ascending=False)
+        return c.df(pricing).sort_values(sortby, ascending=ascending)
     
-
     def test(self):
         response  =  self.forward('Hello, how are you?', stream=False)
         print(response)

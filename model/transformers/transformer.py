@@ -27,12 +27,8 @@ class Transformer( nn.Module, c.Module):
                 state_path = None,
                 **kwargs
                 ):
-        
-
-
-        self.state_path = self.resolve_path(state_path or model)
-        
         nn.Module.__init__(self)
+        self.state_path = self.resolve_path(state_path or model)
         self.model = AutoModelForCausalLM.from_pretrained(model)  
         self.tokenizer =  tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         self.optimizer = c.obj(optimizer) (self.model.parameters(), lr=lr)
@@ -221,9 +217,6 @@ class Transformer( nn.Module, c.Module):
         output_text = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
         return output_text
-
-
-
 
     def loss( self, pred:torch.Tensor,
                        gt:torch.Tensor = None,
