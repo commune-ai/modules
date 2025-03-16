@@ -5,7 +5,7 @@ import openai
 import commune as c
 
 class OpenRouter:
-
+    api_key_path = 'api/openrouter' # path to store api keys (relative to storage_path)
     def __init__(
         self,
         api_key = None,
@@ -25,9 +25,9 @@ class OpenRouter:
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
         """
-
+        self.base_url = base_url
         self.client = openai.OpenAI(
-            base_url=base_url,
+            base_url=self.base_url,
             api_key=api_key or self.get_key(),
             timeout=timeout,
             max_retries=max_retries,
@@ -100,22 +100,29 @@ class OpenRouter:
             model = models[0]
 
         return model
-    
-    api_key_path = 'api/model.openrouter'
+
     def get_key(self):
+        """
+        get the api keys
+        """
         keys = c.get(self.api_key_path, [])
         if len(keys) > 0:
-            return keys[0]
+            return c.choice(keys)
         else:
             return 'password'
 
-    @classmethod
-    def add_key(cls, key):
-        keys = c.get(cls.api_key_path, [])
-        keys.append(key)
-        c.put(cls.api_key_path, keys)
-        return keys
+    def keys(self):
+        """
+        Get the list of API keys
+        """
+        return c.get(self.api_key_path, [])
 
+    def add_key(self, key):
+        keys = c.get(self.api_key_path, [])
+        keys.append(key)
+        keys = list(set(keys))
+        c.put(self.api_key_path, keys)
+        return keys
 
     @staticmethod
     def resolve_path(path):
@@ -126,8 +133,7 @@ class OpenRouter:
         models = c.get(path, default={}, max_age=max_age, update=update)
         if len(models) == 0:
             print('Updating models...')
-            url = 'https://openrouter.ai/api/v1/models'
-            response = requests.get(url)
+            response = requests.get(self.base_url + '/models')
             models = json.loads(response.text)['data']
             c.put(path, models)
         models = self.filter_models(models, search=search)

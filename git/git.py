@@ -8,16 +8,20 @@ import re
 class git(c.Module):
 
     def __init__(self, repo_url='commune-ai/commune'):
-        self.repo_url = repo_url
         self.api_base = "https://api.github.com"
-        self.repo_path = self._get_repo_path()
+        prefix = 'https://github.com/'
+        self.repo_path =  repo_url if repo_url.startswith(prefix) else f'{prefix}{repo_url}'
+        self.repo_name = self.repo_path.split('/')[-1].split('.')[0]
+        self.repo_owner = self.repo_path.split('/')[-2]
+        self.repo_url = f'{prefix}{self.repo_owner}/{self.repo_name}'
+
     def is_repo(self, lib_path:str ):
         # has the .git folder
         return c.cmd(f'ls -a {lib_path}').count('.git') > 0
 
     @staticmethod
     def clone(repo_url:str, target_directory:str = None, branch=None):
-        prefix = 'https://github.com/'
+        
         if not repo_url.startswith(prefix):
             repo_url = f'{prefix}{repo_url}'
 
@@ -143,10 +147,6 @@ class git(c.Module):
         return c.module('web')().page_content(url)["links"]
     
         
-    def _get_repo_path(self):
-        """Extract repository path from URL"""
-        return "/".join(self.repo_url.split("github.com/")[1].split("/"))
-
     def get_file_content(self, path):
         """Get content of a specific file"""
         url = f"{self.api_base}/repos/{self.repo_path}/contents/{path}"
@@ -214,3 +214,9 @@ class git(c.Module):
             print(f"\nFile: {file_path}")
             print("Processed content:")
             print(processed_content[:200] + "..." if processed_content else "No content")
+
+
+    def diff(self, path:str = None):
+        if path == None:
+            path = c.lib_path
+        return c.cmd('git diff', verbose=False, cwd=path)

@@ -29,7 +29,7 @@ class Reduce:
         for file in c.files(path):
             try:
                 file2text[file] = c.text(file)
-                future = c.c submit(self.forward, {'text': c.text(file), 'model': model, 'timeout': 10})
+                future = c.submit(self.forward, {'text': c.text(file), 'model': model, 'timeout': 10})
             except Exception as e:
                 print(f"Error processing {file}: {c.detailed_error(e)}")
                 continue

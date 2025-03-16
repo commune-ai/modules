@@ -20,6 +20,37 @@ class Bittensor:
             List of wallet names
         """
         return 
+
+    def neurons(self, netuid=2) -> List[str]:
+        """List all available neurons
+        Returns:
+            List of neuron names
+        """
+        return self.subtensor.neurons(netuid=netuid)
+
+    def neurons(self, netuid=2) -> List[str]:
+        """List all available neurons
+        Returns:
+            List of neuron names
+        """
+        return self.subtensor.neurons(netuid=netuid)
+
+    def subnet(self, netuid=2, block=None) -> Dict:
+        """Get subnet information
+        Args:
+            netuid (int): Network UID
+        Returns:
+            Subnet information dictionary
+        """
+        return self.subtensor.subnet(netuid=netuid)
+
+
+    def n(self, netuid=1) -> List[str]:
+        """List all available neurons
+        Returns:
+            List of neuron names
+        """
+        return len(self.neurons(netuid=netuid))
     def create_wallet(self, name: str, hotkey: str = None) -> Dict:
         """Create a new wallet
         Args:
@@ -76,15 +107,3 @@ class Bittensor:
             dest=dest_address,
             amount=amount
         )
-    def get_network_info(self) -> Dict:
-        """Get current network information
-        Returns:
-            Dictionary with network stats
-        """
-        return {
-            'block_number': self.subtensor.get_current_block(),
-            'difficulty': self.subtensor.difficulty,
-            'total_stake': self.subtensor.total_stake,
-            'total_issuance': self.subtensor.total_issuance,
-            'registrations_per_block': self.subtensor.registrations_per_block
-        }
