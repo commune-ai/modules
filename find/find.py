@@ -7,7 +7,6 @@ import json
 import os
 
 class Find:
-    model='anthropic/claude-3.5-sonnet'
 
     def forward(self,  
               options: list[str] = [],  
@@ -17,8 +16,8 @@ class Find:
               min_score=0,
               max_score=9,
               threshold=5,
-              context = None,
-              model=None):
+              model='anthropic/claude-3.5-sonnet',
+              context = None):
 
         model = model or self.model
         if trials > 0 :
@@ -70,24 +69,6 @@ class Find:
         output = [idx2options[idx] for idx, score in output['data'] if score >= threshold]
         return output
 
-        
-    @classmethod
-    def lines(self,  search:str=None, path:str='./') -> list[str]:
-        """
-        Finds the lines in text with search
-        """
-        # if is a directory, get all files
-        file2lines = {}
-        for file, text in c.file2text(path).items():
-            found_lines = []
-            lines = text.split('\n')
-            idx2line = {idx:line for idx, line in enumerate(lines)}
-            for idx, line in idx2line.items():
-                if search in line:
-                    found_lines.append((idx, line))
-            file2lines[file] = found_lines
-        return file2lines
-
     def files(self,
               query='the file that is the core of this folder',
                path='./',  
@@ -96,6 +77,9 @@ class Find:
         model = model or self.model
         options = self.forward(options=c.files(path), query=query, n=n, model=model)
         return options
+
+
+        
 
     def modules(self,  query='', **kwargs): 
         return self.forward(options=c.get_modules(), query=query,**kwargs)

@@ -25,56 +25,11 @@ class Agent:
     def forward(self, text = 'whats 2+2?' ,  
                     temperature= 0.5,
                     max_tokens= 1000000, 
-                    stream=True , 
-                    process_text=True, **kwargs):
+                    process_text=True,
+                    stream=True ,**kwargs):
         text = self.process_text(text) if process_text else text
         return self.model.forward(text, stream=stream,max_tokens=max_tokens,temperature=temperature,  **kwargs)
 
-
-
-    def verifyfn(self, fn='module/ls'):
-        code = c.code(fn)
-        prompt = {
-            'goal': 'make the params from the following  and respond in JSON format as kwargs to the function and make sure the params are legit',
-            'code': code, 
-            'output_format': '<JSON_START>DICT(params:dict)</JSON_END>',
-        }
-        response =  c.ask(prompt, process_text=False)
-        output = ''
-        for ch in response:
-            print(ch, end='')
-            output += ch
-            if '</JSON_END>' in output:
-                break
-        params_str = output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip()
-        params = json.loads(params_str)['params']
-
-        result =  c.fn(fn)(**params)
-
-        ## SCORE THE RESULT
-        prompt = {
-            'goal': '''score the code given the result, params 
-            and code out of 100 if the result is indeed the result of the code
-            make sure to only respond in the output format''',
-            'code': code, 
-            'result': result,
-            'params': params,
-            'output_format': '<JSON_START>DICT(score:int, feedback:str, suggestions=List[dict(improvement:str, delta:int)]</JSON_END>',
-        }
-
-        response =  c.ask(prompt, process_text=False)
-
-        output = ''
-        for ch in response:
-            print(ch, end='')
-            output += ch
-            if '</JSON_END>' in output:
-                break
-            
-        return json.loads(output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip())
-
-
-    
     def generate(self, text, **kwargs):
         return self.forward(text, **kwargs)
 
@@ -120,48 +75,30 @@ class Agent:
     
     def process_text(self, text, threshold=1000):
         new_text = ''
-
         is_function_running = False
         words = text.split(' ')
-        condition2fn = {
-            "file": c.file2text,
-            "text": c.file2text,
-            "code": c.code,
-            "c": c.code,
-            'm': c.code,
-            'module': c.code,
-            "run": c.run_fn,
-            'fn': c.run_fn,
-        }
+        fn_detected = False
+        fns = []
         for i, word in enumerate(words):
             prev_word = words[i-1] if i > 0 else ''
-            if i > 0:
-                for condition, fn in condition2fn.items():
-                    is_condition = bool(words[i-1].startswith('/'+condition ) or words[i-1].startswith(condition +'/' ))
-                    if  is_condition:
-                        word = condition2fn[condition](word)
-                        wordchars = len(str(word))
-                        c.print(f'Condition(fn={condition}, chars={wordchars})' )
-                        break
-            # resolve @module/fn(word[i-1]) arg(word[i]) which allows for @module/fn arg 
             # restrictions can currently only handle one function argument, future support for multiple
-            if prev_word.startswith('@'):
-                if prev_word.endswith('/'):
-                    prev_word = prev_word[:-1]
-                if prev_word.count('/') == 1:
-                    if prev_word.endswith('@/'):
-                        prev_word =  '@'+'module' + prev_word.split('@')[1]
-                    module, fn = prev_word.split('@')[1].split('/')
-                else:
-                    module = 'module'
-                    fn = prev_word.split('@')[1]
-                module = c.module(module)()
-                if word.endswith('\n'):
-                    word = word[:-1]
-                word = str(getattr(module, fn)(word))
-            new_text += str(word)
-        c.print(f'ProcessedText(chars={len(new_text)})')
-        return new_text
+            magic_prefix = f'@/'
+            if word.startswith(magic_prefix) and not fn_detected:
+                word = word[len(magic_prefix):]
+                if '/' not in word:
+                    word = '/' + word
+                fns += [{'fn': word, 'params': [], 'idx': i + 2}]
+                fn_detected=True
+            else:
+                if fn_detected:
+                    fns[-1]['params'] += [word]
+                    fn_detected = False
+        c.print(fns)
+        for fn in fns:
+            result = c.fn(fn['fn'])(*fn['params'])
+            fn['result'] = result
+            text =' '.join([*words[:fn['idx']],'-->', str(result), *words[fn['idx']:]])
+        return text
     
  
     def reduce(self, text, max_chars=10000 , timeout=40, max_age=30, model='openai/o1-mini'):
@@ -333,3 +270,46 @@ class Agent:
 
         return plan
 
+
+
+
+    def verifyfn(self, fn='module/ls'):
+        code = c.code(fn)
+        prompt = {
+            'goal': 'make the params from the following  and respond in JSON format as kwargs to the function and make sure the params are legit',
+            'code': code, 
+            'output_format': '<JSON_START>DICT(params:dict)</JSON_END>',
+        }
+        response =  c.ask(prompt, process_text=False)
+        output = ''
+        for ch in response:
+            print(ch, end='')
+            output += ch
+            if '</JSON_END>' in output:
+                break
+        params_str = output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip()
+        params = json.loads(params_str)['params']
+
+        result =  c.fn(fn)(**params)
+
+        ## SCORE THE RESULT
+        prompt = {
+            'goal': '''score the code given the result, params 
+            and code out of 100 if the result is indeed the result of the code
+            make sure to only respond in the output format''',
+            'code': code, 
+            'result': result,
+            'params': params,
+            'output_format': '<JSON_START>DICT(score:int, feedback:str, suggestions=List[dict(improvement:str, delta:int)]</JSON_END>',
+        }
+
+        response =  c.ask(prompt, process_text=False)
+
+        output = ''
+        for ch in response:
+            print(ch, end='')
+            output += ch
+            if '</JSON_END>' in output:
+                break
+            
+        return json.loads(output.split('<JSON_START>')[1].split('</JSON_END>')[0].strip())

@@ -9,7 +9,7 @@ import commune as c
 
 class Web:
     endpoints = ["search", "crawl"]
-    l
+    
     def text(self, url: str = '') -> str:
         # 1. Fetch the page
         response = requests.get(url)

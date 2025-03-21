@@ -1,7 +1,7 @@
 import commune as c
-import os
-from typing import List, Dict, Any, Optional
 import bittensor as bt
+from typing import List, Dict, Any, Optional
+from bittensor.utils.balance import Balance
 
 class Bittensor:
     """Interface module for Subtensor network operations and wallet management"""
@@ -12,46 +12,44 @@ class Bittensor:
             network (str): Network to connect to (e.g. finney, test)
         """
         self.network = network
-        self.subtensor = c.obj('bittensor.core.subtensor.Subtensor')(network=network)
+        self.subtensor = bt.subtensor(network=network)
         
-    def wallets(self) -> List[str]:
+    def list_wallets(self) -> List:
         """List all available wallets
         Returns:
             List of wallet names
         """
-        return 
+        return self.subtensor.list_wallets()
 
-    def neurons(self, netuid=2) -> List[str]:
-        """List all available neurons
-        Returns:
-            List of neuron names
-        """
-        return self.subtensor.neurons(netuid=netuid)
-
-    def neurons(self, netuid=2) -> List[str]:
-        """List all available neurons
-        Returns:
-            List of neuron names
-        """
-        return self.subtensor.neurons(netuid=netuid)
-
-    def subnet(self, netuid=2, block=None) -> Dict:
-        """Get subnet information
+    def neurons(self, netuid: int = 2) -> List[Dict]:
+        """List all neurons in a subnet
         Args:
             netuid (int): Network UID
         Returns:
-            Subnet information dictionary
+            List of neuron information
         """
-        return self.subtensor.subnet(netuid=netuid)
-
-
-    def n(self, netuid=1) -> List[str]:
-        """List all available neurons
+        return self.subtensor.neurons(netuid=netuid)
+    
+    def n(self, netuid: int = 1) -> int:
+        """Get number of neurons in a subnet
+        Args:
+            netuid (int): Network UID
         Returns:
-            List of neuron names
+            Number of neurons
         """
         return len(self.neurons(netuid=netuid))
-    def create_wallet(self, name: str, hotkey: str = None) -> Dict:
+    
+    def subnet(self, netuid: int = 2, block: Optional = None) -> Dict:
+        """Get subnet information
+        Args:
+            netuid (int): Network UID
+            block (Optional): Block number
+        Returns:
+            Subnet information dictionary
+        """
+        return self.subtensor.subnet(netuid=netuid, block=block)
+    
+    def create_wallet(self, name: str, hotkey: Optional = None) -> Dict:
         """Create a new wallet
         Args:
             name (str): Name of the wallet
@@ -59,36 +57,31 @@ class Bittensor:
         Returns:
             Wallet information dictionary
         """
-        wallet = self.subtensor.create_wallet(name=name, hotkey=hotkey)
-        return wallet.info()
-    def get_wallet(self, name: str) -> Dict:
+        wallet = bt.wallet(name=name, hotkey=hotkey)
+        return wallet
+
+    
+    def get_wallet(self, name: str, hotkey: Optional = None) -> Dict:
         """Get wallet information
         Args:
             name (str): Name of the wallet
+            hotkey (str): Optional hotkey name
         Returns:
             Wallet information dictionary
         """
-        wallet = self.subtensor.get_wallet(name)
+        wallet = bt.wallet(name=name, hotkey=hotkey)
         return wallet.info()
-
-
-    def list_wallets(self) -> List[str]:
-        """List all available wallets
-        Returns:
-            List of wallet names
-        """
-        return self.subtensor.list_wallets()
-
-
-    def get_balance(self, address: str) -> float:
+    
+    def bal(self, address: str) -> float:
         """Get balance for an address
         Args:
             address (str): Wallet address
         Returns:
             Balance in TAO
         """
-        return self.subtensor.get_balance(address)
-        
+        balance = self.subtensor.get_balance(address)
+        return balance.tao
+    
     def transfer(self, 
                 wallet_name: str,
                 dest_address: str,
@@ -101,9 +94,26 @@ class Bittensor:
         Returns:
             Success boolean
         """
-        wallet = self.subtensor.get_wallet(wallet_name)
+        wallet = bt.wallet(wallet_name)
+        amount_bal = Balance.from_tao(amount)
         return self.subtensor.transfer(
             wallet=wallet,
             dest=dest_address,
-            amount=amount
+            amount=amount_bal
         )
+    
+    def get_subnets(self) -> List[int]:
+        """Get list of all subnets
+        Returns:
+            List of subnet UIDs
+        """
+        return self.subtensor.get_subnets()
+    
+    def metagraph(self, netuid: int = 1) -> Any:
+        """Get metagraph for a subnet
+        Args:
+            netuid (int): Network UID
+        Returns:
+            Metagraph object
+        """
+        return self.subtensor.metagraph(netuid)
