@@ -8,7 +8,7 @@ class Memory:
         self.data = {}
 
     def add(self, key, value):
-        self.data[key] = value
+        self.data[key] = list(value)
 
     def search(self, query=None):
         keys = list(self.data.keys())

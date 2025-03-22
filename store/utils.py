@@ -2,6 +2,7 @@
 import json
 import os
 
+
 def hash( x, mode: str='sha256',*args,**kwargs) -> str:
     import hashlib
     x = python2str(x)
@@ -49,13 +50,24 @@ def put_json(path:str, data:dict, key=None) -> dict:
 
 def rm_folder(path):
     import shutils
+    if not os.path.exists(path):
+        return {'success': False, 'path': path}
+    if not os.path.isdir(path):
+        return {'success': False, 'path': path}
     shutils.rmtree(path)
     return {'success': True, 'path': path}
 
 def rm_file(path):
     if os.path.exists(path):
         os.remove(path)
-        return {'success': True, 'path': path}
-    if os.patth.isdir(path):
+    assert not os.path.exists(path), f'Failed to remove {path}'
     return {'success': False, 'path': path}
+
+def rm(path):
+    if os.path.isdir(path):
+        return rm_folder(path)
+    elif os.path.isfile(path):
+        return rm_file(path)
+    else:
+        raise ValueError(f'Path {path} does not exist or is neither a file nor a directory')
 

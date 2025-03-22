@@ -1,16 +1,39 @@
 
 import commune as c
 import os
-class x: 
+class Vibe: 
     task = 'make a dank tweet about this for the vibes include the path and score it out of 100 vibes and include'
-    def forward(self, module=None, task=task):
+
+    def forward(self, module:str='module', task=task, update=False):
+        assert c.module_exists(module), f'module {module} does not exist'
         code = c.code(module)
+        code_hash = c.hash(code)
+        path = self.get_path(f'{module}/{code_hash}')
+        vibe = c.get(path, update=update) # download the vibe if it doesn't exist
+        if vibe is not None:
+            print(f'vibe already exists at {path}')
+            return vibe
+        print(f'vibe path: {path}')
         prompt = {
             'code': code,
-            'task': task,
+            'tasks': [task, 'make sure the output_format follows the following within <OUTPUT_JSON> and </OUTPUT_JSON>' ],
             'gith path': self.git_path(module=module),
+            'output_format': {
+                            "vibe": "score out of 100", 
+                            "dope_things_about_this": "list of dope things", 
+                            "improvements": "list of improvements"
+                            }
         }
-        return c.chat(prompt, process_text=False)
+        output = ''
+        for ch in c.chat(prompt, process_text=False):
+            print(ch, end='', flush=True)
+            output += ch
+        output = output.split('<OUTPUT_JSON>')[-1].split('</OUTPUT_JSON>')[0]
+
+        return output
+
+    def get_path(self, path):
+        return c.abspath(f'~/.commune/vibe/{path}')
 
     def git_path(self, module='module', branch='main'):
         """

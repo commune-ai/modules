@@ -2,7 +2,7 @@
 
 import commune as c
 import os
-from .utils import get_json, 
+from .utils import get_json
 class Store:
     free = False
     endpoints = ['put', 'get']

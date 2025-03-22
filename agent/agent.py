@@ -206,7 +206,7 @@ class Agent:
 
 
     def addkey(self, module, key):
-        return c.module('apikey')().add(key)
+        return c.module('apimanager')().add(key)
 
 
     def desc(self, module, max_age=0):

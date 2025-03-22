@@ -2,26 +2,16 @@
 
 import commune as c 
 
-class ApiKey:
+class ApiManager:
     def __init__(self, module='model.openrouter', path:str=None):
         self.set_module(module)
         self.path = path or c.resolve_path('api')
 
     def set_module(self, module):
-        """
-        sets the module
-        """
-        if not isinstance(module, str):
-            if hasattr(module, 'module_name'):
-                module = module.module_name()
-            else:
-                module = module.__name__.lower()
         self.module = module
-
-
     def get(self, module=None):
         return c.choice(self.keys(module))
-         
+    
     def put(self, key:str, module=None):
         path = self.get_path(module)
         keys = c.get(path, [])
@@ -37,8 +27,8 @@ class ApiKey:
         return c.put(path, keys)
     
     def rm(self, module,  key:str):
-        module = module or self.module_name()
-        keys = self.keys(module=module)
+        module = module or self.module
+        keys = self.keys(module)
         n = len(keys)
         if key in keys:
             keys.remove(key)
@@ -49,7 +39,6 @@ class ApiKey:
         if len(self.keys(module)) == 0:
             self.rm(module)
         return {'keys': keys}
-
 
     def get_path(self, module=None):
         module = module or self.module
