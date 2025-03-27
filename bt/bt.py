@@ -117,3 +117,147 @@ class Bittensor:
             Metagraph object
         """
         return self.subtensor.metagraph(netuid)
+
+    def prices(self, query="{ subnetInfos { nodes { netUid alphaIn alphaOut } } }", variables=None):
+        import requests
+
+        GRAPHQL_ENDPOINT = 'https://api.app.trustedstake.ai/graphql'
+
+        headers = {
+            'Content-Type': 'application/json',
+        }
+
+        payload = {
+            'query': query,
+            'variables': variables
+        }
+
+        response = requests.post(GRAPHQL_ENDPOINT, json=payload, headers=headers)
+        response.raise_for_status()  # Raises an HTTPError if the response contains an unsuccessful status code
+        print(response.json())
+        return response.json()
+
+
+    def get_schema(self):
+        """Get the schema of the GraphQL server
+        Returns:
+            The GraphQL schema
+        """
+        import requests
+
+        GRAPHQL_ENDPOINT = 'https://api.app.trustedstake.ai/graphql'
+        
+        # This is the introspection query to get the full schema
+        introspection_query = """
+        query IntrospectionQuery {
+        __schema {
+            queryType {
+            name
+            }
+            mutationType {
+            name
+            }
+            subscriptionType {
+            name
+            }
+            types {
+            ...FullType
+            }
+            directives {
+            name
+            description
+            locations
+            args {
+                ...InputValue
+            }
+            }
+        }
+        }
+
+        fragment FullType on __Type {
+        kind
+        name
+        description
+        fields(includeDeprecated: true) {
+            name
+            description
+            args {
+            ...InputValue
+            }
+            type {
+            ...TypeRef
+            }
+            isDeprecated
+            deprecationReason
+        }
+        inputFields {
+            ...InputValue
+        }
+        interfaces {
+            ...TypeRef
+        }
+        enumValues(includeDeprecated: true) {
+            name
+            description
+            isDeprecated
+            deprecationReason
+        }
+        possibleTypes {
+            ...TypeRef
+        }
+        }
+
+        fragment InputValue on __InputValue {
+        name
+        description
+        type {
+            ...TypeRef
+        }
+        defaultValue
+        }
+
+        fragment TypeRef on __Type {
+        kind
+        name
+        ofType {
+            kind
+            name
+            ofType {
+            kind
+            name
+            ofType {
+                kind
+                name
+                ofType {
+                kind
+                name
+                ofType {
+                    kind
+                    name
+                    ofType {
+                    kind
+                    name
+                    ofType {
+                        kind
+                        name
+                    }
+                    }
+                }
+                }
+            }
+            }
+        }
+        }
+        """
+
+        headers = {
+            'Content-Type': 'application/json',
+        }
+
+        payload = {
+            'query': introspection_query
+        }
+
+        response = requests.post(GRAPHQL_ENDPOINT, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
