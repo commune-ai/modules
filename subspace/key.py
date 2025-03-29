@@ -15,7 +15,6 @@
 import re
 from hashlib import blake2b
 from math import ceil
-
 from scalecodec.types import Bytes
 
 RE_JUNCTION = r'(\/\/?)([^/]+)'

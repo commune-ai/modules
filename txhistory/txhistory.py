@@ -4,6 +4,7 @@ import datetime
 import pandas as pd
 from typing import List, Optional, Union, Dict, Any
 import commune as c
+
 class History:
     def __init__(self, path: Optional = None):
         """
@@ -11,30 +12,29 @@ class History:
         
         Args:
             server: The server instance this history belongs to
-            history_path: Path to store history data
+            storage_path: Path to store history data
             tempo: Maximum age of history records in seconds
         """
-        self.history_path =  path or c.abspath('~/commune/history')
+        self.storage_path =  path or c.abspath('~/commune/history')
         
     def save_data(self,path:str, data: Dict) -> Dict:
         """Save call data to history"""
-        path = f'{self.history_path}/{path}'
+        path = f'{self.storage_path}/{path}'
         c.put(path, data) # save the call data
         return {'message': f'Saved data to {path}', 'success': True}
     
     def call_paths(self, address: str = '') -> List:
         """Get all call paths for a specific address"""
-        path = self.history_path + '/' + address
+        path = self.storage_path + '/' + address
         user_paths = c.glob(path)
         return sorted(user_paths, key=self.get_path_time)
     
     def get_path_time(self, path: str) -> float:
         """Extract timestamp from path"""
-        try:
-            x = float(path.split('/')[-1].split('.')[0])
-        except Exception:
-            x = 0
-        return x
+        path_time = os.path.getmtime(path)
+        if isinstance(path_time, str):
+            path_time = float(path_time)
+        return path_time
     
     def get_path_age(self, path: str) -> float:
         """Calculate age of a path in seconds"""
@@ -46,9 +46,7 @@ class History:
         user_path2time = {p: self.get_path_age(p) for p in user_paths}
         return user_path2time
     
-    def get_history(self, address: str = '', paths: Optional[List] = None, 
-                   as_df: bool = True, 
-                   features: List = ['time', 'fn', 'cost', 'duration', 'client', 'server']) -> Union[pd.DataFrame, List[Dict]]:
+    def get_history(self, address: str = '', paths: Optional[List] = None, df: bool = True, features: List = ['time', 'fn', 'cost', 'duration', 'client', 'server']) -> Union[pd.DataFrame, List[Dict]]:
         """
         Get history data for a specific address
         
@@ -62,18 +60,17 @@ class History:
             DataFrame or list of history records
         """
         paths = paths or self.call_paths(address)
-        history = [self.server.c.get_json(p)["data"] for p in paths]
+        history = [c.get_json(p)["data"] for p in paths]
         history = [h for h in history if isinstance(h, dict) and all([f in h for f in features])]
-        address2key =c.address2key(max_age=self.tempo)
         print(f'History({address}) --> {len(history)}')
         
-        if as_df:
-            df =c.df(history)
-            if len(df) == 0:
-                return df
+        if df:
+            history =c.df(history)
+            if len(history) == 0:
+                return history
                 
-            df['age'] = df['time'].apply(lambda x:c.time() - float(x))
-            df['time'] = df['time'].apply(lambda x: datetime.datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S') 
+            history['age'] = history['time'].apply(lambda x:c.time() - float(x))
+            history['time'] = history['time'].apply(lambda x: datetime.datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S') 
                                          if isinstance(x, float) else x)
 
             def headers2key(x):
@@ -82,11 +79,11 @@ class History:
                     return address2key.get(k, k)
                 return x
 
-            df['client'] = df['client'].apply(lambda x: headers2key(x))
-            df['server'] = df['server'].apply(lambda x: headers2key(x))
+            history['client'] = history['client'].apply(lambda x: headers2key(x))
+            history['server'] = history['server'].apply(lambda x: headers2key(x))
             
             display_features = ['fn', 'cost', 'time', 'duration', 'age', 'client', 'server']
-            return df[display_features]
+            return history[display_features]
         
         return history
     
@@ -104,7 +101,7 @@ class History:
     
     def callers(self, module: str = 'module') -> List:
         """Get all callers for a module"""
-        return [p.split('/')[-1] for p in c.ls(self.history_path + '/' + module)]
+        return [p.split('/')[-1] for p in c.ls(self.storage_path + '/' + module)]
     
     def caller2calls(self, module: str = 'module') -> Dict[str, int]:
         """Map callers to their call counts"""
@@ -112,7 +109,7 @@ class History:
     
     def clear_module_history(self, module: str = 'module') -> int:
         """Clear history for a specific module"""
-        return os.system(f'rm -r {self.history_path}/{module}')
+        return os.system(f'rm -r {self.storage_path}/{module}')
     
     def get_stats(self, address: str = '', as_df: bool = True) -> Union:
         """Get call statistics for an address"""

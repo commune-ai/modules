@@ -9,7 +9,7 @@ import numpy as np
 import commune as c
 
 
-class Model(nn.Module, c.Module):
+class Model(nn.Module):
 
     def __init__(self,
                  config = None,
@@ -623,6 +623,4 @@ class Model(nn.Module, c.Module):
                 )
         return sample_schema   
     
-def fam(x):
-    return x
     

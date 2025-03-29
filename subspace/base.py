@@ -1597,6 +1597,11 @@ class SubstrateInterface:
         GenericExtrinsic The signed Extrinsic
         """
 
+        og_keypair_crypto_type = keypair.crypto_type
+
+        if isinstance(keypair.crypto_type, str):
+            keypair.crypto_type = keypair.crypto_type_id
+
         self.init_runtime()
 
         # Check requirements
@@ -1667,7 +1672,7 @@ class SubstrateInterface:
             value['signature_version'] = signature_version
 
         extrinsic.encode(value)
-
+        keypair.crypto_type = og_keypair_crypto_type
         return extrinsic
 
     def create_unsigned_extrinsic(self, call: GenericCall) -> GenericExtrinsic:

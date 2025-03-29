@@ -5,7 +5,7 @@ import base64
 import re
 
 
-class git(c.Module):
+class git:
 
     def __init__(self, repo_url='commune-ai/commune'):
         self.api_base = "https://api.github.com"

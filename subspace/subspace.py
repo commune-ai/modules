@@ -28,7 +28,7 @@ IPFS_REGEX = re.compile(r"^Qm[1-9A-HJ-NP-Za-km-z]{44}$")
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
 
-class Subspace(c.Module):
+class Chain(c.Module):
 
     name2storage_exceptions = {'key': 'Keys'}
     storage2name_exceptions = {v:k for k,v in name2storage_exceptions.items()}
@@ -37,8 +37,8 @@ class Subspace(c.Module):
     blocktime = block_time = 8
     blocks_per_day = 24*60*60/block_time
     url_map = {
-        "main": ["api.communeai.net"],
-        "test": ["testnet.api.communeai.net"]
+        "main": {"lite": ["api.communeai.net"], "archive": ["archive-node-0.communeai.net", "archive-node-1.communeai.net"]},
+        "test": {"lite": ["testnet.api.communeai.net"]}
     }
     network : str = 'main' # og network
     networks = list(url_map.keys())
@@ -56,6 +56,7 @@ class Subspace(c.Module):
         wait_for_finalization: bool = False,
         test = False,
         ws_options = {},
+        archive = False,
         timeout: int  = None,
         net = None,
     ):
@@ -65,6 +66,7 @@ class Subspace(c.Module):
                          test = test,
                          num_connections=num_connections,  
                          ws_options=ws_options,
+                         archive=archive,
                          wait_for_finalization=wait_for_finalization, 
                          timeout=timeout)
         
@@ -90,11 +92,12 @@ class Subspace(c.Module):
                         mode = 'wss',
                         url = None,
                         test = False,
+                        archive = False,
                         num_connections: int = 1,
                         ws_options: dict[str, int] = {},
                         wait_for_finalization: bool = False,
                         timeout: int  = None ):
-        if network in ['subspace']:
+        if network in ['chain']:
             network = 'main'
 
         t0 = c.time()
@@ -103,26 +106,31 @@ class Subspace(c.Module):
         network = network or self.network
         if timeout != None:
             ws_options["timeout"] = timeout
+        self.network = network
         self.ws_options = ws_options
-        self.url  = url or (mode + '://' + self.url_map.get(network)[0])
+        self.archive = archive
+        self.mode = mode
+        if url == None:
+            url = self.get_url()
+        self.url  = url 
         self.num_connections = num_connections                  
         self.wait_for_finalization = wait_for_finalization
-        self.network = network
         self.connections_queue = queue.Queue(num_connections)
-        self.num_connections = num_connections
+        self.network_state = {"network": self.network, "url": self.url,"connections": self.num_connections}
+        c.print(self.network_state)
         for _ in range(self.num_connections):
             self.connections_queue.put(SubstrateInterface(self.url, ws_options=self.ws_options))
         self.connection_latency = c.time() - t0
-        network_state = {"network": self.network, "url": self.url,"connections": self.num_connections,"latency": self.connection_latency,
-        }
-        c.print(f'Subspace(network={self.network} url={self.url} connections={self.num_connections} latency(s)={c.round(self.connection_latency, 2)})', color='blue') 
-        
+        c.print(f'Chain({self.network_state})', color='blue') 
 
-    def get_url(self, mode='wss',  **kwargs):
-        prefix = mode + '://'
-        url = c.choice(self.url_map[self.network])
-        if not url.startswith(prefix):
-            url = prefix + url
+    def get_url(self,  mode=None, **kwargs):
+        mode = mode or self.mode
+        sub_key = 'archive' if self.archive else 'lite'
+        urls = self.url_map[self.network].get(sub_key)
+        assert len(urls) > 0
+        url = c.choice(urls)
+        if not url.startswith(mode):
+            url = mode + '://' + url
         return url    
 
     @contextmanager
@@ -317,7 +325,6 @@ class Subspace(c.Module):
         current_prefix_batch = []
         current_params_batch = []
         current_size = 0
-
         chunk_list: list[Chunk] = []
 
         # Iterate through each request in the batch
@@ -811,7 +818,6 @@ class Subspace(c.Module):
         result = c.get(path, None, max_age=max_age, update=update)
         if result == None:
             result = self.query_batch_map({module: [(name, params)]}, block_hash)
-
             if extract_value:
                 if isinstance(result, dict):
                     result = result
@@ -871,7 +877,7 @@ class Subspace(c.Module):
         key: Keypair,
         module: str = "SubspaceModule",
         wait_for_inclusion: bool = True,
-        wait_for_finalization: bool = True,
+        wait_for_finalization: bool = False,
         sudo: bool = False,
         tip = 0,
         nonce=None,
@@ -1028,10 +1034,7 @@ class Subspace(c.Module):
             # fee calculation parity has a bug in this version,
             # where the method has to be removed
             rpc_methods = substrate.config.get("rpc_methods")  # type: ignore
-
-            if "state_call" in rpc_methods:  # type: ignore
-                rpc_methods.remove("state_call")  # type: ignore
-
+            rpc_methods.pop("state_call", None)  # type: ignore # remove the method
             # create the multisig account
             multisig_acc = substrate.generate_multisig_account(  # type: ignore
                 signatories, threshold
@@ -1197,45 +1200,36 @@ class Subspace(c.Module):
         params = {"amount":  amount*(10**9), "module_key": dest}
         return self.compose_call(fn="remove_stake", params=params, key=key)
     
-    def update_modules( self, subnet: str, timeout: int=60) -> ExtrinsicReceipt:
-        modules = self.my_modules(subnet)
-        futures = []
-        for m in modules:
-            if m['serving']:
-                continue
-            print(f'Updating {m["name"]}')
-            futures += [c.submit(self.update_module, dict(name=m['name'], subnet=subnet), timeout=timeout)]
-        progress = c.tqdm(total=len(futures))
-        results = []
-        for f in c.as_completed(futures, timeout=timeout):
-            results.append(f.result())
-            progress.update(1)
-        return results
 
     def update_module(
         self,
         key: str,
         name: str=None,
-        address: str = None ,
+        url: str = None,
         metadata: str = None,
         delegation_fee: int = None,
         validator_weight_fee = None,
-        subnet = 0,
+        subnet = 2,
+        min_balance = 10,
         public = False,
 
     ) -> ExtrinsicReceipt:
         assert isinstance(key, str) or name != None
         name = name or key
         key = self.resolve_key(key)
+        balance = self.balance(key)
+        if balance < min_balance:
+            raise ValueError(f'Key {key.ss58_address} has insufficient balance {balance} < {min_balance}')
         subnet = self.resolve_subnet(subnet)
-        address = c.namespace().get(name, '0.0.0.0:8888')
-        address = url if public else ('0.0.0.0:' + url.split(':')[-1])
-        module = self.module(key.ss58_url, subnet=subnet)
-        validator_weight_fee = validator_weight_fee or module.get('validator_weight_fee', 0)
-        delegation_fee = delegation_fee or module.get('stake_delegation_fee', 0)
+        if url == None:
+            url = c.namespace().get(name, '0.0.0.0:8888')
+        url = url if public else ('0.0.0.0:' + url.split(':')[-1])
+        module = self.module(key.ss58_address, subnet=subnet)
+        validator_weight_fee = validator_weight_fee or module.get('validator_weight_fee', 10)
+        delegation_fee = delegation_fee or module.get('stake_delegation_fee', 10)
         params = {
             "name": name,
-            "url": url,
+            "address": url,
             "stake_delegation_fee": delegation_fee,
             "metadata": metadata,
             'validator_weight_fee': validator_weight_fee,
@@ -1244,15 +1238,20 @@ class Subspace(c.Module):
         return self.compose_call("update_module", params=params, key=key) 
     
 
+    updatemod = upmod = update_module
+
+    def reg(self, name='compare', metadata=None, url='0.0.0.0:8888', module_key=None, key=None, subnet=2):
+        return self.register(name=name, metadata=metadata, url=url, module_key=module_key, key=key, subnet=subnet)
+
     def register(
         self,
         name: str,
         url: str = '0.0.0.0:8000',
-        module_key = None, 
+        module_key : str = None , 
         key: Keypair = None,
         metadata: str = 'NA',
-        subnet: str = 'General',
-        wait_for_finalization = True,
+        subnet: str = 2,
+        wait_for_finalization = False,
         public = False,
     ) -> ExtrinsicReceipt:
         """
@@ -1266,23 +1265,22 @@ class Subspace(c.Module):
             subnet: The network subnet to register the module in.
                 If None, a default value is used.
         """
+        module_key = c.get_key(module_key or name).ss58_address
         key =  c.get_key(key)
         if url == None:
             namespace = c.namespace()
             url = namespace.get(name, url)
-            if public:
-                ip = c.ip()
-            else:
-                url = '0.0.0.0' +':'+ url.split(':')[-1]
+            ip = (c.ip() if public else '0.0.0.0')
+            port = url.split(':')[-1]
+            url = ip +':'+ port
         params = {
             "network_name": self.resolve_subnet_name(subnet),
             "address":  url,
             "name": name,
-            "module_key":c.get_key(module_key or name, creaet_if_not_exists=True).ss58_address,
+            "module_key": module_key,
             "metadata": metadata,
         }
-        response =  self.compose_call("register", params=params, key=key, wait_for_finalization=wait_for_finalization)
-        return response
+        return  self.compose_call("register", params=params, key=key, wait_for_finalization=wait_for_finalization)
 
     def dereg(self, key: Keypair, subnet: int=0):
         return self.deregister(key=key, subnet=subnet)
@@ -1314,9 +1312,6 @@ class Subspace(c.Module):
         response = self.compose_call("deregister", params=params, key=key)
 
         return response
-
-    def reg(self, key: Keypair, subnet: int=0):
-        return self.register(key=key, subnet=subnet)
     
     def register_subnet(self, name: str, metadata: str = None,  key: Keypair=None) -> ExtrinsicReceipt:
         """
@@ -1426,17 +1421,11 @@ class Subspace(c.Module):
         params["netuid"] = subnet
         params['vote_mode'] = params.pop('governance_configuration')['vote_mode']
         params["metadata"] = params.pop("metadata", None)
-        params["use_weights_encryption"] = params.pop("use_weights_encryption", False)
-        params['copier_margin'] = params.pop('copier_margin', 0)
-        params["max_encryption_period"] = params.pop("max_encryption_period", params["tempo"]+1)
         return self.compose_call(fn="update_subnet",params=params,key=key)
 
-    def metadata(self) -> str:
-        netuids = self.netuids()
-        metadata = self.query_map('SubnetMetadata')
-        metadata =  {i : metadata.get(i, None) for i in netuids}
-        metadata = sorted(metadata.items(), key=lambda x: x[0])
-        return {k: v for k, v in metadata}
+    def metadata(self, subnet=2) -> str:
+        metadata = self.query_map('Metadata', [subnet])
+        return metadata
     
     def subnet2metadata(self) -> str:
         netuids = self.netuids()
@@ -1982,6 +1971,7 @@ class Subspace(c.Module):
             subnet = subnet_map_lower[subnet]
         assert subnet in netuid2name, f"Subnet {subnet} not found"
         return subnet
+
     def resolve_subnet_name(self, subnet: str) -> int:
         subnet = self.resolve_subnet(subnet)
         subnet_map = self.subnet_map()
@@ -1989,7 +1979,6 @@ class Subspace(c.Module):
         if subnet in netuid2name:
             subnet = netuid2name[subnet]
         reverse_subnet_map = {v:k for k,v in subnet_map.items()}
-
         assert subnet in subnet_map, f"Subnet {subnet} not found, {subnet_map}"
         return subnet
 
@@ -2298,12 +2287,16 @@ class Subspace(c.Module):
     def resolve_key_address(self, key:str ):
         if key == None:
             key = 'module'
-
-        if self.valid_h160_address(key) or self.valid_ss58_address(key):
-            return key
-        else:
-            key = c.get_key( key )
+        if isinstance(key, str):
+            if self.valid_h160_address(key) or self.valid_ss58_address(key):
+                return key
+            else:
+                key = c.get_key( key )
+                return key.ss58_address
+        elif hasattr(key, 'ss58_address'):
             return key.ss58_address
+        else:
+            raise ValueError(f"Invalid key {key}")
 
     def resolve_key(self, key:str ):
         if isinstance(key, str):
@@ -2453,10 +2446,18 @@ class Subspace(c.Module):
                     "proposal_reward_interval": int(global_config["proposal_reward_interval"]),
                 },
             }
-            c.put(path, result)
-        return result
 
-    
+
+            
+            c.put(path, result)
+
+        result['min_weight_stake'] = result['min_weight_stake']/10**9
+        result['general_subnet_application_cost'] = result['general_subnet_application_cost']/10**9
+        result['subnet_registration_cost'] = result['subnet_registration_cost']/10**9
+        result['governance_config']['proposal_cost'] = result['governance_config']['proposal_cost']/10**9
+        result['governance_config']['proposal_reward_treasury_allocation'] = result['governance_config']['proposal_reward_treasury_allocation']/10**9
+        result['governance_config']['max_proposal_reward_treasury_allocation'] = result['governance_config']['max_proposal_reward_treasury_allocation']//10**9
+        return result
 
     def founders(self):
         return self.query_map("Founder", module="SubspaceModule")
@@ -2592,12 +2593,12 @@ class Subspace(c.Module):
         return new_name
                 
     def modules(self,
-                    subnet=0,
+                    subnet=2,
                     max_age = tempo,
                     update=False,
                     timeout=30,
                     module = "SubspaceModule", 
-                    features = ['key', 'url', 'name'],
+                    features = ['key', 'url', 'name', 'metadata'],
                     lite = True,
                     num_connections = 1,
                     search=None,
@@ -2622,28 +2623,27 @@ class Subspace(c.Module):
         for future in c.as_completed(future2feature, timeout=timeout):
             feature = future2feature.pop(future)
             results[feature] = future.result()
-            
             c.put(feature2path[feature], results[feature])
             progress.update(1)
-    
 
         # process
         results = self.process_results(results)
         modules = []
-        for uid in results['key'].keys():
-            module = {'key': results['key'][uid]}
+        for uid in results['key'].keys():  
+            m = {'key':  results['key'][uid]}       
             for f in features:
-                if f in ['key']:
+                if f == 'key':
                     continue
+                m[f] = None
                 if isinstance(results[f], dict):
                     if uid in results[f]:
-                        module[f] = results[f][uid]
-                    if module['key'] in results[f]:
-                        module[f] = results[f][module['key']]
+                        m[f] = results[f][uid]
+                    if m['key'] in results[f]:
+                        m[f] = results[f][m['key']]
                 elif isinstance(results[f], list):
-                    module[f] = results[f][uid]
-            module = {k:v for k,v in module.items()}
-            modules.append(module)  
+                    m[f] = results[f][uid] 
+                     
+            modules.append(m)  
         if search:
             modules = [m for m in modules if search in m['name']]
         if df:
@@ -2652,6 +2652,7 @@ class Subspace(c.Module):
             modules[i] = {k:m[k] for k in features}
         return modules
 
+    mods = modules
     def format_amount(self, x, fmt='nano') :
         if type(x) in [dict]:
             for k,v in x.items():
@@ -2691,14 +2692,10 @@ class Subspace(c.Module):
         key = c.get_key(key)
         keys = self.keys(subnet, max_age=max_age)
         return key.ss58_address in keys
-    
-    def modules(self, keys, subnet=0, max_age=60):
-        futures = [ c.submit(self.module, kwargs=dict(module=k, subnet=subnet, max_age=max_age)) for k in keys]
-        return c.wait(futures, timeout=30)
 
     def module(self, 
                    module, 
-                   subnet=0,
+                   subnet=2,
                    fmt='j', 
                    mode = 'https', 
                    block = None, 
@@ -2714,21 +2711,22 @@ class Subspace(c.Module):
                                ).json()
         module = {**module['result']['stats'], **module['result']['params']}
         module['name'] = self.vec82str(module['name'])
-        module['url'] = self.vec82str(module['address'])
+        module['url'] = self.vec82str(module.pop('address'))
         module['dividends'] = module['dividends'] / U16_MAX
         module['incentive'] = module['incentive'] / U16_MAX
         module['stake_from'] = {k:self.format_amount(v, fmt=fmt) for k,v in module['stake_from'].items()}
         module['stake'] = sum([v / 10**9 for k,v in module['stake_from'].items() ])
         module['emission'] = self.format_amount(module['emission'], fmt=fmt)
         module['key'] = module.pop('controller', None)
-        module['metadata'] = module.pop('metadata', {})
+        module['metadata'] = self.vec82str(module.pop('metadata', []))
         module['vote_staleness'] = (block or self.block()) - module['last_update']
         return module
+    mod = module
     
     @staticmethod
     def vec82str(x):
+        x = x or []
         return ''.join([chr(ch) for ch in x]).strip()
-
 
     def netuids(self,  update=False, block=None) -> Dict[int, str]:
         return list(self.netuid2subnet( update=update, block=block).keys())
@@ -2739,6 +2737,10 @@ class Subspace(c.Module):
         netuid2subnet = self.netuid2subnet()
         emissions = {netuid2subnet[k].lower():v/10**9 for k,v in netuid2emission.items()}
         return  dict(sorted(emissions.items(), key=lambda x: x[1], reverse=True))
+
+    def subnet2emission(self, **kwargs ) -> Dict[str, str]:
+        return self.emissions(**kwargs)
+        
 
     def e(self):
         return self.emissions()
@@ -2766,7 +2768,7 @@ class Subspace(c.Module):
         return modules
     
     def __str__(self):
-        return f'Subspace(network={self.network}, url={self.url})'
+        return f'Chain(network={self.network}, url={self.url})'
     
     def get_metadata_pallet(self, pallet):
         with self.get_conn() as substrate:
@@ -2795,6 +2797,9 @@ class Subspace(c.Module):
     def test(cls):
         from .test import Test
         return Test().test()
+
+    def fam(self):
+        return 1
 
     
             
