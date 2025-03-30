@@ -76,7 +76,7 @@ class Pm2:
         if self.proc_exists(proc_name):
             self.kill(proc_name, rm_server=False)
         cmd = f"pm2 start {c.filepath()} --name {proc_name} --interpreter {interpreter} -f --no-autorestart -- --fn run_fn --params \"{params_str}\""
-        c.cmd(cmd, verbose=verbose, cwd=cwd)
+        c.cmd(cmd, verbose=verbose, cwd=c.lib_path)
         return {'success':True, 'message':f'Running {proc_name}'}
 
     def kill(self, name:str, verbose:bool = True, rm_server=True, **kwargs):

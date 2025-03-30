@@ -261,7 +261,6 @@ class Agent:
         plan =  json.loads(output.split(anchors[0])[1].split(anchors[1])[0])
 
         if run:
-            c.print(plan)
             input_response = input(f'Run plan? (y/n): {plan}')
             if input_response.lower() in ['y', 'yes']:
                 for p in plan:

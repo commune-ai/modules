@@ -5,7 +5,6 @@ from typing import Any
 import commune as c
 
 class Cli:
-
     def forward(self,  
                 fn='module/forward',  
                 module='module', 
@@ -22,14 +21,13 @@ class Cli:
             if '/' in fn:
                 module = '/'.join(fn.split('/')[:-1]).replace('/', '.')
                 fn = fn.split('/')[-1]
-            module = c.module(module)()
-            if hasattr(base_module, fn):
-                # if the function is in the base module
-                fn_obj =  getattr(base_module, fn)
-            elif hasattr(module, fn):
-                fn_obj =  getattr(module, fn)
-            else: 
-                raise ValueError(f'Function {fn} not found in {module} or {base_module}')
+                fn_obj =  getattr(c.module(module)(), fn)
+            else:
+                if hasattr(base_module, fn):
+                    # if the function is in the base module
+                    fn_obj =  getattr(base_module, fn)
+                else: 
+                    raise ValueError(f'Function {fn} not found in {module} or {base_module}')
             # get the params
             parsing_kwargs = False
             for arg in argv:
@@ -40,14 +38,15 @@ class Cli:
                 else:
                     assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
                     params['args'].append(c.str2python(arg))        
-
         # run thefunction
         result = fn_obj(*params['args'], **params['kwargs']) if callable(fn_obj) else fn_obj
         speed = time.time() - t0
-        c.print(f'Call(/{fn}, speed={speed:.2f}s)')
+        module_name = module.__class__.__name__
+        c.print(f'Call({module_name}/{fn}, speed={speed:.2f}s)')
         duration = time.time() - t0
         is_generator = c.is_generator(result)
         if is_generator:
+
             for item in result:
                 if isinstance(item, dict):
                     c.print(item)
@@ -55,6 +54,5 @@ class Cli:
                     c.print(item, end='')
         else:
             c.print(result)
-        return result
 
     

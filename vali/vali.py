@@ -27,7 +27,7 @@ class Vali:
         self.timeout = timeout
         self.batch_size = batch_size
         self.verbose = verbose
-        self.key = c.get_key(key or self.module_name())
+        self.key = c.get_key(key or 'vali')
         self.set_task(task)
         self.set_network(network=network, tempo=tempo,  search=search,  path=path, update=update)
         if run_loop:
