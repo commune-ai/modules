@@ -70,16 +70,14 @@ class Find:
         return output
 
     def files(self,
-              query='the file that is the core of this folder',
+                query='the most relevant files',
+                *extra_query,
                path='./',  
-               model=None, 
                n=30):
-        model = model or self.model
-        options = self.forward(options=c.files(path), query=query, n=n, model=model)
+        if len(extra_query)>0:
+            query = ' '.join([query, *extra_query])
+        options = self.forward(options=c.files(path), query=query, n=n)
         return options
-
-
-        
 
     def modules(self,  query='', **kwargs): 
         return self.forward(options=c.get_modules(), query=query,**kwargs)

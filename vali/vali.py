@@ -49,6 +49,7 @@ class Vali:
             self.storage_path = self.get_path(self.network)
         self.search = search
         self.network_module = c.module(self.network)() 
+        self.sync(update=update)
 
     def set_task(self, task: Union[str, 'callable', int]):
         if isinstance(task, str):
@@ -57,9 +58,9 @@ class Vali:
         self.task_name = task.__class__.__name__.lower()
         self.task = task
 
-    def sync(self):
-        self.params = self.network_module.params(subnet=self.subnet, max_age=self.tempo)
-        self.modules = self.network_module.modules(subnet=self.subnet, max_age=self.tempo)
+    def sync(self, update=False):
+        self.params = self.network_module.params(subnet=self.subnet, max_age=self.tempo, update=update)
+        self.modules = self.network_module.modules(subnet=self.subnet, max_age=self.tempo, update=update)
         # create some extra helper mappings
         self.key2module = {m['key']: m for m in self.modules if 'key' in m}
         self.name2module = {m['name']: m for m in self.modules if 'name' in m}

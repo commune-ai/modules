@@ -8,26 +8,25 @@ class Cli:
     def forward(self,  
                 fn='module/forward',  
                 module='module', 
-                base_fn = 'vs', 
-                base_module='module'):
+                base_fn = 'vs'):
         t0 = time.time()
         argv = sys.argv[1:]
-        base_module = c.module(base_module)()
+        module = c.module(module)()
         params = {'args': [], 'kwargs': {}} 
         if len(argv) == 0:
-            fn_obj =  getattr(base_module, base_fn)
+            fn_obj =  getattr(module, base_fn)
         else:
             fn = argv.pop(0)
-            if '/' in fn:
+            if hasattr(module, fn):
+                # if the function is in the base module
+                fn_obj =  getattr(module, fn)
+            elif '/' in fn:
                 module = '/'.join(fn.split('/')[:-1]).replace('/', '.')
                 fn = fn.split('/')[-1]
-                fn_obj =  getattr(c.module(module)(), fn)
+                module = c.module(module)()
+                fn_obj = getattr(module, fn)
             else:
-                if hasattr(base_module, fn):
-                    # if the function is in the base module
-                    fn_obj =  getattr(base_module, fn)
-                else: 
-                    raise ValueError(f'Function {fn} not found in {module} or {base_module}')
+                raise Exception(f'Function {fn} not found in module {module}')
             # get the params
             parsing_kwargs = False
             for arg in argv:
@@ -41,12 +40,10 @@ class Cli:
         # run thefunction
         result = fn_obj(*params['args'], **params['kwargs']) if callable(fn_obj) else fn_obj
         speed = time.time() - t0
-        module_name = module.__class__.__name__
-        c.print(f'Call({module_name}/{fn}, speed={speed:.2f}s)')
+        c.print(f'Call({module.__class__.__name__}/{fn}, speed={speed:.2f}s)')
         duration = time.time() - t0
         is_generator = c.is_generator(result)
         if is_generator:
-
             for item in result:
                 if isinstance(item, dict):
                     c.print(item)
@@ -54,5 +51,3 @@ class Cli:
                     c.print(item, end='')
         else:
             c.print(result)
-
-    

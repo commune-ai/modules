@@ -6,6 +6,14 @@ import commune as c
 import subprocess
 import json
 
+import pandas as pd
+import subprocess
+import json
+import os
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+
 class Docker:
     """
     A module for interacting with Docker.
@@ -16,20 +24,8 @@ class Docker:
     def __init__(self):
         pass
 
-    def files(self, path: str = './') -> List[str]:
-        """
-        Find all Dockerfiles in the given path.
-
-        Args:
-            path (str): The path to search.
-
-        Returns:
-            List[str]: A list of Dockerfile paths.
-        """
-        return [f for f in c.walk(path) if f.endswith('Dockerfile')]
-
     def build(self,
-              path: Optional[str] = None,
+              path: Optional[str] = './',
               tag: Optional[str] = None,
               sudo: bool = False,
               verbose: bool = True,
@@ -49,18 +45,12 @@ class Docker:
         Returns:
             Dict[str, Any]: A dictionary containing the status, tag, and result of the build.
         """
-        path = c.resolve_path(path)
+        path = os.path.abspath(path)
         tag = tag or path.split('/')[-2]
-
         cmd = f'docker build -t {tag} .'
         if no_cache:
             cmd += ' --no-cache'
-
-        try:
-            result = c.cmd(cmd, sudo=sudo, env=env, cwd=os.path.dirname(path), verbose=verbose)
-            return {'status': 'success', 'tag': tag, 'result': result}
-        except Exception as e:
-            return {'status': 'error', 'tag': tag, 'error': str(e)}
+        return c.cmd(cmd,  cwd=path)
 
     def run(self,
             image: str = './',
@@ -141,7 +131,6 @@ class Docker:
 
         # Add command if specified
         if cmd:
-
             dcmd.append(cmd)
 
         if daemon:
@@ -149,10 +138,7 @@ class Docker:
 
         # Add image name
         dcmd.append(image)
-
         command_str = ' '.join(dcmd)
-
-
         self.kill(name)
         return c.cmd(command_str, verbose=True)
 
@@ -280,10 +266,10 @@ class Docker:
         except Exception as e:
             return f"Error pruning: {e}"
 
-    def resolve_path(self, path: str) -> str:
-        return '/tmp/docker/' + path
+    def get_path(self, path: str) -> str:
+        return os.path.expanduser(f'~/.commune/docker/{path}')
 
-    def stats(self, container: Optional[str], max_age=10, update=False) -> pd.DataFrame:
+    def stats(self, max_age=1000, update=False) -> pd.DataFrame:
         """
         Get container resource usage statistics.
 
@@ -293,10 +279,10 @@ class Docker:
         Returns:
             pd.DataFrame: A DataFrame containing the container statistics.
         """
-        path = self.resolve_path(f'docker_stats/{container}.json')
+        path = self.get_path(f'container_stats.json')
         stats = c.get(path, [], max_age=max_age, update=update)
-        if stats == []:
-            cmd = f'docker stats --no-stream {container if container else ""}'
+        if len(stats) == 0:
+            cmd = f'docker stats --no-stream'
             output = c.cmd(cmd, verbose=False)
             lines = output.split('\n')
             headers = lines[0].split('  ')
@@ -308,7 +294,6 @@ class Docker:
             for k, v in data.iterrows():
                 row = {header: v[header] for header in headers}
                 if 'MEM USAGE / LIMIT' in row:
-                    print(row)
                     mem_usage, mem_limit = row.pop('MEM USAGE / LIMIT').split('/')
                     row['MEM_USAGE'] = mem_usage
                     row['MEM_LIMIT'] = mem_limit
@@ -324,7 +309,8 @@ class Docker:
                 row = {_k.lower(): _v for _k, _v in row.items()}
                 stats.append(row)
                 c.put(path, stats)
-        return stats
+            
+        return c.df(stats)
 
     def ps(self) -> List[str]:
         """
@@ -348,6 +334,133 @@ class Docker:
             c.print(f"Error listing containers: {e}", color='red')
             return []
 
+    def exec(self, name: str, cmd: str ,  *extra_cmd) -> str:
+        """
+        Execute a command in a running Docker container.
 
-    def name2stats(self):
-        return {name: self.stats(name) for name in self.ps()}
+        Args:
+            name (str): The name of the container.
+            cmd (str): The command to execute.
+
+        Returns:
+            str: The output of the command.
+        """
+        if len(extra_cmd) > 0:
+            cmd = ' '.join([cmd] + list(extra_cmd))
+        
+        return c.cmd(f'docker exec {name} bash -c "{cmd}"')
+    # def stats(self, max_age=1000, update=False) -> Dict[str, Any]:
+    #     path = c.abspath('~/.docker/docker_stats.json')
+    #     name2stats = c.get(path, {}, max_age=max_age, update=update)
+    #     if len(name2stats) == 0:
+    #         future2name = {}
+    #         for name in self.ps():
+    #             f = c.submit(self.container_stats, [name])
+    #             future2name[f] = name
+    #         for future in future2name:
+    #             name = future2name[future]  
+    #             name2stats[name] = future.result()
+    #             print(name, name2stats[name])
+    #         c.put(path, name2stats)
+    #     return list(name2stats.values())
+
+
+    def cstats(self, max_age=10, update=False, cache_dir="./docker_stats") -> pd.DataFrame:
+        """
+        Get resource usage statistics for all containers.
+
+        Args:
+            max_age (int): Maximum age of cached data in seconds
+            update (bool): Force update of data
+            cache_dir (str): Directory to store cached data
+
+        Returns:
+            pd.DataFrame: A DataFrame containing statistics for all containers
+        """
+        # Create cache directory if it doesn't exist
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_file = os.path.join(cache_dir, "all_containers.json")
+        
+        # Check if cache exists and is recent enough
+        should_update = update
+        if not should_update and os.path.exists(cache_file):
+            file_age = datetime.now().timestamp() - os.path.getmtime(cache_file)
+            should_update = file_age > max_age
+        
+        if should_update or not os.path.exists(cache_file):
+            # Run docker stats command
+            cmd = 'docker stats --no-stream'
+            try:
+                output = subprocess.check_output(cmd, shell=True, text=True)
+            except subprocess.CalledProcessError:
+                print("Error running docker stats command")
+                return pd.DataFrame()
+            
+            # Parse the output
+            lines = output.strip().split('\n')
+            if len(lines) <= 1:
+                print("No containers running")
+                return pd.DataFrame()
+            
+            # Process headers
+            headers = [h.strip() for h in lines[0].split('  ') if h.strip()]
+            cleaned_headers = []
+            header_indices = []
+            
+            # Find the position of each header in the line
+            current_pos = 0
+            for header in headers:
+                pos = lines[0].find(header, current_pos)
+                if pos != -1:
+                    header_indices.append(pos)
+                    cleaned_headers.append(header)
+                    current_pos = pos + len(header)
+            
+            # Process data rows
+            stats = []
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                    
+                # Extract values based on header positions
+                values = []
+                for i in range(len(header_indices)):
+                    start = header_indices
+                    end = header_indices if i+1 < len(header_indices) else len(line)
+                    values.append(line.strip())
+                
+                # Create a dictionary for this row
+                row = dict(zip(cleaned_headers, values))
+                
+                # Process special columns
+                if 'MEM USAGE / LIMIT' in row:
+                    print(row)
+
+                    mem_usage, mem_limit = row.pop('MEM USAGE / LIMIT').split('/')
+                    row['MEM_USAGE'] = mem_usage.strip()
+                    row['MEM_LIMIT'] = mem_limit.strip()
+                
+                for prefix in ['NET', 'BLOCK']:
+                    if f'{prefix} I/O' in row:
+                        io_in, io_out = row.pop(f'{prefix} I/O').split('/')
+                        row[f'{prefix}_IN'] = io_in.strip()
+                        row[f'{prefix}_OUT'] = io_out.strip()
+                
+                # Rename ID column
+                if 'CONTAINER ID' in row:
+                    row['ID'] = row.pop('CONTAINER ID')
+                
+                # Convert keys to lowercase
+                row = {k.lower(): v for k, v in row.items()}
+                stats.append(row)
+            
+            # Save to cache
+            with open(cache_file, 'w') as f:
+                json.dump(stats, f)
+        else:
+            # Load from cache
+            with open(cache_file, 'r') as f:
+                stats = json.load(f)
+        
+        # Convert to DataFrame
+        return pd.DataFrame(stats)
