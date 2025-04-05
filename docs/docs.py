@@ -17,7 +17,7 @@ class Docs:
 
         """
         output = ''
-        for ch in c.ask(prompt, model=model, process_text=False, **kwargs):
+        for ch in c.ask(prompt, model=model, process_input=False, **kwargs):
             print(ch, end='')
             output += ch
         return output   

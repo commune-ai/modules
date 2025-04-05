@@ -2,17 +2,20 @@ from typing import Generator
 import requests
 import json
 import openai
+import time
 import commune as c
 
 class OpenRouter:
-    api_key_path = 'api/openrouter' # path to store api keys (relative to storage_path)
+    api_key_path = 'apikeys' # path to store api keys (relative to storage_path)
     def __init__(
         self,
         api_key = None,
-        base_url: str = 'https://openrouter.ai/api/v1',
+        url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
         prompt:str=None,
         max_retries: int = 10,
+        storage_path = '~/.commune/openrouter',
+        key = None,
         **kwargs
     ):
         """
@@ -21,18 +24,21 @@ class OpenRouter:
         Args:
             model (OPENAI_MODES): The OpenAI model to use.
             api_key (API_KEY): The API key for authentication.
-            base_url (str, optional): can be used for openrouter api calls
+            url (str, optional): can be used for openrouter api calls
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
         """
-        self.base_url = base_url
+        self.storage_path = storage_path
+        self.storage = c.module('storage')(storage_path)
+        self.url = url
         self.client = openai.OpenAI(
-            base_url=self.base_url,
+            base_url=self.url,
             api_key=api_key or self.get_key(),
             timeout=timeout,
             max_retries=max_retries,
         )
         self.prompt = prompt
+        self.key = c.get_key(key)
 
     def forward(
         self,
@@ -75,17 +81,42 @@ class OpenRouter:
         messages = history.copy()
         messages.append({"role": "user", "content": message})
         result = self.client.chat.completions.create(model=model, messages=messages, stream= bool(stream), max_tokens = max_tokens, temperature= temperature  )
-    
 
+        item = {
+            'model': model,
+            'params': {
+                'messages': messages,
+                'max_tokens': max_tokens,
+                'temperature': temperature,
+            },
+            'time': time.time(),  
+        }
+        
+        item['hash'] = c.hash(item)
+        item['result'] = ''
+        path = f"history/{item['hash']}"
         if stream:
             def stream_generator( result):
                 for token in result:
-                    yield token.choices[0].delta.content
+                    token = token.choices[0].delta.content
+                    item['result'] += token
+                    yield token
+                self.storage.put(path, item)
             return stream_generator(result)
         else:
-            return result.choices[0].message.content
+            item['result'] = result.choices[0].message.content
+            self.storage.put(path, item)
+            return item['result']
         
     generate = forward
+
+
+    def history(self, path:str = None, max_age:int = 0, update:bool = False):
+        """
+        Get the history of the last requests
+        """
+        history = self.storage.items('history', max_age=max_age, update=update)
+        return history
 
     def resolve_model(self, model=None):
         models =  self.models()
@@ -105,7 +136,7 @@ class OpenRouter:
         """
         get the api keys
         """
-        keys = c.get(self.api_key_path, [])
+        keys = self.storage.get(self.api_key_path, [])
         if len(keys) > 0:
             return c.choice(keys)
         else:
@@ -115,13 +146,13 @@ class OpenRouter:
         """
         Get the list of API keys
         """
-        return c.get(self.api_key_path, [])
+        return self.storage.get(self.api_key_path, [])
 
     def add_key(self, key):
-        keys = c.get(self.api_key_path, [])
+        keys = self.storage.get(self.api_key_path, [])
         keys.append(key)
         keys = list(set(keys))
-        c.put(self.api_key_path, keys)
+        self.storage.put(self.api_key_path, keys)
         return keys
 
     @staticmethod
@@ -130,12 +161,12 @@ class OpenRouter:
 
     def model2info(self, search: str = None, path='models', max_age=100, update=False):
         path = self.resolve_path(path)
-        models = c.get(path, default={}, max_age=max_age, update=update)
+        models = self.storage.get(path, default={}, max_age=max_age, update=update)
         if len(models) == 0:
             print('Updating models...')
-            response = requests.get(self.base_url + '/models')
+            response = requests.get(self.url + '/models')
             models = json.loads(response.text)['data']
-            c.put(path, models)
+            self.storage.put(path, models)
         models = self.filter_models(models, search=search)
         return {m['id']:m for m in models}
     

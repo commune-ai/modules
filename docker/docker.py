@@ -88,6 +88,8 @@ class Docker:
         Returns:
             Dict[str, Any]: A dictionary containing the command and working directory.
         """
+
+        self.kill(name)
         dcmd = ['docker', 'run']
         dcmd.extend(['--net', net])
         # Handle GPU configuration
@@ -139,7 +141,6 @@ class Docker:
         # Add image name
         dcmd.append(image)
         command_str = ' '.join(dcmd)
-        self.kill(name)
         return c.cmd(command_str, verbose=True)
 
     def exists(self, name: str) -> bool:
@@ -269,7 +270,7 @@ class Docker:
     def get_path(self, path: str) -> str:
         return os.path.expanduser(f'~/.commune/docker/{path}')
 
-    def stats(self, max_age=1000, update=False) -> pd.DataFrame:
+    def stats(self, max_age=60, update=False) -> pd.DataFrame:
         """
         Get container resource usage statistics.
 
@@ -464,3 +465,9 @@ class Docker:
         
         # Convert to DataFrame
         return pd.DataFrame(stats)
+
+
+
+    def sync(self):
+        self.stats(update=1)
+        

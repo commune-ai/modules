@@ -2,7 +2,9 @@
 import json
 import os
 import time
+
 class Storage:
+
     def __init__(self, storage_dirpath='~/.storage', mode='json'):
         self.storage_dirpath = self.abspath(storage_dirpath)
         self.mode = mode
@@ -13,9 +15,8 @@ class Storage:
         if not os.path.exists(dirpath):
             os.makedirs(dirpath, exist_ok=True)
         with open(path, 'w') as f:
-            json.dump(data, f) # 
+            json.dump(data, f)
         return path
-
 
     def get(self, path, default=None, max_age=None, update=False):
         path = self.get_item_path(path)
@@ -120,60 +121,3 @@ class Storage:
         for p in paths:
             ages[p] = time.time() - os.path.getmtime(p)
         return ages
-
-    def test_basics(self):
-        """
-        runs all tests
-        """
-        k = '_test_storage'
-        v = [10, 'fam', 'hello world']
-        t0 = time.time()
-        n0 = self.n()
-        if self.exists(k):
-            self.rm(k)
-        assert not self.exists(k), f'Failed to delete'
-        self.put(k, v)
-        n1 = self.n()
-        assert n1 == n0 + 1, f'Failed to add item n0={n0} n1={n1}'
-        assert self.exists(k), f'Failed to find {k}'
-        data = self.get(k)
-        self.rm(k)
-        n2 = self.n()
-        assert n2 == n0, f'Failed to delete item n0={n0} n2={n2}'
-        assert not self.exists(k), f'Failed to delete {k}'
-        assert data == v, f'Failed test data={data}'
-        t1 = time.time()
-        return {'success': True, 'msg': 'Passed all tests', 'time': t1 - t0, 'n0': n0, 'n1': n1, 'n2': n2}
-
-        #  test the max age stuff
-
-
-    def test_max_age(self):
-
-        k = '_test_storage_max_age'
-        v = [10, 'fam', 'hello world']
-        t0 = time.time()
-        if self.exists(k):
-            self.rm(k)
-        n0 = self.n()
-        assert not self.exists(k), f'Failed to delete'
-        self.put(k, v)
-        n1 = self.n()
-        assert n1 == n0 + 1, f'Failed to add item n0={n0} n1={n1}'
-        assert self.exists(k), f'Failed to find {k}'
-        data = self.get(k, max_age=1)
-        assert data != None, f'Failed to get {k}'
-        data = self.get(k, max_age=0)
-        assert data == None, f'Failed to get {k}'
-        data = self.get(k, update=True)
-        assert data == None, f'Failed to get {k}'
-        if data == None:
-            self.rm(k)
-        n2 = self.n()
-        assert n2 == n0, f'Failed to delete item n0={n0} n2={n2}'
-        assert not self.exists(k), f'Failed to delete {k}'
-        assert data == None, f'Failed test data={data}'
-        t1 = time.time()
-        print(f'Passed all tests in {t1 - t0} seconds')
-        
-        return {'success': True, 'msg': 'Passed all tests', 'time': t1 - t0, 'n0': n0, 'n1': n1, 'n2': n2}

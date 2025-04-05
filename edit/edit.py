@@ -33,7 +33,7 @@ class Edit:
                 threshold=1000000,
                 model=None,
                 write=False,
-                process_text=False,
+                process_input=False,
                 stream=True):
         
         model = model or self.model
@@ -83,7 +83,7 @@ class Edit:
                                    model=model, 
                                    max_tokens=max_tokens, 
                                    temperature=temperature, 
-                                   process_text=process_text)
+                                   process_input=process_input)
         
         return self.process_output(output, write=write)
 

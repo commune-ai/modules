@@ -186,3 +186,81 @@ class Web:
                 ])
 
         return crawled_content
+
+    def scan_html_screenshot(self, 
+                            image_path: str, 
+                            prompt: str = '',
+                            target: str = './',
+                            temperature: float =
+    0.5,
+                            model: Optional = None,
+                            verbose: bool = True) -> Dict:
+        """
+        Scan an HTML screenshot, extract its content, and send it to the model.
+        
+        Args:
+            image_path: Path to the HTML screenshot image
+            prompt: Additional prompt text to guide the model
+            target: Target directory for code generation
+            temperature: Temperature for generation
+            model: Model to use (defaults to 
+    self.default_model)
+            verbose: Whether to print detailed information
+            
+        Returns:
+            Dictionary mapping file paths to generated content
+        """
+        try:
+            # Check if image path exists
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image not found: {image_path}")
+            
+            # Import necessary libraries for 
+    image processing
+            try:
+                import pytesseract
+                from PIL import Image
+            except ImportError:
+                raise ImportError("Required 
+    packages not installed. Please install with: pip install pytesseract pillow")
+            
+            if verbose:
+                c.print(f"📷 Scanning HTML screenshot: {image_path}", color="cyan")
+            
+            # Open the image
+            image = Image.open(image_path)
+            
+            # Extract text from the image using OCR
+            extracted_text = pytesseract.image_to_string(image)
+            
+            if verbose:
+                c.print(f"📝 Extracted {len(extracted_text)} characters from image", color="cyan")
+                
+            # Construct the full prompt
+            full_prompt = f"""
+            I'm providing you with the text extracted from an HTML 
+    screenshot. 
+            Please analyze this HTML structure 
+    and help me with the following:
+            
+            {prompt}
+            
+            Here's the extracted HTML content:
+            ```html
+            {extracted_text}
+            ```
+            """
+            
+            # Send to the model
+            return self.forward(
+                full_prompt,
+                target=target,
+                temperature=temperature,
+                model=model or self.default_model,
+                verbose=verbose
+            )
+            
+        except Exception as e:
+            if verbose:
+                c.print(f"❌ Error scanning HTML screenshot: {str(e)}", color="red")
+            raise

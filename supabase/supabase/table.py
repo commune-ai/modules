@@ -1,4 +1,6 @@
 
+from typing import Any, Dict, List, Union
+
 class TableQuery:
     """Helper class for building queries against a specific table."""
     

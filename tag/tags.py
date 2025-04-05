@@ -13,7 +13,7 @@ class Tags:
         '''
         model = c.module('openrouter')()
         output = ''
-        for ch in  model.forward(text,process_text=False, stream=1):
+        for ch in  model.forward(text,process_input=False, stream=1):
             print(ch)
             output += ch
         

@@ -1,15 +1,11 @@
 
-
-
-
 import commune as c
 import json
 import os
 
-class Find:
 
-    def __init__(self, model=None):
-        self.model = c.module('openrouter')()
+
+class Selector:
 
     def forward(self,  
               options: list[str] = [],  
@@ -22,6 +18,7 @@ class Find:
               model='anthropic/claude-3.5-sonnet',
               context = None):
 
+        model = model or self.model
         if trials > 0 :
             try:
                 return self.forward(options=options, query=query, n=n, trials=trials-1, threshold=threshold, context=context, model=model)
@@ -56,8 +53,7 @@ class Find:
         --OUTPUT--
         """
         output = ''
-        
-        for ch in self.model.generate(prompt, model=model, stream=1): 
+        for ch in c.ask(prompt, model=model): 
             print(ch, end='')
             output += ch
             if ch == anchors[1]:
@@ -80,10 +76,6 @@ class Find:
         if len(extra_query)>0:
             query = ' '.join([query, *extra_query])
         options = self.forward(options=c.files(path), query=query, n=n)
-        return options
-
-    def text(self, query='the most relevant text files', path='./', n=30):
-        options = self.forward(options=c.text_files(path), query=query, n=n)
         return options
 
     def modules(self,  query='', **kwargs): 

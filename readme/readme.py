@@ -21,7 +21,7 @@ class Readme:
         <END_OUTPUT>
         08
         '''
-        response =  c.ask(prompt, process_text=False)
+        response =  c.ask(prompt, process_input=False)
         output = ''
         for ch in response:
             print(ch, end='')

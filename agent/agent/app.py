@@ -55,12 +55,6 @@ class App(c.Module):
         signature = self.key.ticket(c.hash(data))
         return signature
     
-    def save_data(self, data):
-        path = self.data2path(data)
-        return c.put(path, data)
-
-
-    
     def sidebar(self, user='user', password='password', seperator='::'):
         with st.sidebar:
             st.title('Just Chat')

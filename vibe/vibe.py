@@ -25,7 +25,7 @@ class Vibe:
                             }
         }
         output = ''
-        for ch in c.chat(prompt, process_text=False):
+        for ch in c.chat(prompt, process_input=False):
             print(ch, end='', flush=True)
             output += ch
         output = output.split('<OUTPUT_JSON>')[-1].split('</OUTPUT_JSON>')[0]

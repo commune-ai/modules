@@ -1,6 +1,14 @@
 
-    
+
+import os
+import json
+import commune as c
+
+
+
 class Score:
+    def __init__(self, agent='agent'):
+        self.agent = c.module(agent)()
     def forward(self, module:str, **kwargs):
         if c.path_exists(module):
             code = c.file2text(module)
@@ -28,13 +36,9 @@ class Score:
         <OUTPUT>DICT(score:int, feedback:str, suggestions=List[dict(improvement:str, delta:int)]])</OUTPUT>
         """
         output = ''
-        for ch in  self.forward(prompt, **kwargs):
+        for ch in  self.agent.forward(prompt, stream=True, **kwargs):
             output += ch
             print(ch, end='')
             if '</OUTPUT>' in output:
                 break
         return json.loads(output.split('<OUTPUT>')[1].split('</OUTPUT>')[0])
-
-
-
-    def test(self, module):

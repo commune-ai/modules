@@ -7,6 +7,7 @@ import inspect
 class Vali:
     endpoints = ['score', 'scoreboard']
     def __init__(self,
+
                     network= 'local', # for local chain:test or test # for testnet chain:main or main # for mainnet
                     search : Optional[str] =  None, # (OPTIONAL) the search string for the network 
                     batch_size : int = 128, # the batch size of the most parallel tasks
@@ -34,33 +35,23 @@ class Vali:
             c.thread(self.run_loop) if run_loop else ''
 
     def set_network(self, 
-                    network:str = 'local', 
+                    network:Optional[str] = None, 
                     tempo:int= 10, 
                     search:str=None, 
                     path:str=None, 
                     update = False):
-        self.network = network 
+        if not hasattr(self, 'network'):
+            self.network = 'local'
+        self.network = network or self.network
         self.tempo = tempo
-        if '/' in self.network:
-            self.network, self.subnet = network.split('/')
-            self.storage_path = self.get_path(self.network + '/' + self.subnet)
-        else:
-            self.subnet = None
-            self.storage_path = self.get_path(self.network)
+        self.storage_path = self.get_path(self.network + '/' + self.network)
         self.search = search
-        self.network_module = c.module(self.network)() 
+        self.net = c.module(self.network)() 
         self.sync(update=update)
 
-    def set_task(self, task: Union[str, 'callable', int]):
-        if isinstance(task, str):
-            task = c.module(task)()
-        assert hasattr(task, 'forward'), f'Task {task} does not have a forward method'
-        self.task_name = task.__class__.__name__.lower()
-        self.task = task
-
     def sync(self, update=False):
-        self.params = self.network_module.params(subnet=self.subnet, max_age=self.tempo, update=update)
-        self.modules = self.network_module.modules(subnet=self.subnet, max_age=self.tempo, update=update)
+        self.params = self.net.params(subnet=self.subnet, max_age=self.tempo, update=update)
+        self.modules = self.net.modules(subnet=self.subnet, max_age=self.tempo, update=update)        
         # create some extra helper mappings
         self.key2module = {m['key']: m for m in self.modules if 'key' in m}
         self.name2module = {m['name']: m for m in self.modules if 'name' in m}
@@ -69,6 +60,21 @@ class Vali:
             self.modules = [m for m in self.modules if any(str(self.search) in str(v) for v in m.values())]
         return self.params
     
+    def set_task(self, task: Union[str, 'callable', int]):
+        if isinstance(task, str):
+            task = c.module(task)()
+        assert hasattr(task, 'forward'), f'Task {task} does not have a forward method'
+        self.task = task
+        task_path = task.__module__ + '.' + task.__class__.__name__
+        task_code = c.code_map(task_path)
+        task_hash = c.hash(task_code)
+        self.task.info  = {
+            'name': task.__class__.__name__.lower(),
+            'schema': c.schema(task_path),
+            'code': task_code,
+            'cid': task_hash, # the content id of the code of the task
+        }
+
     def get_path(self, path):
         return os.path.expanduser(f'~/.commune/vali/{path}')
     
@@ -99,6 +105,7 @@ class Vali:
             else:
                 raise ValueError(f'Module not found {module}')
         client = c.client(module['url'], key=self.key)
+        c.print(f'Sample(task={self.task.info["name"]} module={module["name"]} url={module["url"]})')
         result = self.task.forward(client, **kwargs)
         module['result'] = result
         if isinstance(result, dict):
@@ -108,7 +115,7 @@ class Vali:
         module['time'] = t0
         module['duration'] = c.time() - module['time']
         module['vali'] = self.key.key_address
-        module['task'] = self.task_name
+        module['task'] = self.task.info["name"]
         module['path'] = self.get_module_path(module['key'])
         module['proof'] = c.sign(c.hash(module), key=self.key, mode='dict')
         self.verify_proof(module) # verify the proof
@@ -135,17 +142,16 @@ class Vali:
         num_batches = len(batches)
         epoch_info = {
             'epochs' : self.epochs,
-            'network': self.network,
-            'task_name': self.task_name,
-            'key': self.key.shorty,
+            'task': self.task.info['name'],
+            'key': self.key.key_address,
             'batch_size': self.batch_size,
-            'n': n
         }
         results = []
         for i, batch in enumerate(batches):
             futures = []
             future2module = {}
             for m in batch:
+                
                 future = c.submit(self.forward, [m], timeout=self.timeout)
                 future2module[future] = m
                 
@@ -173,7 +179,7 @@ class Vali:
         return c.time() - self.vote_time
 
     def vote(self, results):
-        if not bool(hasattr(self.network_module, 'vote')) :
+        if not bool(hasattr(self.net, 'vote')) :
             return {'success': False, 'msg': f'NOT VOTING NETWORK({self.network})'}
         if self.vote_staleness < self.tempo:
             return {'success': False, 'msg': f'Vote is too soon {self.vote_staleness}'}
@@ -182,7 +188,7 @@ class Vali:
         # get the top modules
         assert all('score' in r for r in results), f'No score in results {results}'
         assert all('key' in r for r in results), f'No key in results {results}'
-        return self.network_module.vote(
+        return self.net.vote(
                     modules=[m['key'] for m in modules], 
                     weights=[m['score'] for m in modules],  
                     key=self.key, 

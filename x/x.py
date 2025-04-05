@@ -10,7 +10,7 @@ class x:
             'task': task,
             'gith path': self.git_path(module=module),
         }
-        return c.chat(prompt, process_text=False)
+        return c.chat(prompt, process_input=False)
 
     def git_path(self, module='module', branch='main'):
         """
