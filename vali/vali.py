@@ -28,7 +28,7 @@ class Vali:
         self.timeout = timeout
         self.batch_size = batch_size
         self.verbose = verbose
-        self.key = c.get_key(key or 'vali')
+        self.key = c.get_key(key)
         self.set_task(task)
         self.set_network(network=network, tempo=tempo,  search=search,  path=path, update=update)
         if run_loop:
@@ -77,11 +77,17 @@ class Vali:
 
     def get_path(self, path):
         return os.path.expanduser(f'~/.commune/vali/{path}')
+
+    def next_epoch_time(self):
+        return self.epoch_time + self.tempo
+
+    def seconds_until_epoch(self):
+        return int(self.next_epoch_time() - c.time())
     
     def run_loop(self, step_time=2):
         while True:
-            # wait until the next epoch
-            seconds_until_epoch = int(self.epoch_time + self.tempo - c.time())
+            # wait until the next epoch)
+            seconds_until_epoch = self.seconds_until_epoch()
             if seconds_until_epoch > 0:
                 progress = c.tqdm(total=seconds_until_epoch, desc='Time Until Next Progress')
                 for i in range(seconds_until_epoch):
@@ -92,9 +98,9 @@ class Vali:
             except Exception as e:
                 c.print('XXXXXXXXXX EPOCH ERROR ----> XXXXXXXXXX ',c.detailed_error(e), color='red')
 
-    def forward(self,  module:dict, **kwargs):
-        t0 = c.time() # the timestamp
-        # resolve the module
+
+
+    def get_module(self, module:Union[str, dict]):
         if isinstance(module, str):
             if module in self.key2module:
                 module = self.key2module[module]
@@ -104,24 +110,27 @@ class Vali:
                 module = self.url2module[module]
             else:
                 raise ValueError(f'Module not found {module}')
+        return module
+    def forward(self,  module:Union[str, dict], **params):
+        module = self.get_module(module)
+        module['time'] = c.time()
         client = c.client(module['url'], key=self.key)
         c.print(f'Sample(task={self.task.info["name"]} module={module["name"]} url={module["url"]})')
-        result = self.task.forward(client, **kwargs)
-        module['result'] = result
-        if isinstance(result, dict):
-            module['score'] = result.get('score', 0)
-        elif isinstance(result, (int, float, bool)):
-            module['score'] = float(result)
-        module['time'] = t0
-        module['duration'] = c.time() - module['time']
-        module['vali'] = self.key.key_address
-        module['task'] = self.task.info["name"]
-        module['path'] = self.get_module_path(module['key'])
-        module['proof'] = c.sign(c.hash(module), key=self.key, mode='dict')
-        self.verify_proof(module) # verify the proof
-        if module['score'] > 0:
-            c.put_json(module['path'], module)
-        return module
+        result = self.task.forward(client, **params)
+        # prepare the module for the result
+        assert 'score' in result, f'Module {module["name"]} does not have a score {result}'
+        data = {**module, **result}
+        data['params'] = params
+        data['result'] = result
+        data['time'] = c.time()
+        data['duration'] = c.time() - module['time']
+        data['vali'] = self.key.key_address
+        data['task'] = self.task.info["name"]
+        data['path'] = self.get_module_path(data['key'])
+        data['proof'] = c.sign(c.hash(data), key=self.key, mode='dict')
+        self.verify_proof(data) # verify the proof
+        c.put_json(data['path'], data)
+        return data
 
     def get_module_path(self, module:str):
         return self.storage_path + '/' + module + '.json'
@@ -151,7 +160,7 @@ class Vali:
             futures = []
             future2module = {}
             for m in batch:
-                
+                print(f'Batch {i}/{num_batches} {m["name"]} {m["url"]}')
                 future = c.submit(self.forward, [m], timeout=self.timeout)
                 future2module[future] = m
                 
@@ -159,7 +168,7 @@ class Vali:
                 try:
                     m = future2module[future]
                     result = future.result()
-                    if isinstance(result, dict) and all(k in result for k in features):
+                    if isinstance(result, dict) and 'score' in result:
                         results.append(result)
                     else: 
                         c.print(f'Error({m["name"]}, result={result})')

@@ -37,7 +37,7 @@ class Dev:
     anchor = 'OUTPUT'
 
     def __init__(self, 
-                 provider: str = 'openrouter', 
+                 model: str = 'openrouter', 
                  default_model: str = 'anthropic/claude-3.7-sonnet',
                  cache_dir: str = '~/.commune/dev_cache',
                  **kwargs):
@@ -50,7 +50,7 @@ class Dev:
             cache_dir: Directory to store cache files
             **kwargs: Additional arguments to pass to the provider
         """
-        self.model = c.module(provider)(**kwargs)
+        self.model = c.module(model)(**kwargs)
         self.default_model = default_model
         self.cache_dir = abspath(cache_dir)
         ensure_directory_exists(self.cache_dir)
@@ -104,15 +104,10 @@ class Dev:
         # Combine all text parts
         if len(extra_text) > 0:
             text = ' '.join(list(map(str, [text] + list(extra_text))))
-        
+        text = self.preprocess(text)
         # Determine mode based on target directory content if set to auto
         if mode == 'auto':
             mode = 'edit' if os.path.exists(target) and os.listdir(target) else 'create'
-        
-        # Gather context from target directory
-
-        # Check cache for identical request
-        
 
         # Build the prompt
         files = c.module('dev.find')().forward(c.files(target), query=text)
@@ -134,7 +129,7 @@ class Dev:
             print(f"🍆 Size (request in characters): {len(context)} files", color="cyan")
 
         # Generate the response
-        output = self.model.generate(
+        output = self.model.forward(
             prompt, 
             stream=stream, 
             model=model or self.default_model, 
@@ -216,3 +211,36 @@ class Dev:
                         print(f"Error processing output: {e}", color="red")
         
         return path2text
+
+
+
+
+
+    def preprocess(self, text, threshold=1000):
+            new_text = ''
+            is_function_running = False
+            words = text.split(' ')
+            fn_detected = False
+            fns = []
+            for i, word in enumerate(words):
+                prev_word = words[i-1] if i > 0 else ''
+                # restrictions can currently only handle one function argument, future support for multiple
+                magic_prefix = f'@/'
+                if word.startswith(magic_prefix) and not fn_detected:
+                    word = word[len(magic_prefix):]
+                    if '/' not in word:
+                        word = '/' + word
+                    fns += [{'fn': word, 'params': [], 'idx': i + 2}]
+                    fn_detected=True
+                else:
+                    if fn_detected:
+                        fns[-1]['params'] += [word]
+                        fn_detected = False
+            c.print(fns)
+            for fn in fns:
+                print('Running function:', fn)
+                result = c.fn(fn['fn'])(*fn['params'])
+                fn['result'] = result
+                text =' '.join([*words[:fn['idx']],'-->', str(result), *words[fn['idx']:]])
+            return text
+        

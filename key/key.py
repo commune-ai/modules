@@ -8,6 +8,7 @@ import secrets
 import base64
 import hashlib
 import nacl.bindings
+import copy
 import nacl.public
 from scalecodec.base import ScaleBytes
 from bip39 import bip39_to_mini_secret, bip39_generate, bip39_validate
@@ -343,7 +344,7 @@ class Key:
         return key
         
     def to_json(self, password: str = None ) -> dict:
-        state_dict =  c.copy(self.__dict__)
+        state_dict =  copy.deepcopy(self.__dict__)
         for k,v in state_dict.items():
             if type(v)  in [bytes]:
                 state_dict[k] = v.hex() 
@@ -424,15 +425,17 @@ class Key:
         """
         Encodes data for signing and vefiying,  converting it to bytes if necessary.
         """
-        data = c.copy(data)
+        data = copy.deepcopy(data)
+
         if not isinstance(data, str):
             data = python2str(data)
+        if isinstance(data, str):
+            if data[0:2] == '0x': # hex string
+                data = bytes.fromhex(data[2:])
+            elif type(data) is str:
+                data = data.encode()
         if type(data) is ScaleBytes:
             data = bytes(data.data)
-        elif data[0:2] == '0x': # hex string
-            data = bytes.fromhex(data[2:])
-        elif type(data) is str:
-            data = data.encode()
         return data
 
     def resolve_signature(self, signature: Union[bytes, str]):
@@ -457,6 +460,23 @@ class Key:
                 public_key = public_key[2:]
             public_key = bytes.fromhex(public_key)
         return public_key
+
+
+    def get_sign_function(self, crypto_type=None):
+        """
+        Returns the sign function for the given crypto type
+        """
+        crypto_type = self.get_crypto_type(crypto_type)
+        if crypto_type == "sr25519":
+            return sr25519.sign
+        elif crypto_type == "ed25519":
+            return ed25519_zebra.ed_sign
+        elif crypto_type == "ecdsa":
+            return ecdsa_sign
+        else:
+            raise ValueError(f"Invalid crypto type: {crypto_type}")
+
+        
 
     def sign(self, data: Union[ScaleBytes, bytes, str], mode='bytes') -> bytes:
         """
@@ -490,7 +510,7 @@ class Key:
                     'signature':signature.hex(),
                     'address': self.key_address}
         elif mode == 'bytes':
-            pass
+            signature = signature
         else:
             raise ValueError(f'invalid mode {mode}')
 
@@ -659,7 +679,7 @@ class Key:
     def str2key(self, password:str, crypto_type=None, **kwargs):
         return self.from_password(password, crypto_type=crypto_type, **kwargs)
 
-    def multi(self,key=None, **kwargs):
-        key = self.get_key(key) if key != None else self
-        return key.crypto_type + '/' + key.key_address
+    def multi(self,key=None, crypto_type=None):
+        key = self.get_key(key, crypto_type=crypto_type ) if key != None else self
+        return key.crypto_type + '::' + key.key_address
     

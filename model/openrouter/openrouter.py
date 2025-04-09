@@ -110,7 +110,6 @@ class OpenRouter:
         
     generate = forward
 
-
     def history(self, path:str = None, max_age:int = 0, update:bool = False):
         """
         Get the history of the last requests

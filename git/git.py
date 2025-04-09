@@ -28,6 +28,20 @@ class git:
             'cmds': cmds,
         }
 
+    def gitpath(self, path:str = './'):
+        """
+        find the closest git path to the current path
+        
+        """
+        import os
+        paths = []
+        for root, dirs, files in os.walk(path):
+            if '.git' in dirs:
+                paths.append(root)
+                continuec
+
+        return paths
+
     
     def git_repos(self, path='./'):
             import os
@@ -282,3 +296,47 @@ class git:
     def branch(self, path=None):
         path = self.get_path(path)
         return c.cmd('git rev-parse --abbrev-ref HEAD', cwd=path).strip().split('\n')[0].strip().split(' ')[0].strip()
+
+    def init_repo(
+        repo_path: str, 
+        user_name: str = None, 
+        user_email: str = None,
+        initial_branch: str = "main",
+        verbose: bool = False
+    ) -> str:
+        """
+        Initialize a Git repository with optional configuration.
+        
+        Args:
+            repo_path (str): Path where the Git repository should be initialized
+            user_name (str, optional): Git user name for this repository
+            user_email (str, optional): Git user email for this repository
+            initial_branch (str, optional): Name of the initial branch
+            verbose (bool): Whether to print command output
+            
+        Returns:
+            str: Command output
+        """
+        import os
+        
+        # Create directory if it doesn't exist
+        os.makedirs(repo_path, exist_ok=True)
+        
+        # Initialize the repository with specified branch name
+        result = cmd(f"git init -b {initial_branch}", cwd=repo_path, verbose=verbose)
+        
+        # Configure user if provided
+        if user_name:
+            cmd(f"git config user.name '{user_name}'", cwd=repo_path, verbose=verbose)
+        
+        if user_email:
+            cmd(f"git config user.email '{user_email}'", cwd=repo_path, verbose=verbose)
+        
+        # Create initial README and commit
+        with open(os.path.join(repo_path, "README.md"), "w") as f:
+            f.write(f"# {os.path.basename(repo_path)}\n\nInitialized with Python.")
+        
+        cmd("git add README.md", cwd=repo_path, verbose=verbose)
+        cmd("git commit -m 'Initial commit'", cwd=repo_path, verbose=verbose)
+        
+        return result

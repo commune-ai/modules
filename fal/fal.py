@@ -1,5 +1,5 @@
 import commune as c 
-class Home2home:
+class Fal:
     """
     A base class that provides fundamental functionality for commune modules.
     """

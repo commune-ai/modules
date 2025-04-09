@@ -7,21 +7,21 @@ import inspect
 
 class Cli:
 
-
-    def forward(self,
+    def main(self,
                 fn='vs',  
                 module='module', 
-                default_fn = 'vs'):
+                default_fn = 'forward'):
         t0 = time.time()
         argv = sys.argv[1:]
         # ---- FUNCTION
         module = self.module(module)()
         if len(argv) == 0:
             argv += [fn]
+
         fn = argv.pop(0)
+
         if hasattr(module, fn):
             fn_obj = getattr(module, fn)
-
         elif '/' in fn:
             if fn.startswith('/'):
                 fn = fn[1:]
@@ -34,7 +34,6 @@ class Cli:
 
         else:
             raise Exception(f'Function {fn} not found in module {module}')
-        fn_obj = getattr(module, fn)
         # ---- PARAMS ----
         params = {'args': [], 'kwargs': {}} 
         parsing_kwargs = False
@@ -51,7 +50,7 @@ class Cli:
         result = fn_obj(*params['args'], **params['kwargs']) if callable(fn_obj) else fn_obj
         speed = time.time() - t0
         module_name = module.__class__.__name__
-        print(f'Call({module_name}/{fn}, speed={speed:.2f}s)')
+        self.print(f'Call({module_name}/{fn}, speed={speed:.2f}s)')
         duration = time.time() - t0
         is_generator = self.is_generator(result)
         if is_generator:
@@ -61,9 +60,7 @@ class Cli:
                 else:
                     self.print(item, end='')
         else:
-            print(result)
-
-   
+            self.print(result)
 
 
     def str2python(self, x):
@@ -109,6 +106,16 @@ class Cli:
                 except ValueError:
                     pass
         return x
+
+
+    def print(self, *args, **kwargs):
+        """
+        Print with a custom prefix
+        """
+        prefix = kwargs.pop('prefix', '')
+        if prefix:
+            print(f'{prefix}: ', end='')
+        print(*args, **kwargs)
 
 
     def is_generator(self, obj):

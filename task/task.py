@@ -10,7 +10,10 @@ class Task:
         self.params = params or {}
 
     def forward(self,module, **params):
+        params = {**self.params, **params}
         result =  getattr(module, self.fn)(**params)
-        assert isinstance(result, dict)
-        assert 'name' in result
-        return 1
+        if 'url' in result:
+            score = 1
+        else: 
+            score = 0
+        return {'score': score, 'result': result, 'params': params}

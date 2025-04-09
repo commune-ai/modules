@@ -1,4 +1,4 @@
-
+ # start of file
 import os
 import pandas as pd
 from typing import List, Dict, Union, Optional, Any
@@ -55,7 +55,7 @@ class Docker:
     def run(self,
             image: str = './',
             cmd: Optional[str] = None,
-            volumes: Optional[Union[List[str], Dict[str, str], str]] = None,
+            volumes: Dict[str, str] = None,
             name: Optional[str] = None,
             gpus: Union[List[int], str, bool] = False,
             shm_size: str = '100g',
@@ -111,13 +111,10 @@ class Docker:
             
         # Handle volume mappings
         if volumes:
-            if isinstance(volumes, str):
-                volumes = [volumes]
-            elif isinstance(volumes, dict):
-                volumes = [f'{k}:{v}' for k, v in volumes.items()]
+            assert isinstance(volumes, dict)
+            volumes = [f'{k}:{v}' for k, v in volumes.items()]
             for volume in volumes:
                 dcmd.extend(['-v', volume])
-
         # Handle environment variables
         if env_vars:
             for key, value in env_vars.items():
@@ -127,23 +124,34 @@ class Docker:
         if name:
             dcmd.extend(['--name', name])
 
-        # # Add command if specified
-        # if entrypoint: 
-        #     dcmd.extend(f' --entrypoint {entrypoint}')
+        # Add entrypoint if specified
+        if entrypoint:
+            dcmd.extend(['--entrypoint', entrypoint])
 
-        # Add command if specified
-        if cmd:
-            dcmd.append(cmd)
-
+        # Run in daemon mode
         if daemon:
             dcmd.append('-d')
 
         # Add image name
         dcmd.append(image)
+        
+        # Add command if specified
+        if cmd:
+            dcmd.append(cmd)
+
         command_str = ' '.join(dcmd)
         return c.cmd(command_str, verbose=True)
 
     def exists(self, name: str) -> bool:
+        """
+        Check if a container exists.
+
+        Args:
+            name (str): The name of the container.
+
+        Returns:
+            bool: True if the container exists, False otherwise.
+        """
         return name in self.ps()
         
     def kill(self, name: str, sudo: bool = False, verbose: bool = True, prune: bool = False) -> Dict[str, str]:
@@ -268,6 +276,15 @@ class Docker:
             return f"Error pruning: {e}"
 
     def get_path(self, path: str) -> str:
+        """
+        Get the path to a Docker-related file.
+
+        Args:
+            path (str): The path to the file.
+
+        Returns:
+            str: The full path to the file.
+        """
         return os.path.expanduser(f'~/.commune/docker/{path}')
 
     def stats(self, max_age=60, update=False) -> pd.DataFrame:
@@ -275,7 +292,8 @@ class Docker:
         Get container resource usage statistics.
 
         Args:
-            container (Optional[str]): The name of the container.
+            max_age (int): Maximum age of cached data in seconds.
+            update (bool): Force update of data.
 
         Returns:
             pd.DataFrame: A DataFrame containing the container statistics.
@@ -335,13 +353,14 @@ class Docker:
             c.print(f"Error listing containers: {e}", color='red')
             return []
 
-    def exec(self, name: str, cmd: str ,  *extra_cmd) -> str:
+    def exec(self, name: str, cmd: str, *extra_cmd) -> str:
         """
         Execute a command in a running Docker container.
 
         Args:
             name (str): The name of the container.
             cmd (str): The command to execute.
+            *extra_cmd: Additional command arguments.
 
         Returns:
             str: The output of the command.
@@ -350,21 +369,6 @@ class Docker:
             cmd = ' '.join([cmd] + list(extra_cmd))
         
         return c.cmd(f'docker exec {name} bash -c "{cmd}"')
-    # def stats(self, max_age=1000, update=False) -> Dict[str, Any]:
-    #     path = c.abspath('~/.docker/docker_stats.json')
-    #     name2stats = c.get(path, {}, max_age=max_age, update=update)
-    #     if len(name2stats) == 0:
-    #         future2name = {}
-    #         for name in self.ps():
-    #             f = c.submit(self.container_stats, [name])
-    #             future2name[f] = name
-    #         for future in future2name:
-    #             name = future2name[future]  
-    #             name2stats[name] = future.result()
-    #             print(name, name2stats[name])
-    #         c.put(path, name2stats)
-    #     return list(name2stats.values())
-
 
     def cstats(self, max_age=10, update=False, cache_dir="./docker_stats") -> pd.DataFrame:
         """
@@ -426,17 +430,15 @@ class Docker:
                 # Extract values based on header positions
                 values = []
                 for i in range(len(header_indices)):
-                    start = header_indices
-                    end = header_indices if i+1 < len(header_indices) else len(line)
-                    values.append(line.strip())
+                    start = header_indices[i]
+                    end = header_indices[i+1] if i+1 < len(header_indices) else len(line)
+                    values.append(line[start:end].strip())
                 
                 # Create a dictionary for this row
                 row = dict(zip(cleaned_headers, values))
                 
                 # Process special columns
                 if 'MEM USAGE / LIMIT' in row:
-                    print(row)
-
                     mem_usage, mem_limit = row.pop('MEM USAGE / LIMIT').split('/')
                     row['MEM_USAGE'] = mem_usage.strip()
                     row['MEM_LIMIT'] = mem_limit.strip()
@@ -466,8 +468,305 @@ class Docker:
         # Convert to DataFrame
         return pd.DataFrame(stats)
 
-
-
     def sync(self):
+        """
+        Sync container statistics.
+        """
         self.stats(update=1)
+
+    # PM2-like methods for container management
+    def start(self, name: str, image: str, **kwargs) -> Dict[str, Any]:
+        """
+        Start a container (PM2-like interface).
+
+        Args:
+            name (str): Name for the container.
+            image (str): Docker image to use.
+            **kwargs: Additional arguments for the run method.
+
+        Returns:
+            Dict[str, Any]: Result of the operation.
+        """
+        if self.exists(name):
+            return self.restart(name)
         
+        return self.run(image=image, name=name, **kwargs)
+
+    def stop(self, name: str) -> Dict[str, str]:
+        """
+        Stop a container without removing it (PM2-like interface).
+
+        Args:
+            name (str): The name of the container.
+
+        Returns:
+            Dict[str, str]: Result of the operation.
+        """
+        try:
+            c.cmd(f'docker stop {name}', verbose=False)
+            return {'status': 'stopped', 'name': name}
+        except Exception as e:
+            return {'status': 'error', 'name': name, 'error': str(e)}
+
+    def restart(self, name: str) -> Dict[str, str]:
+        """
+        Restart a container (PM2-like interface).
+
+        Args:
+            name (str): The name of the container.
+
+        Returns:
+            Dict[str, str]: Result of the operation.
+        """
+        try:
+            c.cmd(f'docker restart {name}', verbose=False)
+            return {'status': 'restarted', 'name': name}
+        except Exception as e:
+            return {'status': 'error', 'name': name, 'error': str(e)}
+
+    def delete(self, name: str) -> Dict[str, str]:
+        """
+        Remove a container (PM2-like interface).
+
+        Args:
+            name (str): The name of the container.
+
+        Returns:
+            Dict[str, str]: Result of the operation.
+        """
+        return self.kill(name)
+
+    def list(self, all: bool = False) -> pd.DataFrame:
+        """
+        List containers with detailed information (PM2-like interface).
+
+        Args:
+            all (bool): Include stopped containers.
+
+        Returns:
+            pd.DataFrame: DataFrame containing container information.
+        """
+        try:
+            cmd = 'docker ps' if not all else 'docker ps -a'
+            output = c.cmd(cmd, verbose=False)
+            lines = output.split('\n')
+            
+            if len(lines) <= 1:
+                return pd.DataFrame()
+                
+            # Process headers
+            headers = []
+            current_pos = 0
+            header_line = lines[0]
+            
+            # Extract header positions
+            for i, char in enumerate(header_line):
+                if char.isupper() and (i == 0 or header_line[i-1].isspace()):
+                    if current_pos < i:
+                        header_end = i
+                        header_text = header_line[current_pos:header_end].strip()
+                        if header_text:
+                            headers.append((current_pos, header_text))
+                    current_pos = i
+            
+            # Add the last header
+            if current_pos < len(header_line):
+                headers.append((current_pos, header_line[current_pos:].strip()))
+            
+            # Extract header positions for parsing
+            header_positions = [pos for pos, _ in headers]
+            header_names = [name.lower().replace(' ', '_') for _, name in headers]
+            
+            # Parse data rows
+            data = []
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                    
+                row = {}
+                for i in range(len(header_positions)):
+                    start = header_positions[i]
+                    end = header_positions[i+1] if i+1 < len(header_positions) else len(line)
+                    value = line[start:end].strip()
+                    row[header_names[i]] = value
+                
+                data.append(row)
+            
+            return pd.DataFrame(data)
+        except Exception as e:
+            c.print(f"Error listing containers: {e}", color='red')
+            return pd.DataFrame()
+
+    def monitor(self) -> pd.DataFrame:
+        """
+        Monitor containers (PM2-like interface).
+
+        Returns:
+            pd.DataFrame: DataFrame with container monitoring information.
+        """
+        return self.cstats(update=True)
+
+    def save(self, config_name: str = 'default') -> Dict[str, Any]:
+        """
+        Save current container configuration (PM2-like interface).
+
+        Args:
+            config_name (str): Name for the configuration.
+
+        Returns:
+            Dict[str, Any]: Result of the operation.
+        """
+        try:
+            containers = self.list(all=True)
+            if containers.empty:
+                return {'status': 'error', 'message': 'No containers to save'}
+            
+            config_path = self.get_path(f'configs/{config_name}.json')
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            
+            # Get container details including image, ports, volumes, etc.
+            container_configs = []
+            for _, container in containers.iterrows():
+                name = container.get('names', '')
+                if not name:
+                    continue
+                    
+                # Get detailed container info
+                inspect_cmd = f'docker inspect {name}'
+                try:
+                    inspect_output = c.cmd(inspect_cmd, verbose=False)
+                    container_info = json.loads(inspect_output)[0]
+                    
+                    config = {
+                        'name': name,
+                        'image': container_info.get('Config', {}).get('Image', ''),
+                        'command': container_info.get('Config', {}).get('Cmd', []),
+                        'entrypoint': container_info.get('Config', {}).get('Entrypoint', []),
+                        'env': container_info.get('Config', {}).get('Env', []),
+                        'ports': container_info.get('HostConfig', {}).get('PortBindings', {}),
+                        'volumes': container_info.get('HostConfig', {}).get('Binds', []),
+                        'network_mode': container_info.get('HostConfig', {}).get('NetworkMode', ''),
+                        'restart_policy': container_info.get('HostConfig', {}).get('RestartPolicy', {}),
+                        'status': container_info.get('State', {}).get('Status', '')
+                    }
+                    container_configs.append(config)
+                except Exception as e:
+                    c.print(f"Error inspecting container {name}: {e}", color='yellow')
+                    continue
+            
+            # Save the configuration
+            with open(config_path, 'w') as f:
+                json.dump(container_configs, f, indent=2)
+                
+            return {
+                'status': 'success', 
+                'message': f'Saved {len(container_configs)} container configurations to {config_path}',
+                'path': config_path
+            }
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
+
+    def load(self, config_name: str = 'default') -> Dict[str, Any]:
+        """
+        Load and apply a saved container configuration (PM2-like interface).
+
+        Args:
+            config_name (str): Name of the configuration to load.
+
+        Returns:
+            Dict[str, Any]: Result of the operation.
+        """
+        try:
+            config_path = self.get_path(f'configs/{config_name}.json')
+            if not os.path.exists(config_path):
+                return {'status': 'error', 'message': f'Configuration {config_name} not found'}
+            
+            with open(config_path, 'r') as f:
+                container_configs = json.load(f)
+            
+            results = []
+            for config in container_configs:
+                name = config.get('name')
+                image = config.get('image')
+                
+                if not name or not image:
+                    results.append({'status': 'error', 'message': 'Missing name or image in config'})
+                    continue
+                
+                # Convert ports format
+                ports = {}
+                for container_port, host_bindings in config.get('ports', {}).items():
+                    if host_bindings and len(host_bindings) > 0:
+                        host_port = host_bindings[0].get('HostPort')
+                        if host_port:
+                            ports[host_port] = container_port.split('/')[0]
+                
+                # Convert volumes format
+                volumes = {}
+                for volume in config.get('volumes', []):
+                    if ':' in volume:
+                        host_path, container_path = volume.split(':', 1)
+                        volumes[host_path] = container_path
+                
+                # Convert environment variables
+                env_vars = {}
+                for env in config.get('env', []):
+                    if '=' in env:
+                        key, value = env.split('=', 1)
+                        env_vars[key] = value
+                
+                # Start the container
+                try:
+                    result = self.run(
+                        image=image,
+                        name=name,
+                        cmd=' '.join(config.get('command', [])) if config.get('command') else None,
+                        entrypoint=' '.join(config.get('entrypoint', [])) if config.get('entrypoint') else None,
+                        volumes=volumes,
+                        ports=ports,
+                        env_vars=env_vars,
+                        net=config.get('network_mode', 'bridge')
+                    )
+                    results.append({'name': name, 'status': 'started', 'result': result})
+                except Exception as e:
+                    results.append({'name': name, 'status': 'error', 'error': str(e)})
+            
+            return {
+                'status': 'success',
+                'message': f'Loaded {len(results)} containers from {config_name} configuration',
+                'results': results
+            }
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
+
+    def file(self, path: str) -> str:
+        """
+        Get the content of a Dockerfile.
+
+        Args:
+            path (str): Path to the directory containing the Dockerfile.
+
+        Returns:
+            str: Content of the Dockerfile.
+        """
+        dockerfile_path = os.path.join(path, 'Dockerfile')
+        if os.path.exists(dockerfile_path):
+            with open(dockerfile_path, 'r') as f:
+                return f.read()
+        return f"Dockerfile not found at {dockerfile_path}"
+
+    def files(self, path: str = '.') -> List[str]:
+        """
+        Find all Dockerfiles in a directory and its subdirectories.
+
+        Args:
+            path (str): Root directory to search.
+
+        Returns:
+            List[str]: List of paths to Dockerfiles.
+        """
+        dockerfiles = []
+        for root, _, files in os.walk(path):
+            if 'Dockerfile' in files:
+                dockerfiles.append(os.path.join(root, 'Dockerfile'))
+        return dockerfiles

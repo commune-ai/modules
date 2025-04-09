@@ -1,116 +1,81 @@
-
+ # start of file
 # Docker Module for Commune
 
-A powerful and flexible Docker management module that provides a high-level interface for Docker operations.
+This module provides a comprehensive interface for managing Docker containers, similar to how PM2 manages processes.
 
 ## Features
 
-- 🐳 Docker container management
-- 🏗️ Image building and handling
-- 📝 Log management
-- 📊 Container statistics
-- 🔄 Resource pruning
-- 🖥️ Multi-container operations
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-repo/commune.git
-
-# Install dependencies
-pip install pandas
-```
+- Build and run Docker containers with advanced configuration options
+- Manage container lifecycle (start, stop, restart, delete)
+- Monitor container resource usage
+- Save and load container configurations
+- Execute commands in running containers
+- View container logs
+- List and manage Docker images
 
 ## Usage
-
-### Basic Examples
 
 ```python
 import commune as c
 
-# Initialize Docker module
-docker = c.Docker()
+# Initialize the Docker module
+docker = c.module('docker')()
 
-# Build a Docker image
-docker.build(path="./my_dockerfile", tag="my_app:latest")
+# Start a container
+docker.start('my_container', 'python:3.8', 
+             cmd='python -m http.server',
+             ports={'8000': 8000})
 
-# Run a container
-docker.run(
-    path="my_app:latest",
-    volumes=["/host/path:/container/path"],
-    gpus=[0,1],  # Use specific GPUs
-    env_vars={"KEY": "VALUE"}
-)
+# List running containers
+containers = docker.list()
+print(containers)
 
-# Get container logs
-logs = docker.logs(name="my_container", follow=True)
+# Monitor container resource usage
+stats = docker.monitor()
+print(stats)
 
-# View container statistics
-stats = docker.stats()
+# Execute a command in a container
+result = docker.exec('my_container', 'ls -la')
+print(result)
 
-# Kill containers
-docker.kill("my_container")
-docker.kill_all()  # Kill all containers
+# View container logs
+logs = docker.logs('my_container')
+print(logs)
+
+# Stop a container
+docker.stop('my_container')
+
+# Remove a container
+docker.delete('my_container')
+
+# Save current container configuration
+docker.save('my_setup')
+
+# Load a saved configuration
+docker.load('my_setup')
 ```
 
-## API Reference
+## PM2-like Interface
 
-### Core Methods
+The Docker module provides a PM2-like interface for managing containers:
 
-#### `build(path, tag, sudo=False, verbose=True, no_cache=False, env={})`
-Builds a Docker image from a Dockerfile.
+- `start(name, image, **kwargs)`: Start a container
+- `stop(name)`: Stop a container
+- `restart(name)`: Restart a container
+- `delete(name)`: Remove a container
+- `list(all=False)`: List containers
+- `monitor()`: Monitor container resource usage
+- `save(config_name)`: Save current container configuration
+- `load(config_name)`: Load a saved configuration
 
-#### `run(path, cmd=None, volumes=None, name=None, gpus=False, ...)`
-Runs a Docker container with extensive configuration options.
+## Advanced Options
 
-#### `kill(name, sudo=False, verbose=True, prune=False)`
-Kills and removes a specific container.
+The module supports advanced Docker features:
 
-#### `kill_all(sudo=False, verbose=True)`
-Kills all running containers.
-
-#### `logs(name, follow=False, tail=100, since=None)`
-Retrieves container logs with various filtering options.
-
-#### `stats(container=None)`
-Gets resource usage statistics for containers.
-
-#### `prune(all=False)`
-Cleans up unused Docker resources.
-
-### Utility Methods
-
-#### `file(path='./')`
-Gets content of the first Dockerfile found in path.
-
-#### `files(path='./')`
-Finds all Dockerfiles in given path.
-
-#### `images(to_records=True)`
-Lists all Docker images in system.
-
-## Configuration
-
-- Default shared memory size: 100GB
-- Default network mode: host
-- Supports both GPU and CPU configurations
-- Flexible volume mounting
-- Customizable environment variables
-- Port mapping support
-
-## Requirements
-
-- Python 3.6+
-- Docker installed and running
-- pandas library
-- commune framework
-
-## License
-
-[Your License Here]
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
+- GPU configuration
+- Volume mapping
+- Port mapping
+- Environment variables
+- Network configuration
+- Shared memory size
+- Custom entrypoints and commands
