@@ -59,6 +59,15 @@ def str2bytes( data: str, mode: str = 'hex') -> bytes:
         return bytes.fromhex(data)
 
 
+def is_int(value: str) -> bool:
+    """
+    Check if the provided string is an integer
+    """
+    try:
+        int(value)
+        return True
+    except ValueError:
+        return False
 
 def is_valid_ecdsa_address(address: str) -> bool:
     """

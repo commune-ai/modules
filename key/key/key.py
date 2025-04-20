@@ -40,7 +40,7 @@ from .utils import (extract_derive_path,
                      mnemonic_to_ecdsa_private_key, 
                      ecdsa_sign, 
                      str2bytes,
-                     ecdsa_verify)
+                     ecdsa_verify, is_int)
 
 # imoport 
 class Key:
@@ -110,8 +110,8 @@ class Key:
         if type(public_key) is str:
             public_key = bytes.fromhex(public_key.replace('0x', ''))
             
-        self.crypto_type = crypto_type
-        self.crypto_type_id = self.crypto_type_map[crypto_type]
+        self.crypto_type_name = crypto_type # the name of the crypto type
+        self.crypto_type = self.crypto_type_id = self.crypto_type_map[crypto_type] # the integer value of the crypto type
         self.private_key = private_key
         self.public_key = public_key
         self.key_address = self.address = self.ss58_address =  key_address
@@ -127,8 +127,8 @@ class Key:
                 shortcuts[net] = k
         if crypto_type in shortcuts:
             crypto_type = shortcuts[crypto_type]
-
-        if c.is_int(crypto_type):
+        
+        if is_int(crypto_type):
             crypto_type = self.reverse_crypto_type_map[int(crypto_type)]
         elif isinstance(crypto_type, str):
             crypto_type = crypto_type.lower()
@@ -149,7 +149,7 @@ class Key:
         if not self.key_exists(path, crypto_type=crypto_type) or refresh :
             key = self.new_key( private_key=private_key, crypto_type=crypto_type, mnemonic=mnemonic, **kwargs)
             key_json = json.loads(key.to_json())
-            assert crypto_type == key_json['crypto_type'], f'crypto_type mismatch {crypto_type} != {key_json["crypto_type"]}'
+            assert crypto_type == self.get_crypto_type(key_json['crypto_type']), f'crypto_type mismatch {crypto_type} != {key_json["crypto_type"]}'
             path = self.resolve_path(path) + '/' + crypto_type+ '/' + key.key_address + '.json'
             c.put(path, key_json)
             assert self.key_exists(path, crypto_type=crypto_type), f'key does not exist at {path}'
@@ -159,7 +159,7 @@ class Key:
         new_path = self.get_key_path(new_path)
         key = self.get_key(path)
         key_json = key.to_json()
-        new_key_path = new_path + '/' + key.crypto_type + '/' + key.key_address + '.json'
+        new_key_path = new_path + '/' + self.get_crypto_type(key.crypto_type) + '/' + key.key_address + '.json'
         new_key_path_dir = '/'.join(new_key_path.split('/')[:-1])
         if not c.exists(new_key_path_dir):
             os.makedirs(new_key_path_dir)
@@ -184,7 +184,7 @@ class Key:
 
     def get_key(self, 
                 path:str,
-                password:str=None, 
+                password:Optional[str]=None, 
                 create_if_not_exists:bool = True, 
                 prompt_password:bool = False,
                 crypto_type=None, 
@@ -207,7 +207,7 @@ class Key:
         if self.is_encrypted(key_json):
             if prompt_password and password == None:
                 password = input(f'enter password to decrypt {path} ')
-            key_json = c.decrypt(data=key_json, password=password)
+            key_json = self.decrypt(data=key_json, password=password)
         key_json = json.loads(key_json) if isinstance(key_json, str) else key_json
         key =  self.from_json(key_json, crypto_type=crypto_type)
         return key
@@ -681,5 +681,5 @@ class Key:
 
     def multi(self,key=None, crypto_type=None):
         key = self.get_key(key, crypto_type=crypto_type ) if key != None else self
-        return key.crypto_type + '::' + key.key_address
+        return key.crypto_type_name + '::' + key.key_address
     
