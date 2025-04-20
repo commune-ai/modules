@@ -1,124 +1,135 @@
 
-## Serving
+# Commune Server Module
 
+A robust, secure, and extensible server framework for building API services with authentication, transaction tracking, and middleware support.
 
-A server is a module that is converted to an http server.
+## Overview
 
-To deploy a server
+The Commune Server module provides a complete server infrastructure with:
 
-```python
-# c serve model.openai is also vaid without the tag
-# if you want to add a tag to the server
-c serve model.openai:
-# c.serve('model.openai')
-```
-{
-    'success': True,
-    'name': 'model.openai',
-    'address': '162.84.137.201:50191',
-    'kwargs': {}
-}
+- JWT-based authentication
+- Request verification
+- Transaction tracking and analytics
+- Rate limiting
+- Middleware for request processing
+- Persistent storage
 
-The server can be called in several ways
+## Components
 
-```python
-c call model.openai/forward "sup"
-c.call("model.openai:/forward",  "sup")
-```
+### Server
 
-"hey there homie"
+The core server component that handles routing, function execution, and client communication.
 
-The name of the endpoing is formated as
+### Auth
 
-{server_ip}:{server_port}/{function}
+JWT-based authentication system for secure API access with token generation and verification.
 
-with the data being a json request in the format of the following
+### Middleware
 
+Request processing middleware that handles:
+- Request size validation
+- Rate limiting
+- Authentication verification
+- Transaction logging
 
+### TxCollector
 
-### Viewing Available Servers
-You can view the available servers using the `servers()` method:
+Transaction collector for tracking and analyzing API requests with:
+- Efficient storage of transaction data
+- Query capabilities for analytics
+- Automatic cleanup of old transaction data
 
-```
-c servers # c.servers()  
-```
-### Viewing Server Logs
-To view the logs of a served module, you can use the `logs()` method:
+### Store
 
-```python
-c logs demo c.logs('demo')
-```
+Simple key-value storage for persisting data.
 
-### Connecting to a Served Module
-You can connect to a served module using the `connect()` method:
-The following calls the `info()` function of the `demo:1` module:
+## Usage
+
+### Starting a Server
 
 ```python
-c call demo/info 
+import commune as c
+
+# Create and start a server for a module
+server = c.module('server')
+server.serve('my_module', port=8000)
 ```
 
-### Restarting a Module
-You can restart or kill a served module using the `restart()` and `kill()` methods:
+### Client Usage
 
 ```python
-c.restart('demo')  # Restart the module which will run bxack on the same port
+import commune as c
+
+# Create a client to interact with the server
+client = c.module('server.client')
+result = client.call('my_module/function_name', param1='value1', param2='value2')
 ```
 
-SERIALIZER
-
-The serializer is responsible for making sure the object is json serializable
-
-
-
-The rules are simple
-
-If the object is a dictionary, we iterate over the keys and values and serialize them. 
-If the value is a dictionary, we recursively put that dictionary through the serializer
-if the value is not a dictionary, we see if the value is json serializable. 
-
-Default json serializable types are:
-- str
-- int
-- float
-- bool
-- None
-
-
-Adding a new type is simple. Just add the type to the `SERIALIZABLE_TYPES` list in the `Serializer` class.
-
-If the value is not json serializable, we raise a `NotSerializableError` exception.
-
-The serializer is used in the `Commune` class to serialize the object before it is saved to the database. 
-```
+### Authentication
 
 ```python
-# File: commune/serializer/serializer.py
-from typing import Any, Dict, Union
-def serialize_{type}(obj: {type}) -> Dict[str, Any]:
-    return {{"value": obj.value}}
+import commune as c
 
-def deserialize_{type}(data: Dict[str, Any]) -> {type}:
-    return {type}(data["value"])
+# Generate a key for authentication
+key = c.get_key('my_key')
+
+# Create a client with authentication
+client = c.module('server.client')(url='my_module', key=key)
+result = client.forward('function_name', params={'param1': 'value1'})
 ```
 
+## Configuration
 
+The server module is highly configurable:
 
+- **Authentication**: Customize JWT token parameters
+- **Rate Limiting**: Set request limits per client
+- **Transaction Tracking**: Configure retention periods and storage paths
+- **Middleware**: Add custom middleware for request processing
 
-Now when that type is encoutered, the serializer will use the `serialize_{type}` and `deserialize_{type}` functions to serialize and deserialize the object.
+## Advanced Features
 
+### Function Exposure
 
-TESTS
+Control which functions are exposed via the API:
 
-to test if commune is running properly 
+```python
+class MyModule:
+    # Only these functions will be accessible via the API
+    functions = ['public_function1', 'public_function2']
+    
+    def public_function1(self):
+        return "This is accessible"
+        
+    def _private_function(self):
+        return "This is not accessible"
+```
 
-c test
+### Transaction Analytics
 
-to test a module 
+Get insights into API usage:
 
-c test {modulename}
+```python
+import commune as c
 
+tx_collector = c.module('server.txcollector')
+stats = tx_collector.get_stats(days=7)
+print(f"Total transactions: {stats['total_transactions']}")
+```
 
-c core is the core modules
+## Security
 
+The server module implements several security measures:
 
-the go functi
+- JWT token verification
+- Request validation
+- Rate limiting
+- Size limits on requests
+- Client authentication
+
+## Dependencies
+
+- FastAPI
+- Uvicorn
+- Starlette
+- Commune core modules

@@ -40,7 +40,7 @@ class Client:
         url = self.get_url(url, mode=mode)
         key = self.get_key(key) # step 1: get the key
         params = self.get_params(params=params, args=args, kwargs=kwargs, extra_kwargs=extra_kwargs) # step 3: get the params
-        headers = self.auth.get_headers({'fn': fn, 'params': params}, key=key) # step 4: get the headers
+        headers = self.auth.get_headers(params, key=key) # step 4: get the headers
         with requests.Session() as conn:
             response = conn.post( f"{url}/{fn}/", json=params,  headers=headers, timeout=timeout, stream=stream)
         ## handle the response
