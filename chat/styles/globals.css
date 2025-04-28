@@ -1,0 +1,29 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 30, 30, 35;
+  --background-end-rgb: 20, 20, 25;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    )
+    fixed;
+}
+
+/* Custom colors for chat */
+:root {
+  --chat-dark: #1e1e23;
+  --chat-darker: #14141a;
+  --chat-light: #2a2a35;
+  --chat-accent: #6366f1;
+  --chat-accent-hover: #4f46e5;
+}

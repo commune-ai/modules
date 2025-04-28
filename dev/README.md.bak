@@ -1,0 +1,83 @@
+# Development Environment Container
+
+This repository provides a containerized development environment that includes support for multiple programming languages and tools including Python, Rust, NPM, and Docker-in-Docker capabilities.
+
+## Features
+
+- Pre-configured Ubuntu 22.04 base with essential development tools
+- Python 3 with pip and virtual environment support
+- Docker-in-Docker capability for nested container operations
+- Simple command interface through Makefile
+- Consistent development environment across different machines
+
+## Prerequisites
+
+- Docker installed on your host machine
+- Make utility
+
+## Quick Start
+
+```bash
+# Build the container image
+make build
+
+# Start the container
+make start
+
+# Enter the running container
+make enter
+
+# Stop the container
+make stop
+```
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Builds the Docker image with the current directory name as the tag |
+| `make start` | Starts a container with the current directory mounted at /app |
+| `make stop` | Stops and removes the running container |
+| `make enter` | Opens a bash shell in the running container |
+| `make test` | Runs tests in a temporary container |
+| `make chmod` | Makes all scripts in the scripts directory executable |
+| `make up` | Alias for `make start` |
+| `make down` | Alias for `make stop` |
+
+## Container Structure
+
+The container mounts the current directory to `/app` within the container, allowing you to edit files on your host machine while running them in the container environment.
+
+## Environment Variables
+
+When using docker-compose:
+- `CONTAINER_NAME`: Set this to override the default container name (defaults to 'dev')
+
+## Advanced Usage
+
+### Custom Container Names
+
+You can specify a custom container name for most commands:
+
+```bash
+# Start with custom name
+make start NAME=my-custom-name
+
+# Enter container with custom name
+make enter NAME=my-custom-name
+
+# Stop container with custom name
+make stop NAME=my-custom-name
+```
+
+### Using Docker Compose
+
+Alternatively, you can use the included docker-compose.yml:
+
+```bash
+CONTAINER_NAME=custom-name docker-compose up -d
+```
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).

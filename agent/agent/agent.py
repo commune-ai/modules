@@ -22,26 +22,23 @@ class Agent:
         self.model = c.module('model.openrouter')(model=model, **kwargs)
 
     def forward(self, text = 'whats 2+2?' ,  
+                    *extra_text,
                     temperature= 0.5,
                     max_tokens= 1000000, 
-                    preprocess=True,
+                    model= 'openai/gpt-4-0314',
                     stream=True,
                     **kwargs):
-        if preprocess:
-            text = self.preprocess(text)
-        params = {'message': text, 'temperature': temperature, 'max_tokens': max_tokens,  'stream': stream, **kwargs}
+
+        text = ' '.join(list(map(str, [text, *extra_text])))
+        text = self.preprocess(text)
+        params = {'message': text, 'temperature': temperature, 'max_tokens': max_tokens,  'stream': stream, 'model': model, **kwargs}
         return self.model.forward(**params)
 
     def ask(self, *text, **kwargs): 
         return self.forward(' '.join(list(map(str, text))), **kwargs)
 
-    def models(self, *args, **kwargs):
-        return self.model.models(*args,**kwargs)
-
     def resolve_path(self, path):
         return os.path.expanduser('~/.commune/agent/' + path)
-
-
 
     def preprocess(self, text, threshold=1000):
             new_text = ''

@@ -1,4 +1,4 @@
- # start of file
+
 import os
 import glob
 import json
@@ -20,6 +20,11 @@ def abspath(path):
     """
     return os.path.abspath(os.path.expanduser(path))
 
+def makedirs(path):
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+    return path
+
 def put_text(path, text):
     """
     Write text to a file.
@@ -33,8 +38,8 @@ def put_text(path, text):
     """
     path = abspath(path)
     dirpath = os.path.dirname(path)
-    if dirpath and not os.path.exists(dirpath):
-        os.makedirs(dirpath, exist_ok=True)
+    makedirs(dirpath)  # Ensure the directory exists
+    
     # Ensure the directory exists
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text)
@@ -50,16 +55,22 @@ def get_text(path):
     Returns:
         Text content of the file
     """
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except UnicodeDecodeError:
-        # Try with a different encoding
+    if os.path.isdir(path):
+        file2text = {}
+        for root, _, files in os.walk(path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if os.path.isfile(file_path):
+                    path = os.path.abspath(file_path)
+                    file2text[file_path] = get_text(file_path)
+        return file2text
+    else:
         try:
-            with open(path, 'r', encoding='latin-1') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
-            return f"[Error reading file: {str(e)}]"
+            print(f"Error reading file {path}: {e}")
+            return None
 
 def ensure_directory_exists(directory_path):
     """
@@ -360,3 +371,4 @@ def is_binary_file(file_path, sample_size=1024):
         return bool(sample.translate(None, textchars))
     except:
         return True
+

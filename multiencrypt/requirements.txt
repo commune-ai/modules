@@ -1,0 +1,6 @@
+
+commune>=0.1.0
+cryptography>=41.0.0
+fastapi>=0.103.0
+uvicorn>=0.23.0
+pydantic>=2.4.0
