@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import os
 
-class git:
+class Git:
 
     def __init__(self, path:str = './'):
         self.path = os.path.abspath(os.path.expanduser(path))
