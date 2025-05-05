@@ -33,7 +33,7 @@ class Server:
         auth = 'server.auth', # the auth for the server,
         middleware = 'server.middleware', # the middleware for the server
         store = 'server.store', # the history for the server
-        pm = 'pm2', # the process manager for the server
+        pm = 'server.pm', # the process manager for the server
         helper_functions  = ['info', 'forward'], # the helper functions
 
         # MISC

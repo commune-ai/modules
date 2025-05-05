@@ -126,6 +126,7 @@ class OpenRouter:
             else:
                 models = [m for m in models if str(model) in m]
             print(f"Model {model} not found. Using {models} instead.")
+            print(model)
             assert len(models) > 0
             model = models[0]
 
