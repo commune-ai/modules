@@ -1,0 +1,12 @@
+{
+    "code": {
+        "tm.py": "class TM:\n    repo = 'github.com/commune-ai/tm.git'"
+    },
+    "schema": {},
+    "name": "tm",
+    "key": "5FutiNk3NxmAmJU7vps59gXTav3XqxPdWXkhuvWDNBr9sxVP",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:0bf884a52920ce9a5b15030049c667b57e16e7fa94a5c7b03374b2c687781975",
+    "time": 1746536252.026269,
+    "signature": "0xcae186d3cf0542554d118a2ed3e32536ac3099ca43456f4b05ddc28df71cc3513dbd181639891f3f9a25f2d32b96c69ce68a9746d1ca480870b9b8f92a2c9085"
+}

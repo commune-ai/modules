@@ -1,0 +1,313 @@
+{
+    "code": {
+        "README.md": "\n# Memory Tool\n\nA flexible memory management system for AI applications that provides both short-term and long-term memory capabilities.\n\n## Features\n\n- **Short-term Memory**: In-memory storage with automatic expiration\n- **Long-term Memory**: Persistent file-based storage\n- **Relevance Filtering**: Find memories most relevant to a query\n- **Memory Management**: Automatic cleanup of expired items\n- **Memory Search**: Search through stored memories\n- **Memory Summarization**: Generate summaries of stored memories\n\n## Usage\n\n```python\nimport commune as c\n\n# Initialize the memory tool\nmemory = c.module('dev.tool.memory')()\n\n# Store information in short-term memory (expires after default TTL)\nmemory.add_short_term(\"user_preference\", {\"theme\": \"dark\", \"language\": \"python\"})\n\n# Store information in long-term memory (persistent)\nmemory.add_long_term(\"project_requirements\", {\n    \"name\": \"AI Assistant\",\n    \"features\": [\"code generation\", \"memory management\", \"file editing\"]\n})\n\n# Retrieve memories\nuser_pref = memory.get_short_term(\"user_preference\")\nrequirements = memory.get_long_term(\"project_requirements\")\n\n# Filter a list of items by relevance to a query\nfiles = [\"main.py\", \"utils.py\", \"memory.py\", \"database.py\"]\nrelevant_files = memory.forward(files, query=\"memory management\", n=2)\n# Returns: [\"memory.py\", \"utils.py\"]\n\n# Search long-term memory\nrelevant_memories = memory.search_long_term(\"project features\")\n\n# Generate a summary of memories\nsummary = memory.summarize_memories(query=\"user preferences\")\n```\n\n## Integration with Dev Module\n\nThe Memory tool is designed to work seamlessly with the Dev module:\n\n```python\ndev = c.module('dev')()\ndev.set_memory(c.module('dev.tool.memory')())\n\n# Now Dev will use the memory tool to maintain context\n```\n\n## Advanced Features\n\n### Memory Eviction Policies\n\nWhen short-term memory reaches capacity, items are evicted using a Least Recently Used (LRU) strategy.\n\n### Memory Persistence\n\nLong-term memories are stored as JSON files in the specified directory (default: `~/.commune/memory/long_term`).\n\n### Relevance Scoring\n\nThe tool uses LLM-based relevance scoring to find the most relevant memories for a given query.\n",
+        "memory.py": "\nimport commune as c\nimport os\nimport json\nimport time\nfrom typing import Dict, List, Any, Optional, Union\nfrom pathlib import Path\n\nclass Memory:\n    \"\"\"\n    A memory management tool that provides both short-term and long-term memory capabilities.\n    \n    This tool helps maintain context across interactions by:\n    - Storing temporary information in short-term memory (in-memory)\n    - Persisting important information in long-term memory (file-based)\n    - Retrieving and filtering memories based on relevance\n    - Managing memory expiration and prioritization\n    \"\"\"\n    \n    def __init__(\n        self,\n        long_term_path: str = \"~/.commune/memory/long_term\",\n        short_term_capacity: int = 100,\n        default_ttl: int = 3600,  # 1 hour default TTL for short-term memory\n        model: str = 'dev.model.openrouter',\n        **kwargs\n    ):\n        \"\"\"\n        Initialize the Memory module.\n        \n        Args:\n            long_term_path: Path to store long-term memories\n            short_term_capacity: Maximum number of items in short-term memory\n            default_ttl: Default time-to-live for short-term memories (in seconds)\n            model: Model to use for relevance scoring\n            **kwargs: Additional arguments to pass to the model\n        \"\"\"\n        self.model = c.module(model)(**kwargs)\n        self.long_term_path = os.path.expanduser(long_term_path)\n        self.short_term_capacity = short_term_capacity\n        self.default_ttl = default_ttl\n        \n        # Initialize memory stores\n        self.short_term = {}  # {key: {'data': Any, 'timestamp': float, 'ttl': int}}\n        \n        # Ensure long-term storage directory exists\n        os.makedirs(self.long_term_path, exist_ok=True)\n        \n    def add_short_term(\n        self, \n        key: str, \n        data: Any, \n        ttl: Optional[int] = None\n    ) -> Dict[str, Any]:\n        \"\"\"\n        Add an item to short-term memory.\n        \n        Args:\n            key: Unique identifier for the memory\n            data: Data to store\n            ttl: Time-to-live in seconds (None for default)\n            \n        Returns:\n            Dictionary with status and info about the stored memory\n        \"\"\"\n        # Clean expired items first\n        self._clean_expired_short_term()\n        \n        # Check capacity\n        if len(self.short_term) >= self.short_term_capacity:\n            self._evict_short_term()\n            \n        # Store with timestamp\n        self.short_term[key] = {\n            'data': data,\n            'timestamp': time.time(),\n            'ttl': ttl if ttl is not None else self.default_ttl\n        }\n        \n        return {\n            'status': 'success',\n            'key': key,\n            'ttl': ttl if ttl is not None else self.default_ttl,\n            'expires_at': time.time() + (ttl if ttl is not None else self.default_ttl)\n        }\n    \n    def get_short_term(self, key: str) -> Optional[Any]:\n        \"\"\"\n        Retrieve an item from short-term memory.\n        \n        Args:\n            key: Key of the memory to retrieve\n            \n        Returns:\n            The stored data or None if not found or expired\n        \"\"\"\n        # Clean expired items first\n        self._clean_expired_short_term()\n        \n        if key in self.short_term:\n            # Update access timestamp (keeps frequently accessed items alive)\n            self.short_term[key]['timestamp'] = time.time()\n            return self.short_term[key]['data']\n        \n        return None\n    \n    def add_long_term(self, key: str, data: Any) -> Dict[str, Any]:\n        \"\"\"\n        Add an item to long-term memory.\n        \n        Args:\n            key: Unique identifier for the memory\n            data: Data to store\n            \n        Returns:\n            Dictionary with status and info about the stored memory\n        \"\"\"\n        # Sanitize key for filename\n        safe_key = self._sanitize_key(key)\n        file_path = os.path.join(self.long_term_path, f\"{safe_key}.json\")\n        \n        memory_data = {\n            'data': data,\n            'timestamp': time.time(),\n            'metadata': {\n                'created_at': time.time(),\n                'key': key,\n                'type': type(data).__name__\n            }\n        }\n        \n        try:\n            with open(file_path, 'w') as f:\n                json.dump(memory_data, f, indent=2)\n                \n            return {\n                'status': 'success',\n                'key': key,\n                'path': file_path\n            }\n        except Exception as e:\n            return {\n                'status': 'error',\n                'key': key,\n                'error': str(e)\n            }\n    \n    def get_long_term(self, key: str) -> Optional[Any]:\n        \"\"\"\n        Retrieve an item from long-term memory.\n        \n        Args:\n            key: Key of the memory to retrieve\n            \n        Returns:\n            The stored data or None if not found\n        \"\"\"\n        safe_key = self._sanitize_key(key)\n        file_path = os.path.join(self.long_term_path, f\"{safe_key}.json\")\n        \n        if os.path.exists(file_path):\n            try:\n                with open(file_path, 'r') as f:\n                    memory_data = json.load(f)\n                return memory_data['data']\n            except Exception:\n                return None\n        \n        return None\n    \n    def list_memories(\n        self, \n        memory_type: str = 'all'\n    ) -> Dict[str, List[str]]:\n        \"\"\"\n        List available memories.\n        \n        Args:\n            memory_type: Type of memories to list ('short', 'long', or 'all')\n            \n        Returns:\n            Dictionary with lists of memory keys\n        \"\"\"\n        result = {'short_term': [], 'long_term': []}\n        \n        # Clean expired items first\n        self._clean_expired_short_term()\n        \n        if memory_type in ['short', 'all']:\n            result['short_term'] = list(self.short_term.keys())\n            \n        if memory_type in ['long', 'all']:\n            try:\n                files = os.listdir(self.long_term_path)\n                result['long_term'] = [\n                    os.path.splitext(f)[0] for f in files \n                    if f.endswith('.json')\n                ]\n            except Exception:\n                result['long_term'] = []\n                \n        return result\n    \n    def delete_memory(\n        self, \n        key: str, \n        memory_type: str = 'all'\n    ) -> Dict[str, Any]:\n        \"\"\"\n        Delete a memory.\n        \n        Args:\n            key: Key of the memory to delete\n            memory_type: Type of memory to delete ('short', 'long', or 'all')\n            \n        Returns:\n            Dictionary with deletion status\n        \"\"\"\n        result = {'status': 'success', 'deleted': []}\n        \n        if memory_type in ['short', 'all']:\n            if key in self.short_term:\n                del self.short_term[key]\n                result['deleted'].append('short_term')\n                \n        if memory_type in ['long', 'all']:\n            safe_key = self._sanitize_key(key)\n            file_path = os.path.join(self.long_term_path, f\"{safe_key}.json\")\n            \n            if os.path.exists(file_path):\n                try:\n                    os.remove(file_path)\n                    result['deleted'].append('long_term')\n                except Exception as e:\n                    result['status'] = 'partial'\n                    result['error'] = str(e)\n        \n        if not result['deleted']:\n            result['status'] = 'not_found'\n            \n        return result\n    \n    def forward(\n        self, \n        data: Union[List[str], Dict[str, Any], str],\n        query: str = None,\n        n: int = 5,\n        memory_type: str = 'short',\n        store: bool = True,\n        key: str = None,\n        **kwargs\n    ) -> Union[List[str], Dict[str, Any], str]:\n        \"\"\"\n        Process data through memory, optionally storing it and retrieving\n        relevant items based on a query.\n        \n        Args:\n            data: Data to process (can be a list, dict, or string)\n            query: Optional query to filter/retrieve relevant memories\n            n: Number of items to return when filtering\n            memory_type: Where to store/retrieve from ('short' or 'long')\n            store: Whether to store the data in memory\n            key: Optional key for storing (generated if not provided)\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            Processed data, potentially filtered by relevance to query\n        \"\"\"\n        # Generate a key if not provided\n        if store and key is None:\n            if isinstance(data, str):\n                key = f\"mem_{hash(data) & 0xffffffff}\"\n            else:\n                key = f\"mem_{int(time.time())}_{hash(str(data)) & 0xffffffff}\"\n        \n        # Store the data if requested\n        if store:\n            if memory_type == 'short':\n                self.add_short_term(key, data)\n            else:\n                self.add_long_term(key, data)\n        \n        # If there's a query, filter the data by relevance\n        if query and isinstance(data, list):\n            return self._filter_by_relevance(data, query, n, **kwargs)\n        \n        return data\n    \n    def _filter_by_relevance(\n        self, \n        items: List[Any], \n        query: str, \n        n: int = 5,\n        **kwargs\n    ) -> List[Any]:\n        \"\"\"\n        Filter a list of items by relevance to a query.\n        \n        Args:\n            items: List of items to filter\n            query: Query to compare against\n            n: Maximum number of items to return\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            List of most relevant items\n        \"\"\"\n        if not items:\n            return []\n        \n        # For simple string items, we can use the model to score relevance\n        if all(isinstance(item, str) for item in items):\n            # Prepare the prompt for relevance scoring\n            prompt = str({\n                \"task\": \"Rank these items by relevance to the query and return the top N most relevant items.\",\n                \"query\": query,\n                \"items\": items,\n                \"n\": n,\n                \"format\": \"Return a JSON array of the most relevant items in order of relevance.\"\n            })\n            \n            try:\n                # Get relevance scores from model\n                result = self.model.forward(prompt, **kwargs)\n                \n                # Parse the result - expecting a JSON array\n                import re\n                json_match = re.search(r'\\[.*\\]', result, re.DOTALL)\n                if json_match:\n                    try:\n                        relevant_items = json.loads(json_match.group(0))\n                        # Ensure we only return items that were in the original list\n                        return [item for item in relevant_items if item in items][:n]\n                    except json.JSONDecodeError:\n                        pass\n            except Exception as e:\n                c.print(f\"Error in relevance filtering: {e}\", color=\"red\")\n        \n        # Fallback: return first n items\n        return items[:n]\n    \n    def _clean_expired_short_term(self) -> int:\n        \"\"\"\n        Remove expired items from short-term memory.\n        \n        Returns:\n            Number of items removed\n        \"\"\"\n        now = time.time()\n        expired_keys = [\n            key for key, value in self.short_term.items()\n            if now > value['timestamp'] + value['ttl']\n        ]\n        \n        for key in expired_keys:\n            del self.short_term[key]\n            \n        return len(expired_keys)\n    \n    def _evict_short_term(self) -> None:\n        \"\"\"\n        Evict items from short-term memory when capacity is reached.\n        Uses LRU (Least Recently Used) strategy.\n        \"\"\"\n        if not self.short_term:\n            return\n            \n        # Find oldest item by timestamp\n        oldest_key = min(\n            self.short_term.keys(),\n            key=lambda k: self.short_term[k]['timestamp']\n        )\n        \n        # Remove it\n        del self.short_term[oldest_key]\n    \n    def _sanitize_key(self, key: str) -> str:\n        \"\"\"\n        Sanitize a key for use as a filename.\n        \n        Args:\n            key: Key to sanitize\n            \n        Returns:\n            Sanitized key\n        \"\"\"\n        # Replace invalid filename characters\n        import re\n        return re.sub(r'[^\\w\\-\\.]', '_', str(key))\n    \n    def search_long_term(\n        self, \n        query: str, \n        n: int = 5,\n        **kwargs\n    ) -> List[Dict[str, Any]]:\n        \"\"\"\n        Search long-term memory for relevant items.\n        \n        Args:\n            query: Search query\n            n: Maximum number of items to return\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            List of relevant memory items with metadata\n        \"\"\"\n        # Get all long-term memories\n        memories = []\n        try:\n            files = os.listdir(self.long_term_path)\n            for filename in files:\n                if filename.endswith('.json'):\n                    file_path = os.path.join(self.long_term_path, filename)\n                    try:\n                        with open(file_path, 'r') as f:\n                            memory_data = json.load(f)\n                            memories.append({\n                                'key': os.path.splitext(filename)[0],\n                                'data': memory_data['data'],\n                                'timestamp': memory_data['timestamp'],\n                                'metadata': memory_data.get('metadata', {})\n                            })\n                    except Exception:\n                        continue\n        except Exception as e:\n            c.print(f\"Error searching long-term memory: {e}\", color=\"red\")\n            return []\n        \n        if not memories:\n            return []\n            \n        # Use the model to rank memories by relevance\n        memory_texts = [\n            f\"Memory {i}: {str(mem['data'])[:500]}\" \n            for i, mem in enumerate(memories)\n        ]\n        \n        prompt = str({\n            \"task\": \"Rank these memory items by relevance to the query and return the indices of the top N most relevant items in order.\",\n            \"query\": query,\n            \"memory_items\": memory_texts,\n            \"n\": n,\n            \"format\": \"Return a JSON array of indices, e.g. [2, 5, 0]\"\n        })\n        \n        try:\n            result = self.model.forward(prompt, **kwargs)\n            \n            # Parse the result - expecting a JSON array of indices\n            import re\n            json_match = re.search(r'\\[.*\\]', result, re.DOTALL)\n            if json_match:\n                try:\n                    indices = json.loads(json_match.group(0))\n                    # Return the memories in order of relevance\n                    return [memories[i] for i in indices if i < len(memories)]\n                except (json.JSONDecodeError, TypeError, IndexError):\n                    pass\n        except Exception as e:\n            c.print(f\"Error in relevance ranking: {e}\", color=\"red\")\n        \n        # Fallback: return most recent memories\n        memories.sort(key=lambda x: x['timestamp'], reverse=True)\n        return memories[:n]\n    \n    def summarize_memories(\n        self, \n        query: Optional[str] = None, \n        memory_type: str = 'all',\n        **kwargs\n    ) -> str:\n        \"\"\"\n        Generate a summary of relevant memories.\n        \n        Args:\n            query: Optional query to filter relevant memories\n            memory_type: Type of memories to summarize ('short', 'long', or 'all')\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            Summary text\n        \"\"\"\n        memories = []\n        \n        # Collect short-term memories if requested\n        if memory_type in ['short', 'all']:\n            self._clean_expired_short_term()\n            for key, value in self.short_term.items():\n                memories.append({\n                    'key': key,\n                    'data': value['data'],\n                    'source': 'short_term',\n                    'timestamp': value['timestamp']\n                })\n        \n        # Collect long-term memories if requested\n        if memory_type in ['long', 'all']:\n            long_term_memories = self.search_long_term(\n                query if query else \"recent important information\", \n                n=10,\n                **kwargs\n            )\n            for mem in long_term_memories:\n                memories.append({\n                    'key': mem['key'],\n                    'data': mem['data'],\n                    'source': 'long_term',\n                    'timestamp': mem['timestamp']\n                })\n        \n        if not memories:\n            return \"No memories available.\"\n        \n        # Sort by timestamp (newest first)\n        memories.sort(key=lambda x: x['timestamp'], reverse=True)\n        \n        # Filter by relevance if query provided\n        if query:\n            memory_texts = [\n                f\"Memory {i} ({mem['source']}): {str(mem['data'])[:500]}\" \n                for i, mem in enumerate(memories)\n            ]\n            \n            prompt = str({\n                \"task\": \"Filter these memory items by relevance to the query and return the indices of relevant items.\",\n                \"query\": query,\n                \"memory_items\": memory_texts,\n                \"format\": \"Return a JSON array of indices, e.g. [2, 5, 0]\"\n            })\n            \n            try:\n                result = self.model.forward(prompt, **kwargs)\n                \n                # Parse the result\n                import re\n                json_match = re.search(r'\\[.*\\]', result, re.DOTALL)\n                if json_match:\n                    try:\n                        indices = json.loads(json_match.group(0))\n                        memories = [memories[i] for i in indices if i < len(memories)]\n                    except (json.JSONDecodeError, TypeError, IndexError):\n                        pass\n            except Exception:\n                pass\n        \n        # Generate summary\n        memory_texts = [\n            f\"Memory {i+1} ({mem['source']}): {str(mem['data'])}\" \n            for i, mem in enumerate(memories)\n        ]\n        \n        prompt = str({\n            \"task\": \"Summarize these memory items into a coherent summary.\",\n            \"memory_items\": memory_texts,\n            \"query\": query if query else \"Summarize recent important information\",\n            \"format\": \"Return a concise summary that captures the key information.\"\n        })\n        \n        try:\n            summary = self.model.forward(prompt, **kwargs)\n            return summary\n        except Exception as e:\n            return f\"Error generating summary: {e}\"\n"
+    },
+    "schema": {
+        "add_long_term": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Add an item to long-term memory.\n        \n        Args:\n            key: Unique identifier for the memory\n            data: Data to store\n            \n        Returns:\n            Dictionary with status and info about the stored memory\n        ",
+            "cost": 1,
+            "name": "add_long_term",
+            "source": {
+                "start": 107,
+                "length": 40,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:ecc43e4dfba0ef4ebc6d7fd3838569be190a5c535e7ad3bde1d153c96dea27ab",
+                "end": 147
+            }
+        },
+        "add_short_term": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "ttl": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Add an item to short-term memory.\n        \n        Args:\n            key: Unique identifier for the memory\n            data: Data to store\n            ttl: Time-to-live in seconds (None for default)\n            \n        Returns:\n            Dictionary with status and info about the stored memory\n        ",
+            "cost": 1,
+            "name": "add_short_term",
+            "source": {
+                "start": 49,
+                "length": 37,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:94b5c12efebb7e16649fbbe9aa67707837c09b82dbcfb6748ad6aecf79278e17",
+                "end": 86
+            }
+        },
+        "delete_memory": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "memory_type": {
+                    "value": "all",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Delete a memory.\n        \n        Args:\n            key: Key of the memory to delete\n            memory_type: Type of memory to delete ('short', 'long', or 'all')\n            \n        Returns:\n            Dictionary with deletion status\n        ",
+            "cost": 1,
+            "name": "delete_memory",
+            "source": {
+                "start": 204,
+                "length": 38,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:677e4af991b933a4edc0bb6d66b98f351ab9cab352d92751b3a3dc3b33fba83f",
+                "end": 242
+            }
+        },
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "query": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "n": {
+                    "value": 5,
+                    "type": "int"
+                },
+                "memory_type": {
+                    "value": "short",
+                    "type": "str"
+                },
+                "store": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Union[typing.List[str], typing.Dict[str, typing.Any], str]"
+            },
+            "docs": "\n        Process data through memory, optionally storing it and retrieving\n        relevant items based on a query.\n        \n        Args:\n            data: Data to process (can be a list, dict, or string)\n            query: Optional query to filter/retrieve relevant memories\n            n: Number of items to return when filtering\n            memory_type: Where to store/retrieve from ('short' or 'long')\n            store: Whether to store the data in memory\n            key: Optional key for storing (generated if not provided)\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            Processed data, potentially filtered by relevance to query\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 243,
+                "length": 45,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:56223a5027fab83fe22b8a1407b98a6fbb77996023110003821b97fea5a7fba4",
+                "end": 288
+            }
+        },
+        "get_long_term": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Optional[typing.Any]"
+            },
+            "docs": "\n        Retrieve an item from long-term memory.\n        \n        Args:\n            key: Key of the memory to retrieve\n            \n        Returns:\n            The stored data or None if not found\n        ",
+            "cost": 1,
+            "name": "get_long_term",
+            "source": {
+                "start": 148,
+                "length": 22,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:9f9da12e1034e517bc2d6506f23dde29b42a7551d4f17b150874c6fbad9878cd",
+                "end": 170
+            }
+        },
+        "get_short_term": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Optional[typing.Any]"
+            },
+            "docs": "\n        Retrieve an item from short-term memory.\n        \n        Args:\n            key: Key of the memory to retrieve\n            \n        Returns:\n            The stored data or None if not found or expired\n        ",
+            "cost": 1,
+            "name": "get_short_term",
+            "source": {
+                "start": 87,
+                "length": 19,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:edc14e029823d3fd953599e6c47d2e3c1a6d0e6a40e5650ead13706efad64e72",
+                "end": 106
+            }
+        },
+        "list_memories": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "memory_type": {
+                    "value": "all",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.List[str]]"
+            },
+            "docs": "\n        List available memories.\n        \n        Args:\n            memory_type: Type of memories to list ('short', 'long', or 'all')\n            \n        Returns:\n            Dictionary with lists of memory keys\n        ",
+            "cost": 1,
+            "name": "list_memories",
+            "source": {
+                "start": 171,
+                "length": 32,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:718c6f3818b62fee3fb7189f2a89b9fd563b756384eeb492d20d68258eb456db",
+                "end": 203
+            }
+        },
+        "search_long_term": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "query": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "n": {
+                    "value": 5,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[typing.Dict[str, typing.Any]]"
+            },
+            "docs": "\n        Search long-term memory for relevant items.\n        \n        Args:\n            query: Search query\n            n: Maximum number of items to return\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            List of relevant memory items with metadata\n        ",
+            "cost": 1,
+            "name": "search_long_term",
+            "source": {
+                "start": 391,
+                "length": 75,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:4d7a2f6c600c763ac73ecc13ad7f8034840b91bbc37b928a0bf3e59866f1bd68",
+                "end": 466
+            }
+        },
+        "summarize_memories": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "query": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "memory_type": {
+                    "value": "all",
+                    "type": "str"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Generate a summary of relevant memories.\n        \n        Args:\n            query: Optional query to filter relevant memories\n            memory_type: Type of memories to summarize ('short', 'long', or 'all')\n            **kwargs: Additional arguments for the model\n            \n        Returns:\n            Summary text\n        ",
+            "cost": 1,
+            "name": "summarize_memories",
+            "source": {
+                "start": 467,
+                "length": 98,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/memory/memory.py",
+                "code": null,
+                "hash": "sha256:5d2015b045ab520af33ff0cd2f40c3741c4b487fd3fcd056246600cca6320e41",
+                "end": 565
+            }
+        }
+    },
+    "name": "dev.tool.memory",
+    "key": "5GnQDniavgqYZetGDoeoy94Lk4dJBc1ZFB9Ude9Q24aTcubW",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:114f1cc4a2894d32e79805d6cc0f78b914a68f6a68c3447d046ba26400627d5a",
+    "time": 1746536301.69633,
+    "signature": "0xd63afe2d44557b601c892cf24b9e88c4a20848ea032e7fad2b29d21cd6a56a03d765124f36d65abae6af022ffa5f981f57301e2e6ed560db927ec848a740298f"
+}

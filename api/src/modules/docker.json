@@ -1,0 +1,788 @@
+{
+    "code": {
+        "README.md": " # start of file\n# Docker Module for Commune\n\nThis module provides a comprehensive interface for managing Docker containers, similar to how PM2 manages processes.\n\n## Features\n\n- Build and run Docker containers with advanced configuration options\n- Manage container lifecycle (start, stop, restart, delete)\n- Monitor container resource usage\n- Save and load container configurations\n- Execute commands in running containers\n- View container logs\n- List and manage Docker images\n\n## Usage\n\n```python\nimport commune as c\n\n# Initialize the Docker module\ndocker = c.module('docker')()\n\n# Start a container\ndocker.start('my_container', 'python:3.8', \n             cmd='python -m http.server',\n             ports={'8000': 8000})\n\n# List running containers\ncontainers = docker.list()\nprint(containers)\n\n# Monitor container resource usage\nstats = docker.monitor()\nprint(stats)\n\n# Execute a command in a container\nresult = docker.exec('my_container', 'ls -la')\nprint(result)\n\n# View container logs\nlogs = docker.logs('my_container')\nprint(logs)\n\n# Stop a container\ndocker.stop('my_container')\n\n# Remove a container\ndocker.delete('my_container')\n\n# Save current container configuration\ndocker.save('my_setup')\n\n# Load a saved configuration\ndocker.load('my_setup')\n```\n\n## PM2-like Interface\n\nThe Docker module provides a PM2-like interface for managing containers:\n\n- `start(name, image, **kwargs)`: Start a container\n- `stop(name)`: Stop a container\n- `restart(name)`: Restart a container\n- `delete(name)`: Remove a container\n- `list(all=False)`: List containers\n- `monitor()`: Monitor container resource usage\n- `save(config_name)`: Save current container configuration\n- `load(config_name)`: Load a saved configuration\n\n## Advanced Options\n\nThe module supports advanced Docker features:\n\n- GPU configuration\n- Volume mapping\n- Port mapping\n- Environment variables\n- Network configuration\n- Shared memory size\n- Custom entrypoints and commands\n",
+        "docker.py": " # start of file\nimport os\nimport pandas as pd\nfrom typing import List, Dict, Union, Optional, Any\nimport commune as c\nimport subprocess\nimport json\n\nimport pandas as pd\nimport subprocess\nimport json\nimport os\nfrom typing import Optional, List, Dict, Any\nfrom datetime import datetime\n\n\nclass Docker:\n    \"\"\"\n    A module for interacting with Docker.\n    \"\"\"\n    default_shm_size = '100g'\n    default_network = 'host'\n\n    def __init__(self):\n        pass\n\n    def build(self,\n              path: Optional[str] = './',\n              tag: Optional[str] = None,\n              sudo: bool = False,\n              verbose: bool = True,\n              no_cache: bool = False,\n              env: Dict[str, str] = {}) -> Dict[str, Any]:\n        \"\"\"\n        Build a Docker image from a Dockerfile.\n\n        Args:\n            path (Optional[str]): Path to the Dockerfile. Defaults to None.\n            tag (Optional[str]): Tag for the image. Defaults to None.\n            sudo (bool): Use sudo. Defaults to False.\n            verbose (bool): Enable verbose output. Defaults to True.\n            no_cache (bool): Disable cache during build. Defaults to False.\n            env (Dict[str, str]): Environment variables. Defaults to {}.\n\n        Returns:\n            Dict[str, Any]: A dictionary containing the status, tag, and result of the build.\n        \"\"\"\n        path = os.path.abspath(path)\n        tag = tag or path.split('/')[-2]\n        cmd = f'docker build -t {tag} .'\n        if no_cache:\n            cmd += ' --no-cache'\n        return c.cmd(cmd,  cwd=path)\n\n    def run(self,\n            image: str = './',\n            cmd: Optional[str] = None,\n            volumes: Dict[str, str] = None,\n            name: Optional[str] = None,\n            gpus: Union[List[int], str, bool] = False,\n            shm_size: str = '100g',\n            entrypoint = 'tail -f /dev/null',\n            sudo: bool = False,\n            build: bool = True,\n            ports: Optional[Dict[str, int]] = None,\n            net: str = 'host',\n            daemon: bool = True,\n            cwd: Optional[str] = None,\n            env_vars: Optional[Dict[str, str]] = None) -> Dict[str, Any]:\n        \"\"\"\n        Run a Docker container with advanced configuration options.\n\n        Args:\n            path (str): Path to Dockerfile or image name.\n            cmd (Optional[str]): Command to run in container.\n            volumes (Optional[Union[List[str], Dict[str, str], str]]): Volume mappings.\n            name (Optional[str]): Container name.\n            gpus (Union[List[int], str, bool]): GPU configuration.\n            shm_size (str): Shared memory size.\n            sudo (bool): Use sudo.\n            build (bool): Build image before running.\n            ports (Optional[Dict[str, int]]): Port mappings.\n            net (str): Network mode.\n            daemon (bool): Run in daemon mode.\n            cwd (Optional[str]): Working directory.\n            env_vars (Optional[Dict[str, str]]): Environment variables.\n\n        Returns:\n            Dict[str, Any]: A dictionary containing the command and working directory.\n        \"\"\"\n\n        self.kill(name)\n        dcmd = ['docker', 'run']\n        dcmd.extend(['--net', net])\n        # Handle GPU configuration\n        if isinstance(gpus, list):\n            dcmd.append(f'--gpus \"device={\",\".join(map(str, gpus))}\"')\n        elif isinstance(gpus, str):\n            dcmd.append(f'--gpus \"{gpus}\"')\n        elif gpus is True:\n            dcmd.append(f'--gpus all')\n        # Configure shared memory\n        if shm_size:\n            dcmd.extend(['--shm-size', shm_size])\n        # Handle port mappings\n        if ports:\n            if isinstance(ports, list):\n                ports = {port: port for port in ports}\n            for host_port, container_port in ports.items():\n                dcmd.extend(['-p', f'{host_port}:{container_port}'])\n            \n        # Handle volume mappings\n        if volumes:\n            assert isinstance(volumes, dict)\n            volumes = [f'{k}:{v}' for k, v in volumes.items()]\n            for volume in volumes:\n                dcmd.extend(['-v', volume])\n        # Handle environment variables\n        if env_vars:\n            for key, value in env_vars.items():\n                dcmd.extend(['-e', f'{key}={value}'])\n\n        # Set container name\n        if name:\n            dcmd.extend(['--name', name])\n\n        # Add entrypoint if specified\n        if entrypoint:\n            dcmd.extend(['--entrypoint', entrypoint])\n\n        # Run in daemon mode\n        if daemon:\n            dcmd.append('-d')\n\n        # Add image name\n        dcmd.append(image)\n        \n        # Add command if specified\n        if cmd:\n            dcmd.append(cmd)\n\n        command_str = ' '.join(dcmd)\n        return c.cmd(command_str, verbose=True)\n\n    def exists(self, name: str) -> bool:\n        \"\"\"\n        Check if a container exists.\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            bool: True if the container exists, False otherwise.\n        \"\"\"\n        return name in self.ps()\n        \n    def kill(self, name: str, sudo: bool = False, verbose: bool = True, prune: bool = False) -> Dict[str, str]:\n        \"\"\"\n        Kill and remove a container.\n\n        Args:\n            name (str): The name of the container.\n            sudo (bool): Use sudo.\n            verbose (bool): Enable verbose output.\n            prune (bool): Prune unused Docker resources.\n\n        Returns:\n            Dict[str, str]: A dictionary containing the status and name of the container.\n        \"\"\"\n        try:\n            c.cmd(f'docker kill {name}', sudo=sudo, verbose=verbose)\n            c.cmd(f'docker rm {name}', sudo=sudo, verbose=verbose)\n            if prune:\n                self.prune()\n            return {'status': 'killed', 'name': name}\n        except Exception as e:\n            return {'status': 'error', 'name': name, 'error': str(e)}\n\n    def kill_all(self, sudo: bool = False, verbose: bool = True) -> Dict[str, str]:\n        \"\"\"\n        Kill all running containers.\n\n        Args:\n            sudo (bool): Use sudo.\n            verbose (bool): Enable verbose output.\n\n        Returns:\n            Dict[str, str]: A dictionary indicating the status of the operation.\n        \"\"\"\n        try:\n            for container in self.ps():\n                self.kill(container, sudo=sudo, verbose=verbose)\n            return {'status': 'all_containers_killed'}\n        except Exception as e:\n            return {'status': 'error', 'error': str(e)}\n\n    def images(self, to_records: bool = True) -> Union[pd.DataFrame, Any]:\n        \"\"\"\n        List all Docker images.\n\n        Args:\n            to_records (bool): Convert to records.\n\n        Returns:\n            Union[pd.DataFrame, Any]: A DataFrame or records of Docker images.\n        \"\"\"\n        try:\n            text = c.cmd('docker images', verbose=False)\n            rows = []\n            cols = []\n\n            for i, line in enumerate(text.split('\\n')):\n                if not line.strip():\n                    continue\n                if i == 0:\n                    cols = [col.strip().lower().replace(' ', '_') for col in line.split() if col]\n                else:\n                    rows.append([col.strip() for col in line.split() if col])\n\n            df = pd.DataFrame(rows, columns=cols)\n            return df.to_records() if to_records else df\n        except Exception as e:\n            c.print(f\"Error listing images: {e}\", color='red')\n            return {'status': 'error', 'error': str(e)}\n\n    def logs(self,\n             name: str,\n             sudo: bool = False,\n             follow: bool = False,\n             verbose: bool = False,\n             tail: int = 100,\n             since: Optional[str] = None) -> str:\n        \"\"\"\n        Get container logs with advanced options.\n\n        Args:\n            name (str): The name of the container.\n            sudo (bool): Use sudo.\n            follow (bool): Follow the logs.\n            verbose (bool): Enable verbose output.\n            tail (int): Number of lines to tail.\n            since (Optional[str]): Show logs since timestamp.\n\n        Returns:\n            str: The container logs.\n        \"\"\"\n        cmd = ['docker', 'logs']\n\n        if follow:\n            cmd.append('-f')\n        if tail:\n            cmd.extend(['--tail', str(tail)])\n        if since:\n            cmd.extend(['--since', since])\n\n        cmd.append(name)\n        try:\n            return c.cmd(' '.join(cmd), verbose=verbose)\n        except Exception as e:\n            return f\"Error fetching logs: {e}\"\n\n    def prune(self, all: bool = False) -> str:\n        \"\"\"\n        Prune Docker resources.\n\n        Args:\n            all (bool): Prune all unused resources.\n\n        Returns:\n            str: The result of the prune command.\n        \"\"\"\n        cmd = 'docker system prune -f' if all else 'docker container prune -f'\n        try:\n            return c.cmd(cmd)\n        except Exception as e:\n            return f\"Error pruning: {e}\"\n\n    def get_path(self, path: str) -> str:\n        \"\"\"\n        Get the path to a Docker-related file.\n\n        Args:\n            path (str): The path to the file.\n\n        Returns:\n            str: The full path to the file.\n        \"\"\"\n        return os.path.expanduser(f'~/.commune/docker/{path}')\n\n    def stats(self, max_age=60, update=False) -> pd.DataFrame:\n        \"\"\"\n        Get container resource usage statistics.\n\n        Args:\n            max_age (int): Maximum age of cached data in seconds.\n            update (bool): Force update of data.\n\n        Returns:\n            pd.DataFrame: A DataFrame containing the container statistics.\n        \"\"\"\n        path = self.get_path(f'container_stats.json')\n        stats = c.get(path, [], max_age=max_age, update=update)\n        if len(stats) == 0:\n            cmd = f'docker stats --no-stream'\n            output = c.cmd(cmd, verbose=False)\n            lines = output.split('\\n')\n            headers = lines[0].split('  ')\n            lines = [line.split('   ') for line in lines[1:] if line.strip()]\n            lines = [[col.strip().replace(' ', '') for col in line if col.strip()] for line in lines]\n            headers = [header.strip().replace(' %', '') for header in headers if header.strip()]\n            data = pd.DataFrame(lines, columns=headers)\n            stats = []\n            for k, v in data.iterrows():\n                row = {header: v[header] for header in headers}\n                if 'MEM USAGE / LIMIT' in row:\n                    mem_usage, mem_limit = row.pop('MEM USAGE / LIMIT').split('/')\n                    row['MEM_USAGE'] = mem_usage\n                    row['MEM_LIMIT'] = mem_limit\n                c.print(row)\n                row['ID'] = row.pop('CONTAINER ID')\n\n                for prefix in ['NET', 'BLOCK']:\n                    if f'{prefix} I/O' in row:\n                        net_in, net_out = row.pop(f'{prefix} I/O').split('/')\n                        row[f'{prefix}_IN'] = net_in\n                        row[f'{prefix}_OUT'] = net_out\n                \n                row = {_k.lower(): _v for _k, _v in row.items()}\n                stats.append(row)\n                c.put(path, stats)\n            \n        return c.df(stats)\n\n    def ps(self) -> List[str]:\n        \"\"\"\n        List all running Docker containers.\n\n        Returns:\n            List[str]: A list of container names.\n        \"\"\"\n        try:\n            text = c.cmd('docker ps')\n            ps = []\n            for i, line in enumerate(text.split('\\n')):\n                if not line.strip():\n                    continue\n                if i > 0:\n                    parts = line.split()\n                    if len(parts) > 0:  # Check if there are any parts in the line\n                        ps.append(parts[-1])\n            return ps\n        except Exception as e:\n            c.print(f\"Error listing containers: {e}\", color='red')\n            return []\n\n    def exec(self, name: str, cmd: str, *extra_cmd) -> str:\n        \"\"\"\n        Execute a command in a running Docker container.\n\n        Args:\n            name (str): The name of the container.\n            cmd (str): The command to execute.\n            *extra_cmd: Additional command arguments.\n\n        Returns:\n            str: The output of the command.\n        \"\"\"\n        if len(extra_cmd) > 0:\n            cmd = ' '.join([cmd] + list(extra_cmd))\n        \n        return c.cmd(f'docker exec {name} bash -c \"{cmd}\"')\n\n    def cstats(self, max_age=10, update=False, cache_dir=\"./docker_stats\") -> pd.DataFrame:\n        \"\"\"\n        Get resource usage statistics for all containers.\n\n        Args:\n            max_age (int): Maximum age of cached data in seconds\n            update (bool): Force update of data\n            cache_dir (str): Directory to store cached data\n\n        Returns:\n            pd.DataFrame: A DataFrame containing statistics for all containers\n        \"\"\"\n        # Create cache directory if it doesn't exist\n        os.makedirs(cache_dir, exist_ok=True)\n        cache_file = os.path.join(cache_dir, \"all_containers.json\")\n        \n        # Check if cache exists and is recent enough\n        should_update = update\n        if not should_update and os.path.exists(cache_file):\n            file_age = datetime.now().timestamp() - os.path.getmtime(cache_file)\n            should_update = file_age > max_age\n        \n        if should_update or not os.path.exists(cache_file):\n            # Run docker stats command\n            cmd = 'docker stats --no-stream'\n            try:\n                output = subprocess.check_output(cmd, shell=True, text=True)\n            except subprocess.CalledProcessError:\n                print(\"Error running docker stats command\")\n                return pd.DataFrame()\n            \n            # Parse the output\n            lines = output.strip().split('\\n')\n            if len(lines) <= 1:\n                print(\"No containers running\")\n                return pd.DataFrame()\n            \n            # Process headers\n            headers = [h.strip() for h in lines[0].split('  ') if h.strip()]\n            cleaned_headers = []\n            header_indices = []\n            \n            # Find the position of each header in the line\n            current_pos = 0\n            for header in headers:\n                pos = lines[0].find(header, current_pos)\n                if pos != -1:\n                    header_indices.append(pos)\n                    cleaned_headers.append(header)\n                    current_pos = pos + len(header)\n            \n            # Process data rows\n            stats = []\n            for line in lines[1:]:\n                if not line.strip():\n                    continue\n                    \n                # Extract values based on header positions\n                values = []\n                for i in range(len(header_indices)):\n                    start = header_indices[i]\n                    end = header_indices[i+1] if i+1 < len(header_indices) else len(line)\n                    values.append(line[start:end].strip())\n                \n                # Create a dictionary for this row\n                row = dict(zip(cleaned_headers, values))\n                \n                # Process special columns\n                if 'MEM USAGE / LIMIT' in row:\n                    mem_usage, mem_limit = row.pop('MEM USAGE / LIMIT').split('/')\n                    row['MEM_USAGE'] = mem_usage.strip()\n                    row['MEM_LIMIT'] = mem_limit.strip()\n                \n                for prefix in ['NET', 'BLOCK']:\n                    if f'{prefix} I/O' in row:\n                        io_in, io_out = row.pop(f'{prefix} I/O').split('/')\n                        row[f'{prefix}_IN'] = io_in.strip()\n                        row[f'{prefix}_OUT'] = io_out.strip()\n                \n                # Rename ID column\n                if 'CONTAINER ID' in row:\n                    row['ID'] = row.pop('CONTAINER ID')\n                \n                # Convert keys to lowercase\n                row = {k.lower(): v for k, v in row.items()}\n                stats.append(row)\n            \n            # Save to cache\n            with open(cache_file, 'w') as f:\n                json.dump(stats, f)\n        else:\n            # Load from cache\n            with open(cache_file, 'r') as f:\n                stats = json.load(f)\n        \n        # Convert to DataFrame\n        return pd.DataFrame(stats)\n\n    def sync(self):\n        \"\"\"\n        Sync container statistics.\n        \"\"\"\n        self.stats(update=1)\n\n    # PM2-like methods for container management\n    def start(self, name: str, image: str, **kwargs) -> Dict[str, Any]:\n        \"\"\"\n        Start a container (PM2-like interface).\n\n        Args:\n            name (str): Name for the container.\n            image (str): Docker image to use.\n            **kwargs: Additional arguments for the run method.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        \"\"\"\n        if self.exists(name):\n            return self.restart(name)\n        \n        return self.run(image=image, name=name, **kwargs)\n\n    def stop(self, name: str) -> Dict[str, str]:\n        \"\"\"\n        Stop a container without removing it (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        \"\"\"\n        try:\n            c.cmd(f'docker stop {name}', verbose=False)\n            return {'status': 'stopped', 'name': name}\n        except Exception as e:\n            return {'status': 'error', 'name': name, 'error': str(e)}\n\n    def restart(self, name: str) -> Dict[str, str]:\n        \"\"\"\n        Restart a container (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        \"\"\"\n        try:\n            c.cmd(f'docker restart {name}', verbose=False)\n            return {'status': 'restarted', 'name': name}\n        except Exception as e:\n            return {'status': 'error', 'name': name, 'error': str(e)}\n\n    def delete(self, name: str) -> Dict[str, str]:\n        \"\"\"\n        Remove a container (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        \"\"\"\n        return self.kill(name)\n\n    def list(self, all: bool = False) -> pd.DataFrame:\n        \"\"\"\n        List containers with detailed information (PM2-like interface).\n\n        Args:\n            all (bool): Include stopped containers.\n\n        Returns:\n            pd.DataFrame: DataFrame containing container information.\n        \"\"\"\n        try:\n            cmd = 'docker ps' if not all else 'docker ps -a'\n            output = c.cmd(cmd, verbose=False)\n            lines = output.split('\\n')\n            \n            if len(lines) <= 1:\n                return pd.DataFrame()\n                \n            # Process headers\n            headers = []\n            current_pos = 0\n            header_line = lines[0]\n            \n            # Extract header positions\n            for i, char in enumerate(header_line):\n                if char.isupper() and (i == 0 or header_line[i-1].isspace()):\n                    if current_pos < i:\n                        header_end = i\n                        header_text = header_line[current_pos:header_end].strip()\n                        if header_text:\n                            headers.append((current_pos, header_text))\n                    current_pos = i\n            \n            # Add the last header\n            if current_pos < len(header_line):\n                headers.append((current_pos, header_line[current_pos:].strip()))\n            \n            # Extract header positions for parsing\n            header_positions = [pos for pos, _ in headers]\n            header_names = [name.lower().replace(' ', '_') for _, name in headers]\n            \n            # Parse data rows\n            data = []\n            for line in lines[1:]:\n                if not line.strip():\n                    continue\n                    \n                row = {}\n                for i in range(len(header_positions)):\n                    start = header_positions[i]\n                    end = header_positions[i+1] if i+1 < len(header_positions) else len(line)\n                    value = line[start:end].strip()\n                    row[header_names[i]] = value\n                \n                data.append(row)\n            \n            return pd.DataFrame(data)\n        except Exception as e:\n            c.print(f\"Error listing containers: {e}\", color='red')\n            return pd.DataFrame()\n\n    def monitor(self) -> pd.DataFrame:\n        \"\"\"\n        Monitor containers (PM2-like interface).\n\n        Returns:\n            pd.DataFrame: DataFrame with container monitoring information.\n        \"\"\"\n        return self.cstats(update=True)\n\n    def save(self, config_name: str = 'default') -> Dict[str, Any]:\n        \"\"\"\n        Save current container configuration (PM2-like interface).\n\n        Args:\n            config_name (str): Name for the configuration.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        \"\"\"\n        try:\n            containers = self.list(all=True)\n            if containers.empty:\n                return {'status': 'error', 'message': 'No containers to save'}\n            \n            config_path = self.get_path(f'configs/{config_name}.json')\n            os.makedirs(os.path.dirname(config_path), exist_ok=True)\n            \n            # Get container details including image, ports, volumes, etc.\n            container_configs = []\n            for _, container in containers.iterrows():\n                name = container.get('names', '')\n                if not name:\n                    continue\n                    \n                # Get detailed container info\n                inspect_cmd = f'docker inspect {name}'\n                try:\n                    inspect_output = c.cmd(inspect_cmd, verbose=False)\n                    container_info = json.loads(inspect_output)[0]\n                    \n                    config = {\n                        'name': name,\n                        'image': container_info.get('Config', {}).get('Image', ''),\n                        'command': container_info.get('Config', {}).get('Cmd', []),\n                        'entrypoint': container_info.get('Config', {}).get('Entrypoint', []),\n                        'env': container_info.get('Config', {}).get('Env', []),\n                        'ports': container_info.get('HostConfig', {}).get('PortBindings', {}),\n                        'volumes': container_info.get('HostConfig', {}).get('Binds', []),\n                        'network_mode': container_info.get('HostConfig', {}).get('NetworkMode', ''),\n                        'restart_policy': container_info.get('HostConfig', {}).get('RestartPolicy', {}),\n                        'status': container_info.get('State', {}).get('Status', '')\n                    }\n                    container_configs.append(config)\n                except Exception as e:\n                    c.print(f\"Error inspecting container {name}: {e}\", color='yellow')\n                    continue\n            \n            # Save the configuration\n            with open(config_path, 'w') as f:\n                json.dump(container_configs, f, indent=2)\n                \n            return {\n                'status': 'success', \n                'message': f'Saved {len(container_configs)} container configurations to {config_path}',\n                'path': config_path\n            }\n        except Exception as e:\n            return {'status': 'error', 'error': str(e)}\n\n    def load(self, config_name: str = 'default') -> Dict[str, Any]:\n        \"\"\"\n        Load and apply a saved container configuration (PM2-like interface).\n\n        Args:\n            config_name (str): Name of the configuration to load.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        \"\"\"\n        try:\n            config_path = self.get_path(f'configs/{config_name}.json')\n            if not os.path.exists(config_path):\n                return {'status': 'error', 'message': f'Configuration {config_name} not found'}\n            \n            with open(config_path, 'r') as f:\n                container_configs = json.load(f)\n            \n            results = []\n            for config in container_configs:\n                name = config.get('name')\n                image = config.get('image')\n                \n                if not name or not image:\n                    results.append({'status': 'error', 'message': 'Missing name or image in config'})\n                    continue\n                \n                # Convert ports format\n                ports = {}\n                for container_port, host_bindings in config.get('ports', {}).items():\n                    if host_bindings and len(host_bindings) > 0:\n                        host_port = host_bindings[0].get('HostPort')\n                        if host_port:\n                            ports[host_port] = container_port.split('/')[0]\n                \n                # Convert volumes format\n                volumes = {}\n                for volume in config.get('volumes', []):\n                    if ':' in volume:\n                        host_path, container_path = volume.split(':', 1)\n                        volumes[host_path] = container_path\n                \n                # Convert environment variables\n                env_vars = {}\n                for env in config.get('env', []):\n                    if '=' in env:\n                        key, value = env.split('=', 1)\n                        env_vars[key] = value\n                \n                # Start the container\n                try:\n                    result = self.run(\n                        image=image,\n                        name=name,\n                        cmd=' '.join(config.get('command', [])) if config.get('command') else None,\n                        entrypoint=' '.join(config.get('entrypoint', [])) if config.get('entrypoint') else None,\n                        volumes=volumes,\n                        ports=ports,\n                        env_vars=env_vars,\n                        net=config.get('network_mode', 'bridge')\n                    )\n                    results.append({'name': name, 'status': 'started', 'result': result})\n                except Exception as e:\n                    results.append({'name': name, 'status': 'error', 'error': str(e)})\n            \n            return {\n                'status': 'success',\n                'message': f'Loaded {len(results)} containers from {config_name} configuration',\n                'results': results\n            }\n        except Exception as e:\n            return {'status': 'error', 'error': str(e)}\n\n    def file(self, path: str) -> str:\n        \"\"\"\n        Get the content of a Dockerfile.\n\n        Args:\n            path (str): Path to the directory containing the Dockerfile.\n\n        Returns:\n            str: Content of the Dockerfile.\n        \"\"\"\n        dockerfile_path = os.path.join(path, 'Dockerfile')\n        if os.path.exists(dockerfile_path):\n            with open(dockerfile_path, 'r') as f:\n                return f.read()\n        return f\"Dockerfile not found at {dockerfile_path}\"\n\n    def files(self, path: str = '.') -> List[str]:\n        \"\"\"\n        Find all Dockerfiles in a directory and its subdirectories.\n\n        Args:\n            path (str): Root directory to search.\n\n        Returns:\n            List[str]: List of paths to Dockerfiles.\n        \"\"\"\n        dockerfiles = []\n        for root, _, files in os.walk(path):\n            if 'Dockerfile' in files:\n                dockerfiles.append(os.path.join(root, 'Dockerfile'))\n        return dockerfiles\n",
+        "scripts/docker_monitor.py": " # start of file\n#!/usr/bin/env python3\n\"\"\"\nDocker container monitoring script.\nSimilar to PM2's monitoring interface but for Docker containers.\n\"\"\"\n\nimport commune as c\nimport time\nimport argparse\nimport os\nimport sys\n\ndef clear_screen():\n    \"\"\"Clear the terminal screen.\"\"\"\n    os.system('cls' if os.name == 'nt' else 'clear')\n\ndef format_size(size_str):\n    \"\"\"Format size strings for consistent display.\"\"\"\n    if not size_str:\n        return \"0B\"\n    return size_str\n\ndef format_percent(percent_str):\n    \"\"\"Format percentage strings for consistent display.\"\"\"\n    if not percent_str:\n        return \"0.00%\"\n    if not percent_str.endswith('%'):\n        percent_str += '%'\n    return percent_str\n\ndef main():\n    parser = argparse.ArgumentParser(description='Monitor Docker containers')\n    parser.add_argument('--refresh', type=int, default=2, help='Refresh interval in seconds')\n    parser.add_argument('--container', type=str, help='Monitor specific container')\n    parser.add_argument('--no-clear', action='store_true', help='Do not clear screen between updates')\n    args = parser.parse_args()\n\n    docker = c.module('docker')()\n    \n    try:\n        while True:\n            if not args.no_clear:\n                clear_screen()\n            \n            print(\"\\033[1m\" + \"Docker Container Monitor\" + \"\\033[0m\")\n            print(\"\\033[1m\" + \"\u2500\" * 100 + \"\\033[0m\")\n            \n            # Get container list\n            containers = docker.list(all=True)\n            if containers.empty:\n                print(\"No containers found.\")\n                time.sleep(args.refresh)\n                continue\n                \n            # Get container stats\n            stats = docker.cstats(update=True)\n            \n            # Filter for specific container if requested\n            if args.container:\n                containers = containers[containers['names'].str.contains(args.container)]\n                if not containers.empty and not stats.empty:\n                    stats = stats[stats['name'].str.contains(args.container)]\n            \n            # Print container information\n            print(\"\\033[1m{:<20} {:<15} {:<10} {:<10} {:<15} {:<15} {:<15}\\033[0m\".format(\n                \"Container\", \"Status\", \"CPU %\", \"MEM %\", \"MEM Usage\", \"NET I/O\", \"BLOCK I/O\"\n            ))\n            print(\"\u2500\" * 100)\n            \n            for _, container in containers.iterrows():\n                name = container.get('names', '')\n                status = container.get('status', '')\n                \n                # Find matching stats\n                container_stats = stats[stats['name'] == name] if not stats.empty else None\n                \n                if container_stats is not None and not container_stats.empty:\n                    row = container_stats.iloc[0]\n                    cpu = format_percent(row.get('cpu%', '0%'))\n                    mem = format_percent(row.get('mem%', '0%'))\n                    mem_usage = format_size(row.get('mem_usage', '0B'))\n                    net_io = f\"{format_size(row.get('net_in', '0B'))}/{format_size(row.get('net_out', '0B'))}\"\n                    block_io = f\"{format_size(row.get('block_in', '0B'))}/{format_size(row.get('block_out', '0B'))}\"\n                else:\n                    cpu = \"N/A\"\n                    mem = \"N/A\"\n                    mem_usage = \"N/A\"\n                    net_io = \"N/A\"\n                    block_io = \"N/A\"\n                \n                # Color status\n                if 'Up' in status:\n                    status = f\"\\033[92m{status}\\033[0m\"  # Green for running\n                elif 'Exited' in status:\n                    status = f\"\\033[91m{status}\\033[0m\"  # Red for stopped\n                else:\n                    status = f\"\\033[93m{status}\\033[0m\"  # Yellow for other states\n                \n                print(\"{:<20} {:<40} {:<10} {:<10} {:<15} {:<15} {:<15}\".format(\n                    name, status, cpu, mem, mem_usage, net_io, block_io\n                ))\n            \n            print(\"\\n\" + \"\u2500\" * 100)\n            print(f\"Refresh: every {args.refresh}s | Press Ctrl+C to exit\")\n            \n            time.sleep(args.refresh)\n            \n    except KeyboardInterrupt:\n        print(\"\\nExiting Docker monitor...\")\n        sys.exit(0)\n    except Exception as e:\n        print(f\"Error: {e}\")\n        sys.exit(1)\n\nif __name__ == \"__main__\":\n    main()\n",
+        "test_docker.py": "\nimport pytest\nimport commune as c\nimport os\nimport pandas as pd\nfrom typing import Dict, List\n\nclass TestDocker:\n    def __init__(self):\n        self.docker =  c.module('docker')()\n\n    def test_init(self, docker):\n        assert docker.default_shm_size == '100g'\n        assert docker.default_network == 'host'\n\n    def test_file(self, docker, tmp_path):\n        # Create a temporary Dockerfile\n        dockerfile_path = tmp_path / \"Dockerfile\"\n        dockerfile_content = \"FROM python:3.8\\nWORKDIR /app\"\n        dockerfile_path.write_text(dockerfile_content)\n        \n        result = docker.file(str(tmp_path))\n        assert isinstance(result, str)\n        assert \"FROM python:3.8\" in result\n\n    def test_files(self, docker, tmp_path):\n        # Create multiple Dockerfiles\n        (tmp_path / \"Dockerfile\").write_text(\"FROM python:3.8\")\n        (tmp_path / \"subfolder\").mkdir()\n        (tmp_path / \"subfolder\" / \"Dockerfile\").write_text(\"FROM ubuntu:latest\")\n        \n        files = docker.files(str(tmp_path))\n        assert len(files) == 2\n        assert all(f.endswith('Dockerfile') for f in files)\n\n\n    def test_run(self, docker):\n        result = docker.run(\n            path='python:3.8-slim',\n            cmd='python --version',\n            volumes=['/tmp:/tmp'],\n            name='test_container',\n            gpus=[0],\n            shm_size='2g',\n            ports={'8080': 8080},\n            net='bridge',\n            daemon=True,\n            env_vars={'TEST_VAR': 'test_value'}\n        )\n        \n        assert isinstance(result, dict)\n        assert 'cmd' in result\n        assert 'docker run' in result['cmd']\n        assert '--shm-size 2g' in result['cmd']\n        assert '-p 8080:8080' in result['cmd']\n\n    def test_kill(self):\n        # First run a container\n        docker = self.docker\n        docker.run(\n            path='python:3.8-slim',\n            name='test_container_kill'\n        )\n        \n        result = docker.kill('test_container_kill')\n        assert result['status'] == 'killed'\n        assert result['name'] == 'test_container_kill'\n\n    def test_images(self, docker):\n        images = docker.images(to_records=False)\n        assert isinstance(images, pd.DataFrame)\n        assert not images.empty\n        assert 'repository' in images.columns\n\n    def test_logs(self, docker):\n        # Run a container that outputs something\n        docker.run(\n            path='python:3.8-slim',\n            name='test_logs',\n            cmd='echo \"test log message\"'\n        )\n        \n        logs = docker.logs('test_logs', tail=1)\n        assert isinstance(logs, str)\n        assert 'test log message' in logs\n\n    def test_stats(self, docker):\n        # Run a container\n        docker.run(\n            path='python:3.8-slim',\n            name='test_stats',\n            cmd='sleep 10'\n        )\n        \n        stats = docker.stats('test_stats')\n        assert isinstance(stats, pd.DataFrame)\n        assert not stats.empty\n\n    def test_prune(self, docker):\n        result = docker.prune(all=False)\n        assert isinstance(result, str)\n\n    @pytest.mark.cleanup\n    def test_kill_all(self, docker):\n        result = docker.kill_all(verbose=False)\n        assert result['status'] == 'all_containers_killed'\n\n"
+    },
+    "schema": {
+        "build": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "./",
+                    "type": "str"
+                },
+                "tag": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "no_cache": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "env": {
+                    "value": {},
+                    "type": "dict"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Build a Docker image from a Dockerfile.\n\n        Args:\n            path (Optional[str]): Path to the Dockerfile. Defaults to None.\n            tag (Optional[str]): Tag for the image. Defaults to None.\n            sudo (bool): Use sudo. Defaults to False.\n            verbose (bool): Enable verbose output. Defaults to True.\n            no_cache (bool): Disable cache during build. Defaults to False.\n            env (Dict[str, str]): Environment variables. Defaults to {}.\n\n        Returns:\n            Dict[str, Any]: A dictionary containing the status, tag, and result of the build.\n        ",
+            "cost": 1,
+            "name": "build",
+            "source": {
+                "start": 27,
+                "length": 27,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:4a62e84b94e65e773716405c5b3237893fdb970c592dabd18ee34c2fb9633d32",
+                "end": 54
+            }
+        },
+        "cstats": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "max_age": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "cache_dir": {
+                    "value": "./docker_stats",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'pandas.core.frame.DataFrame'>"
+            },
+            "docs": "\n        Get resource usage statistics for all containers.\n\n        Args:\n            max_age (int): Maximum age of cached data in seconds\n            update (bool): Force update of data\n            cache_dir (str): Directory to store cached data\n\n        Returns:\n            pd.DataFrame: A DataFrame containing statistics for all containers\n        ",
+            "cost": 1,
+            "name": "cstats",
+            "source": {
+                "start": 373,
+                "length": 97,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:bedc266e918e77bdd59f3eecfc77bb86a0f53efd1e83b2f0a3ce3c4ef0c223f2",
+                "end": 470
+            }
+        },
+        "delete": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, str]"
+            },
+            "docs": "\n        Remove a container (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "delete",
+            "source": {
+                "start": 527,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:6d19441b95ed367ec5b024f1572b7392a0129baae301b6e13d34e53d39c5d06f",
+                "end": 538
+            }
+        },
+        "exec": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "cmd": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "extra_cmd": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Execute a command in a running Docker container.\n\n        Args:\n            name (str): The name of the container.\n            cmd (str): The command to execute.\n            *extra_cmd: Additional command arguments.\n\n        Returns:\n            str: The output of the command.\n        ",
+            "cost": 1,
+            "name": "exec",
+            "source": {
+                "start": 356,
+                "length": 16,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:03eee443e93ff25b103758c17ce6cb48c2ba2f512e8bacaf35c4bd42267ec249",
+                "end": 372
+            }
+        },
+        "exists": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bool'>"
+            },
+            "docs": "\n        Check if a container exists.\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            bool: True if the container exists, False otherwise.\n        ",
+            "cost": 1,
+            "name": "exists",
+            "source": {
+                "start": 145,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:3a3f5f3a64255f9fa890b8dc22bcb775a08a23606bb00ec7cc9fe53a639b5844",
+                "end": 156
+            }
+        },
+        "file": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Get the content of a Dockerfile.\n\n        Args:\n            path (str): Path to the directory containing the Dockerfile.\n\n        Returns:\n            str: Content of the Dockerfile.\n        ",
+            "cost": 1,
+            "name": "file",
+            "source": {
+                "start": 742,
+                "length": 15,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:5e6343bbcab4c69528cdbd2f2d07548f3073a63ba951554c8c44277d12372646",
+                "end": 757
+            }
+        },
+        "files": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": ".",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": "\n        Find all Dockerfiles in a directory and its subdirectories.\n\n        Args:\n            path (str): Root directory to search.\n\n        Returns:\n            List[str]: List of paths to Dockerfiles.\n        ",
+            "cost": 1,
+            "name": "files",
+            "source": {
+                "start": 758,
+                "length": 15,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:70ac318ce4468c4f2d3c1ef19344e7293219ecbfba1adb7c32575479f5a88ef6",
+                "end": 773
+            }
+        },
+        "get_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Get the path to a Docker-related file.\n\n        Args:\n            path (str): The path to the file.\n\n        Returns:\n            str: The full path to the file.\n        ",
+            "cost": 1,
+            "name": "get_path",
+            "source": {
+                "start": 278,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:ceb81976de18b9f68d31d628e8303efba620be305ca87d591d1a52fa30805c44",
+                "end": 289
+            }
+        },
+        "images": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "to_records": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Union[pandas.core.frame.DataFrame, typing.Any]"
+            },
+            "docs": "\n        List all Docker images.\n\n        Args:\n            to_records (bool): Convert to records.\n\n        Returns:\n            Union[pd.DataFrame, Any]: A DataFrame or records of Docker images.\n        ",
+            "cost": 1,
+            "name": "images",
+            "source": {
+                "start": 197,
+                "length": 28,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:14f9e99502166765a3973b14523f38cebd18bde4acc3dac9dc2be6ab91a193ea",
+                "end": 225
+            }
+        },
+        "kill": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "prune": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, str]"
+            },
+            "docs": "\n        Kill and remove a container.\n\n        Args:\n            name (str): The name of the container.\n            sudo (bool): Use sudo.\n            verbose (bool): Enable verbose output.\n            prune (bool): Prune unused Docker resources.\n\n        Returns:\n            Dict[str, str]: A dictionary containing the status and name of the container.\n        ",
+            "cost": 1,
+            "name": "kill",
+            "source": {
+                "start": 157,
+                "length": 21,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:54eb5f3a92fdf08e7c9d1fc982e1ee8b9a29b36e90c0eb00e2097fff662c2055",
+                "end": 178
+            }
+        },
+        "kill_all": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, str]"
+            },
+            "docs": "\n        Kill all running containers.\n\n        Args:\n            sudo (bool): Use sudo.\n            verbose (bool): Enable verbose output.\n\n        Returns:\n            Dict[str, str]: A dictionary indicating the status of the operation.\n        ",
+            "cost": 1,
+            "name": "kill_all",
+            "source": {
+                "start": 179,
+                "length": 17,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:bb2e6effd38e7e32f9cb7164f3bdca78edc1893ce128063ffc7710130980b15b",
+                "end": 196
+            }
+        },
+        "list": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "all": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'pandas.core.frame.DataFrame'>"
+            },
+            "docs": "\n        List containers with detailed information (PM2-like interface).\n\n        Args:\n            all (bool): Include stopped containers.\n\n        Returns:\n            pd.DataFrame: DataFrame containing container information.\n        ",
+            "cost": 1,
+            "name": "list",
+            "source": {
+                "start": 539,
+                "length": 60,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:f77294585f07846d6141145ca18adcf19ca282cf9319764f209ff68564a7337c",
+                "end": 599
+            }
+        },
+        "load": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "config_name": {
+                    "value": "default",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Load and apply a saved container configuration (PM2-like interface).\n\n        Args:\n            config_name (str): Name of the configuration to load.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "load",
+            "source": {
+                "start": 669,
+                "length": 72,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:3f0030fb287598872fd156a0fcf3bf817079bf0e82503af73d0c27ab8b378763",
+                "end": 741
+            }
+        },
+        "logs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "follow": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "verbose": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "tail": {
+                    "value": 100,
+                    "type": "int"
+                },
+                "since": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Get container logs with advanced options.\n\n        Args:\n            name (str): The name of the container.\n            sudo (bool): Use sudo.\n            follow (bool): Follow the logs.\n            verbose (bool): Enable verbose output.\n            tail (int): Number of lines to tail.\n            since (Optional[str]): Show logs since timestamp.\n\n        Returns:\n            str: The container logs.\n        ",
+            "cost": 1,
+            "name": "logs",
+            "source": {
+                "start": 226,
+                "length": 35,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:23e6c45c977dc7e3ea3cadb0013a8b914c0beb283d36e82e7bf23b842cb8c853",
+                "end": 261
+            }
+        },
+        "monitor": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'pandas.core.frame.DataFrame'>"
+            },
+            "docs": "\n        Monitor containers (PM2-like interface).\n\n        Returns:\n            pd.DataFrame: DataFrame with container monitoring information.\n        ",
+            "cost": 1,
+            "name": "monitor",
+            "source": {
+                "start": 600,
+                "length": 8,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:1f2fd3b4b68221589f37e1cbe76808908cafbe93277afd459ab03780e27e2fae",
+                "end": 608
+            }
+        },
+        "prune": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "all": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Prune Docker resources.\n\n        Args:\n            all (bool): Prune all unused resources.\n\n        Returns:\n            str: The result of the prune command.\n        ",
+            "cost": 1,
+            "name": "prune",
+            "source": {
+                "start": 262,
+                "length": 15,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:59f053caadf7edcbfa79240836d5be46d8fdc257590b17c293cd1395ef79eb22",
+                "end": 277
+            }
+        },
+        "ps": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": "\n        List all running Docker containers.\n\n        Returns:\n            List[str]: A list of container names.\n        ",
+            "cost": 1,
+            "name": "ps",
+            "source": {
+                "start": 334,
+                "length": 21,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:fc0750c45fa9fcb7483ee99f2f86429194610b64242bafe3630aa3a8fbcb5d6a",
+                "end": 355
+            }
+        },
+        "restart": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, str]"
+            },
+            "docs": "\n        Restart a container (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "restart",
+            "source": {
+                "start": 511,
+                "length": 15,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:a725230e088d632a7c2ce58f799258887e36ca0172a568bff01b543cba9b4cd0",
+                "end": 526
+            }
+        },
+        "run": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "image": {
+                    "value": "./",
+                    "type": "str"
+                },
+                "cmd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "volumes": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "name": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "gpus": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "shm_size": {
+                    "value": "100g",
+                    "type": "str"
+                },
+                "entrypoint": {
+                    "value": "tail -f /dev/null",
+                    "type": "str"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "build": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "ports": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "net": {
+                    "value": "host",
+                    "type": "str"
+                },
+                "daemon": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "cwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "env_vars": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Run a Docker container with advanced configuration options.\n\n        Args:\n            path (str): Path to Dockerfile or image name.\n            cmd (Optional[str]): Command to run in container.\n            volumes (Optional[Union[List[str], Dict[str, str], str]]): Volume mappings.\n            name (Optional[str]): Container name.\n            gpus (Union[List[int], str, bool]): GPU configuration.\n            shm_size (str): Shared memory size.\n            sudo (bool): Use sudo.\n            build (bool): Build image before running.\n            ports (Optional[Dict[str, int]]): Port mappings.\n            net (str): Network mode.\n            daemon (bool): Run in daemon mode.\n            cwd (Optional[str]): Working directory.\n            env_vars (Optional[Dict[str, str]]): Environment variables.\n\n        Returns:\n            Dict[str, Any]: A dictionary containing the command and working directory.\n        ",
+            "cost": 1,
+            "name": "run",
+            "source": {
+                "start": 55,
+                "length": 89,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:2e965d709b6cd7fa5e955a6660fa34ef4d3a14eb9605c5dc9c5d988977468d4f",
+                "end": 144
+            }
+        },
+        "save": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "config_name": {
+                    "value": "default",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Save current container configuration (PM2-like interface).\n\n        Args:\n            config_name (str): Name for the configuration.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "save",
+            "source": {
+                "start": 609,
+                "length": 59,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:c3a85fd01c8c92e3fdc182f6bb5e77f46a379cd27c305096d71927761614f44a",
+                "end": 668
+            }
+        },
+        "start": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "image": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "\n        Start a container (PM2-like interface).\n\n        Args:\n            name (str): Name for the container.\n            image (str): Docker image to use.\n            **kwargs: Additional arguments for the run method.\n\n        Returns:\n            Dict[str, Any]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "start",
+            "source": {
+                "start": 478,
+                "length": 16,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:1b1ddf6de6efa9350b8ae824f10ba810501ac0da6e1489ce6954d85709d55a1e",
+                "end": 494
+            }
+        },
+        "stats": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "max_age": {
+                    "value": 60,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'pandas.core.frame.DataFrame'>"
+            },
+            "docs": "\n        Get container resource usage statistics.\n\n        Args:\n            max_age (int): Maximum age of cached data in seconds.\n            update (bool): Force update of data.\n\n        Returns:\n            pd.DataFrame: A DataFrame containing the container statistics.\n        ",
+            "cost": 1,
+            "name": "stats",
+            "source": {
+                "start": 290,
+                "length": 43,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:80eebdb0cbcb95b34bdc35cb83002f3446bf28eff4f40f634960870b0d66434f",
+                "end": 333
+            }
+        },
+        "stop": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, str]"
+            },
+            "docs": "\n        Stop a container without removing it (PM2-like interface).\n\n        Args:\n            name (str): The name of the container.\n\n        Returns:\n            Dict[str, str]: Result of the operation.\n        ",
+            "cost": 1,
+            "name": "stop",
+            "source": {
+                "start": 495,
+                "length": 15,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:9bcd522f61ec87682c53927321b50c6accee438d51fde65c91cd2f38c8041803",
+                "end": 510
+            }
+        },
+        "sync": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Sync container statistics.\n        ",
+            "cost": 1,
+            "name": "sync",
+            "source": {
+                "start": 471,
+                "length": 5,
+                "path": "~/commune/commune/modules/docker/docker.py",
+                "code": null,
+                "hash": "sha256:7ba7954d720761af52849bfd1a271efdb9b840c2c9c1b3107f16d763fa0d1432",
+                "end": 476
+            }
+        }
+    },
+    "name": "docker",
+    "key": "5CFjHWtTfjPg6gea2JXPqtZ6RcYEmqbuDZLgpRNjxjzfaSM5",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:6d13e485b8ca873307af1ceb346a2b4aeb2c9caef0088e5ddc624001fabaa9e6",
+    "time": 1746536214.635402,
+    "signature": "0x861426c1bcf082cd2c7bb2060fffc1eaf8ca47a0c56c9ffba194451a51f6967c25a17500af033070e5a7fbdbd2b6e97256b71a99ea452ee9610dc45e9e54308f"
+}

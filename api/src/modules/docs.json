@@ -1,0 +1,56 @@
+{
+    "code": {
+        "docs.py": "import commune as c\nimport os\nclass Docs:\n    def forward(self, module='module', \n                model='anthropic/claude-3.5-sonnet', \n                fmt='DICT(key=topic:str, value=data:str)', \n                goal=\" summarize the following into object level descriptions get the core functions of the modules and give some examples\", \n\n    **kwargs ) -> int:\n        context = c.code(module)\n        prompt = f\"\"\"\n        GOAL:\n            {goal}\n        CONTEXT:\n            {context}\n        OUTPUT:\n\n        \"\"\"\n        output = ''\n        for ch in c.ask(prompt, model=model, process_input=False, **kwargs):\n            print(ch, end='')\n            output += ch\n        return output   \n\n    \n    "
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "model": {
+                    "value": "anthropic/claude-3.5-sonnet",
+                    "type": "str"
+                },
+                "fmt": {
+                    "value": "DICT(key=topic:str, value=data:str)",
+                    "type": "str"
+                },
+                "goal": {
+                    "value": " summarize the following into object level descriptions get the core functions of the modules and give some examples",
+                    "type": "str"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'int'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 4,
+                "length": 20,
+                "path": "~/commune/commune/modules/docs/docs.py",
+                "code": null,
+                "hash": "sha256:aea405824e299dc5da7d59eb55d00b3b4881f140d3d7d82400c6e2535212361e",
+                "end": 24
+            }
+        }
+    },
+    "name": "docs",
+    "key": "5Hb4aHLkyuxM13rBSVpMtJFRcb5fZi6jhY76v5vkbtubZqwr",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:439943daed6b021fd11318e1e1dca934766f0deeb862a7bed6e15d6f3d5da3c7",
+    "time": 1746536214.471751,
+    "signature": "0xd843657d591ffa51202a17199ad62c90144b29615c0c4246422bdde692c40d0ac75178d6c3997309c4711dd828a00bf855d370ec3b64686705b159293edfc180"
+}

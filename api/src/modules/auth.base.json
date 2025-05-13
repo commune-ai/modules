@@ -1,0 +1,141 @@
+{
+    "code": {
+        "base.py": "import commune as c\nimport time\n\nclass Auth:\n\n    data_features=['data', 'time']\n\n    def get_headers(self, data='fam', key=None, content_type='application/json', crypto_type='ecdsa'):\n        key = c.get_key(key, crypto_type=crypto_type)\n        headers_data = {'data': c.hash(data), 'time': str(time.time())}\n        headers = {k: headers_data[k] for k in self.data_features}\n        headers['signature'] = key.sign(headers_data, mode='str')\n        headers['crypto_type'] = crypto_type\n        headers['key'] = key.key_address\n        return headers\n\n    def verify_headers(self, headers:dict, data=None, max_staleness=10):\n        signature = headers['signature']\n        headers_data = {k: str(headers[k]) for k in self.data_features}\n        if data:\n            assert c.hash(data) == headers['data'], f'InvalidDataHash({c.hash(data)} != {headers[\"data\"]})'\n        staleness = c.time() - float(headers['time'])\n        headers['time'] = float(headers['time'])\n        assert isinstance(headers, dict), f'Headers must be a dict, not {type(headers)}'\n        assert  staleness < max_staleness, f\"Request is too old ({staleness}s > {max_staleness}s (MAX)\" \n        assert c.verify(headers_data, signature, address=headers['key'], crypto_type=headers['crypto_type']), f'InvalidSignature'\n        return headers\n\n\n    def test_headers(self,crypto_type='sr25519'):\n        results = {}\n        for crypto_type in ['ecdsa', 'sr25519']:\n            data = {'fn': 'test', 'params': {'a': 1, 'b': 2}}\n            headers = self.get_headers(data, crypto_type=crypto_type)\n            verified = self.verify_headers(headers)\n            results[crypto_type] = {'headers': headers, 'verified': verified}\n        return results\n\n\n\n\n    def test(self,crypto_type='sr25519'):\n        results = {}\n        for crypto_type in ['ecdsa', 'sr25519']:\n            data = {'fn': 'test', 'params': {'a': 1, 'b': 2}}\n            headers = self.get_headers(data, crypto_type=crypto_type)\n            verified = self.verify_headers(headers)\n            results[crypto_type] = {'headers': headers, 'verified': verified}\n        return results\n        "
+    },
+    "schema": {
+        "get_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "fam",
+                    "type": "str"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "content_type": {
+                    "value": "application/json",
+                    "type": "str"
+                },
+                "crypto_type": {
+                    "value": "ecdsa",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_headers",
+            "source": {
+                "start": 8,
+                "length": 8,
+                "path": "~/commune/commune/modules/auth/base.py",
+                "code": null,
+                "hash": "sha256:b8d5cd341fee46b22632fa3d4b9d6993d117fd3180bb09486ca91e2cc3fe514f",
+                "end": 16
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "crypto_type": {
+                    "value": "sr25519",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 42,
+                "length": 8,
+                "path": "~/commune/commune/modules/auth/base.py",
+                "code": null,
+                "hash": "sha256:a50de161c74e1c2b22b6c73bea2fc27f027de1c936cd574c36a99911e32c4ca5",
+                "end": 50
+            }
+        },
+        "test_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "crypto_type": {
+                    "value": "sr25519",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_headers",
+            "source": {
+                "start": 30,
+                "length": 8,
+                "path": "~/commune/commune/modules/auth/base.py",
+                "code": null,
+                "hash": "sha256:0c55dedc14d25e61918cbc40e76a23e9f86a196879f4463c8680f7fa516cfc78",
+                "end": 38
+            }
+        },
+        "verify_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "headers": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "max_staleness": {
+                    "value": 10,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "verify_headers",
+            "source": {
+                "start": 17,
+                "length": 11,
+                "path": "~/commune/commune/modules/auth/base.py",
+                "code": null,
+                "hash": "sha256:107bd852103663674a26a74381ddaeae4550fec0e68380be7e2995d1a66f1953",
+                "end": 28
+            }
+        }
+    },
+    "name": "auth.base",
+    "key": "5EsPWTtuTFsD6cA3rq3NNeqXtyj11nx5YMRL7aj54ELZP81X",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:76008c4d9a49fdf398451154c917ea3a8ade4c6ae10b2fb082a789fa741bcca2",
+    "time": 1746536205.081836,
+    "signature": "0x58b9e2557557012de191acb3774ad54e129142a61d348bd1800253ab0469c06be6187b33f39afa651b78e9868621d2bb791ca082f9b600922cc6dd0af14dfc8a"
+}

@@ -1,0 +1,1237 @@
+{
+    "code": {
+        "README.md": "Remote Class for Commune\nWelcome! Imagine you have a magic wand that lets you talk to computers far away as if they were right in front of you. The Remote class is like that magic wand for adults, letting them send messages (we call them \"commands\") to computers that are not next to them. It's like sending a letter to a friend who lives in another city, but much, much faster!\n\nHow It Works\nOur magic wand, the Remote class, can do several fun things:\n\nSend Commands: Tell a faraway computer to do something, like showing all the pictures it has.\nRemember Computers: Keep a list of faraway computers so we don't forget how to reach them.\nAdd New Friends: If we meet a new computer, we can add it to our list so we can talk to it later.\nHow to Use the Magic Wand\n1. Adding a New Computer Friend\nIf you meet a new computer and want to talk to it later, you need to remember its name, where it lives, and a secret password so it knows you're a friend. Adults write this down in a special way:\n\nRemote.add_host_from_ssh_string(\"vali@0.0.0.0:940 -p 22 -pwd your_password\", name=\"my_computer_friend\")\nReplit\n\nThis is like saying, \"I have a friend named 'my_computer_friend'. They live at house number 0.0.0.0, on street 940, and their secret password is 'your_password'.\"\n\n2. Sending a Command to a Computer\nImagine you want to ask your computer friend to show you all the toys they have. Adults do this by sending a command:\n\ntoys_list = Remote.ssh_cmd(\"ls\", host=\"my_computer_friend\", verbose=True)\nReplit\n\nThis is like asking, \"Can you list all your toys, please?\"\n\n3. Remembering All Your Computer Friends\nIf you have many computer friends and you want to see a list of all their names, you can do this:\n\nall_my_friends = Remote.names()\nprint(all_my_friends)\nReplit\n\nThis will show you the names of all the computers you can talk to.\n\nSafety First!\nRemember, just like you shouldn't tell strangers your home address or your secrets, you should keep your computer friends' information safe and not share their secret passwords with anyone you don't trust.\n\nConclusion\nUsing the Remote class is like having a magic wand that lets you talk to computers no matter where they are. You can ask them to do things for you, remember new computer friends, and make sure all your computer friends are safe and happy.\n\nThis README.md aims to simplify the explanation of the Remote class functionalities and usage, making it accessible to beginners or even to a younger audience. Adjust the content as necessary to better fit your project or audience.\n\n\nAPP\n\nto run the app \n\nc app remote \nor \nc app r\n",
+        "app.py": "import commune as c\nimport streamlit as st\nfrom typing import *\nimport json \nRemote = c.module('remote')\nclass App(c.Module):\n    def __init__(self, **kwargs):\n        remote = Remote()\n        for fn in dir(remote):\n            if not fn.startswith('_'):\n                try:\n                    setattr(self, fn, getattr(remote, fn))\n                except Exception as e:\n                    print(e)\n    @classmethod\n    def app(cls, module: str = None, **kwargs):\n        if module:\n            cls = c.module(module)\n\n        self = cls()\n        with st.sidebar:\n\n            self.filter_hosts_dashboard()\n        tabs = st.tabs(['SSH', 'Manage Hosts'])\n\n        with tabs[0]:\n            self.ssh()\n        with tabs[1]:\n            self.manage_hosts()\n\n\n    def edit_hosts(self):\n        host_map = self._host_map\n        og_host_map = self.hosts()\n        og_host_map = {k:v for k,v in og_host_map.items() if k in host_map }\n        # edit the hosts by edihting the string of the json\n        st.write('## Hosts')    \n        host_map = st.text_area('Host Map', json.dumps(host_map, indent=4), height=1000)\n    \n        save_hosts = st.button('Save Hosts')\n\n        st.write(host_map)\n        try: \n            host_map = json.loads(host_map)\n        except Exception as e:\n            st.error(e)\n        host_map = host_map.update(og_host_map)\n        if save_hosts:\n            self.save_hosts(host_map)\n\n        \n\n    def filter_hosts_dashboard(self, host_names: list = None, expanded: bool = True, **kwargs):\n\n        host_map = self.hosts()\n        host_names = list(host_map.keys())\n\n        search_terms = self.search_terms()\n        self.set_search_terms(search_terms)\n\n        search_terms['include'] = st.text_input('search', search_terms.get('include', ''))     \n        self.set_search_terms(search_terms)\n        host_map = self.filter_hosts(**search_terms)\n        host_names = list(host_map.keys())\n        n = len(host_names)\n        \n        # get the search terms\n        with st.expander(f'Hosts(n={n})', expanded=True):   \n            host_names = st.multiselect(f'Hosts', host_names, host_names)\n            self._host_map = {k:host_map[k] for k in host_names}\n            self.host2ssh = self.host2ssh(host_map=host_map)\n\n    def manage_hosts(self):\n\n        with st.expander('host2ssh', expanded=1):\n            self.host2ssh_search(expander=False)\n        \n\n        with st.expander('Add Host', expanded=False):\n            st.markdown('## Hosts')\n            host_map = self.hosts()\n            default_host = st.selectbox('Copy Host', list(host_map.keys()))\n            default_parmas = host_map[default_host]\n            cols = st.columns(3)\n            user = cols[0].text_input('User', default_parmas['user'])\n            host = cols[1].text_input('Host',  default_parmas['host'])\n            port = cols[2].number_input('Port', 22, 30000000000, default_parmas['port'])\n\n            cols = st.columns(2)\n            pwd = cols[1].text_input('Password',default_parmas['pwd'], type='password')\n            name = cols[0].text_input('Name', default_host)\n            metadata = st.text_area('Metadata', default_parmas.get('metadata', ''))\n            add_host = st.button('Add Host')\n\n            if add_host:\n                r = self.add_host(host=host, \n                                  port=port, \n                                  user=user, \n                                  pwd=pwd, \n                                  name=name, \n                                  metadata=metadata)\n                st.success(r)\n\n\n   \n        with st.expander('Remove Host', expanded=False):\n            host_names = list(self.hosts().keys())\n            rm_host_name = st.selectbox('Host to Remove', host_names)\n            rm_host = st.button('Remove Host')\n            if rm_host:\n                st.write(self.rm_host(rm_host_name))\n\n        with st.expander('Rename Host', expanded=False):\n            host_names = list(self.hosts().keys())\n            rm_host_name = st.selectbox('Host Name', host_names)\n            new_host_name = st.text_input('New Host Name')\n            rename_host = st.button('Rename Host')\n            if rename_host:\n                host = self.hosts()[rm_host_name]\n                self.add_host(host)\n                self.rm_host(rm_host_name)\n\n        with st.expander('Edit Hosts', expanded=False):\n            self.edit_hosts()\n\n        with st.expander('Save SSH Config', expanded=True):\n            path = st.text_input('Enter Path', \"~/.ssh/config\")\n            if  st.button(f'Save SSH Config to {path}'):\n                st.success(self.save_ssh_config(path))\n\n\n\n    def host2ssh_search(self, expander=True):\n        host =  st.selectbox('Search', list(self.host2ssh.keys()))\n        host2ssh = self.host2ssh\n        host2ssh = host2ssh.get(host, {})\n        st.code(host2ssh)\n    \n    def ssh(self):\n\n\n        with st.expander('params', False):\n            cols = st.columns([4,4,2,2])\n            cwd = cols[0].text_input('cwd', '/')\n            timeout = cols[1].number_input('Timeout', 1, 100, 10)\n            if cwd == '/':\n                cwd = None\n            for i in range(2):\n                cols[i].write('')\n            self.sudo = cols[2].checkbox('Sudo')\n            st.write('---')\n            cols = st.columns([2,1])\n            enable_docker = cols[1].checkbox('Enable Docker')\n            docker_container = cols[0].text_input('Docker Container', 'commune')\n\n            # line \n            st.write('---')\n            cols = st.columns([4,1])\n            num_columns = cols[1].number_input('Num Columns', 1, 10, 2)\n            fn_code = cols[0].text_input('Function', 'x')\n\n            cwd = cwd\n            timeout = timeout\n            num_columns = num_columns\n            fn_code = fn_code\n            expanded = 1\n\n\n\n        host_map = self._host_map\n        \n        cmd = st.text_input('Command', 'ls')\n        if 'x' not in fn_code:\n            fn_code = f'x'\n        fn_code = f'lambda x: {fn_code}'\n        fn_code = eval(fn_code)  \n        cols = st.columns([1,1])                             \n        run_button = cols[0].button('Run', use_container_width=True)\n        stop_button = cols[1].button('Stop', use_container_width=True)\n\n\n        host2stats = self.get('host2stats', {})\n        future2host = {}\n        host_names = list(host_map.keys())\n        if run_button and not stop_button:\n            if enable_docker:\n                cmd = f'docker exec {docker_container} {cmd}'\n            for host in host_names:\n                cmd_kwargs = dict(host=host, verbose=False, sudo=self.sudo, cwd=cwd)\n                future = c.submit(self.ssh_cmd, args=[cmd], kwargs=cmd_kwargs, timeout=timeout)\n                future2host[future] = host\n                host2stats[host] = host2stats.get(host, {'success': 0, 'error': 0 })\n\n            cols = st.columns(num_columns)\n            failed_hosts = []\n            errors = []\n            futures = list(future2host.keys())\n            cols = st.columns(num_columns)\n            col_idx = 0\n            try:\n                for future in c.as_completed(futures, timeout=timeout):\n                    if host == None:\n                        continue\n                    host = future2host.pop(future)\n                    stats = host2stats.get(host, {'success': 0, 'error': 0})\n                    result = future.result()\n                    is_error = c.is_error(result)\n                    emoji =  c.emoji(\"cross\") if is_error else c.emoji(\"check\")\n                    stats = host2stats.get(host, {'success': 0, 'error': 0})\n                    title = f'{emoji} :: {host} :: {emoji}'\n                    st.write(result)\n                    if not is_error:        \n                        msg =  result.strip()\n                        msg = fn_code(msg)\n                        stats['last_success'] = c.time()\n                        stats['success'] += 1\n                        col = cols[col_idx % num_columns]\n                        col_idx += 1\n                        emoji = c.emoji(\"check\")\n                        with col.expander(f'{title}', expanded=0):\n                            st.write(title)\n                            st.code('\\n'.join(msg.split('\\n')))\n                    else:\n                        msg = result\n                        stats['error'] += 1\n                        failed_hosts.append(host)\n                        errors.append(result)\n \n        \n                    \n                    host2stats[host] = stats\n        \n            except Exception as e:\n                pending_hosts = list(future2host.values())\n                st.error(c.detailed_error(e))\n                st.error(f\"Hosts {pending_hosts} timed out\")\n                failed_hosts += pending_hosts\n                for host in pending_hosts:\n                    stats = host2stats[host]\n                    stats['error'] += 1\n                    host2stats[host] = stats\n                errors += [c.detailed_error(e)] * len(pending_hosts)\n        \n            with st.expander('Failed Hosts', expanded=False):\n                selected_failed_hosts = st.multiselect('Failed Hosts', failed_hosts, failed_hosts)\n                delete_failed = st.button('Delete Failed')\n                if delete_failed:\n                    for host in selected_failed_hosts:\n                        st.write(self.rm_host(host))\n\n                for host, error in zip(failed_hosts, errors):\n                    st.write(f'**{host}**')\n                    st.code(error)\n\nif __name__ == '__main__':\n    App.app()\n\n\n\n",
+        "remote.py": "import commune as c\nimport streamlit as st\nfrom typing import *\nimport os\nimport json\nimport paramiko\n    \nclass Remote(c.Module):\n    def __init__(self, path = 'hosts'):\n        self.set_host_path(path)\n\n    def set_host_path(self, path=None):\n        path = path or 'hosts.yaml'\n        path = Remote.resolve_path(path)\n        self.host_data_path = path\n        return {'status': 'success', 'msg': f'Host data path set to {path}'}\n\n\n    def ssh_cmd(self, *cmd_args, \n                cmd : str = None,\n                port = None, \n                user = None,\n                password = None,\n                host:str= None,  \n                cwd:str=None, \n                verbose=False, \n                sudo=False, \n                stream = False,\n                key=None, \n                timeout=10,  \n                container = None,\n                key_policy = 'auto_add_policy',\n                **kwargs ):\n        \"\"\"s\n        Run a command on a remote server using Remote.\n\n        :param host: Hostname or IP address of the remote machine.\n        :param port: Remote port (typically 22).\n        :param username: Remote username.\n        :param password: Remote password.\n        :param command: Command to be executed on the remote machine.\n        :return: Command output.\n        \"\"\"\n\n        if host == None:\n            if port == None or user == None or password == None:\n                host = list(self.hosts().values())[0]\n            else:\n                host = {\n                    'host': host,\n                    'port': port,\n                    'user': user,\n                    'pwd': password,\n                }\n        else:\n            host = self.hosts().get(host, None)\n        \n\n        host['name'] = f'{host[\"user\"]}@{host[\"host\"]}:{host[\"port\"]}'\n\n        # Create an Remote client instance.\n        client = paramiko.SSHClient()\n        # Automatically add the server's host key (this is insecure and used for demonstration; \n        # in production, you should have the remote server's public key in known_hosts)\n        if key_policy == 'auto_add_policy':\n            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n        else:\n            client.load_system_host_keys()\n                \n        # Connect to the remote server\n        client.connect(host['host'],\n                       port=host['port'], \n                       username=host['user'], \n                       password=host['pwd'])\n\n        # THE COMMAND\n\n        command = ' '.join(cmd_args).strip() if cmd == None else cmd\n\n\n        if cwd != None:\n            command = f'cd {cwd} && {command}'\n\n        # Execute the command on the remote server\n        if sudo and host['user'] != \"root\":\n            command = \"sudo -S -p '' %s\" % command\n            \n        if container != None:\n            command = f'docker exec {container} {command}'\n\n        c.print(f'Running --> (command={command} host={host[\"name\"]} sudo={sudo} cwd={cwd})')\n\n        stdin, stdout, stderr = client.exec_command(command)\n        try:\n            if sudo:\n                stdin.write(host['pwd'] + \"\\n\") # Send the password for sudo commands\n                stdin.flush() # Send the password\n            color = c.random_color()\n            # Print the output of ls command\n            def print_output():\n                for line in stdout.readlines():\n                    if verbose:\n                        c.print(f'[bold]{host[\"name\"]}[/bold]', line.strip('\\n'), color=color)\n                    yield line \n                # if there is an stderr, print it\n\n                for line in stderr.readlines():\n                    if verbose:\n                        c.print(f'[bold]{host[\"name\"]}[/bold]', line.strip('\\n'))\n                    yield line\n\n            if stream:\n                return print_output()\n            else:\n                output = ''\n                for line in print_output():\n                    output += line \n\n\n            del stdin, stdout, stderr, client\n\n        except Exception as e:\n            c.print(e)\n\n        return output\n\n    \n    def add_host(self, \n                 host:str = '0.0.0.0',\n                 ip = None,\n                 port:int = 22,\n                 user:str = 'root',\n                 pwd:str = None,\n                 password:str = None,\n                 name : str = None,\n                 metadata = None\n                 \n                 ):\n        \n        host = ip or host\n\n        if 'ssh ' in host:\n            return self.add_host_from_ssh(host)\n        \n        hosts = self.hosts()\n        host = {\n            'host': host, # IP address of the remote machine\n            'port': port, # Remote port (typically 22)\n            'user': user, # Remote username\n            'pwd': pwd or password, # Remote password\n            'metadata': metadata or {}\n        }\n\n        if name == None:\n            # \n            cnt = 0\n            name = f'{user}{cnt}'\n            while name in hosts:\n                cnt += 1\n                name = f'{user}{cnt}'\n        hosts[name] = host\n        self.save_hosts(hosts)\n        return {'status': 'success', 'msg': f'Host {name} added', 'host': host, 'name': name}\n    \n    \n    def save_hosts(self, hosts=None, path = None):\n        if path == None:\n            path = self.host_data_path\n        \n        c.print(f'Saving hosts to {path}')\n        if hosts == None:\n            hosts = self.hosts()\n        self.put_yaml(path, hosts)\n\n        return {\n                'status': 'success', \n                'msg': f'Hosts saved', \n                'hosts': hosts, \n                'path': self.host_data_path, \n                }\n    def load_hosts(self, path = None):\n        if path == None:\n            path = self.host_data_path\n        return c.get_yaml(path)\n    \n    def switch_hosts(self, path):\n        hosts = c.get_json(path)\n        self.save_hosts(hosts)\n        return {'status': 'success', 'msg': f'Host data path switched to {path}'}\n    \n    \n    def rm_host(self, name):\n        hosts = self.hosts()\n        if name in hosts:\n            del hosts[name]\n            self.save_hosts( hosts)\n            c.print(self.hosts())\n            return {'status': 'success', 'msg': f'Host {name} removed'}\n        else:\n            return {'status': 'error', 'msg': f'Host {name} not found'}\n\n    def hosts(self, search=None, enable_search_terms: bool = False, path=None):\n        hosts = self.load_hosts(path=path)\n        if len(hosts) == 0:\n            return {}\n        \n        \n        if search != None:\n            hosts = {k:v for k,v in hosts.items() if search in k}\n        if enable_search_terms:\n            return self.filter_hosts(hosts=hosts)\n        return hosts\n\n    host_map = hosts\n\n    def host2ip(self, search=None):\n        hosts = self.hosts(search=search)\n        return {k:v['host'] for k,v in hosts.items()}\n\n    def ip2host(self, search=None):\n        host2ip = self.host2ip(search=search)\n        return {v:k for k,v in host2ip.items()}\n    \n    def names(self, search=None):\n        return list(self.hosts(search=search).keys())\n\n    def host2name(self, host):\n        hosts = self.hosts()\n        for name, h in hosts.items():\n            if h == host:\n                return name\n        raise Exception(f'Host {host} not found')\n    \n    def n(self, search=None):\n        return len(self.hosts(search=search))\n\n    \n    def host(self, name):\n        hosts = self.hosts()\n\n        if name not in hosts:\n            raise Exception(f'Host {name} not found')\n        \n        return hosts[name]\n    \n    def install(self):\n        c.cmd('pip3 install paramiko')\n    def test(self):\n        # Test Remote\n        c.print(self.ssh_cmd('ls'))\n\n    def cmd(self, *commands, \n            search=None, \n            hosts:Union[list, dict, str] = None, \n            cwd=None,\n              host:str=None,  \n              timeout=5 , \n              verbose:bool = True,**kwargs):\n        if hosts == None:\n            hosts = self.hosts()\n            if host != None:\n                hosts = {host:hosts[host]}\n        if search != None:\n            hosts = {k:v for k,v in hosts.items() if search in k}\n        if isinstance(hosts, list):\n            hosts = {h:hosts[h] for h in hosts}\n        elif isinstance(hosts, str):\n            hosts = {hosts:self.hosts(hosts)}\n\n        assert isinstance(hosts, dict), f'Hosts must be a dict, got {type(hosts)}'\n\n        results = {}\n        errors = {}\n        host2future = {}\n        for host in hosts:\n            host2future[host] = c.submit(self.ssh_cmd, \n                                            args=commands, \n                                            kwargs=dict(host=host, cwd=cwd, verbose=verbose,**kwargs),\n                                            return_future=True\n                                            )\n        future2host = {v:k for k,v in host2future.items()}\n\n\n        try:\n            for future in c.as_completed(list(host2future.values()), timeout=timeout):\n                result = future.result()\n                host = future2host[future]\n                if not c.is_error(result):\n                    results[host] = result\n                else:\n                    errors[host]= result\n        except Exception as e:\n            c.print(e)\n\n\n        if all([v == None for v in results.values()]):\n            raise Exception(f'all results are None')\n        \n        for k,v in results.items():\n            if isinstance(v, str):\n                results[k] = v.strip('\\n')\n\n        return results \n\n    def add_admin(self, timeout=10):\n        root_key_address = c.root_key().ss58_address\n        return self.cmd(f'c add_admin {root_key_address}', timeout=timeout)\n    \n    def is_admin(self, timeout=10):\n        root_key_address = c.root_key().ss58_address\n        results =  self.cmd(f'c is_admin {root_key_address}', timeout=timeout)\n        for host, r in results.items():\n            results[host] = bool(r)\n        return results\n    \n    def logs(self, module, n=3 , **kwargs):\n        namespace = self.namespace(search=module)\n        c.print(namespace)\n        for name, address in list(namespace.items())[:n]:\n            if address == None:\n                raise Exception(f'Address for {name} not found')\n            logs = c.call(address, 'logs', name, stream=False)\n            c.print(f'[bold yellow]{name}[/bold yellow]')\n            c.print('\\n'.join(logs.split('\\n')[-10:]))\n\n    def push(self,**kwargs):\n        return [c.push(), self.pull()]\n\n        \n    def pull(self, stash=True, hosts=None):\n        return c.rcmd(f'c pull stash={stash}', hosts=hosts)\n    \n\n\n    def push(self):\n        c.push()\n        c.rcmd('c pull', verbose=True)\n        c.rcmd('c serve', verbose=True)\n        c.add_peers()\n\n\n    \n\n    def setup(self,**kwargs):\n        repo_url = c.repo_name_url()\n        c.print(self.cmd(f'git clone {repo_url}', **kwargs))\n        c.print(self.cmd(f'apt ', **kwargs))\n        c.print(self.cmd(f'cd commune && pip install -e .', **kwargs))\n        c.print(self.cmd(f'c add_admin {c.root_key().ss58_address} ', **kwargs))\n        c.print(self.cmd(f'c serve', **kwargs))\n\n    def enter(self, host='root10'):\n        host2ssh  = self.host2ssh()\n        c.print(host2ssh)\n        ssh = host2ssh[host]\n        c.cmd(ssh)\n\n    \n        \n        \n    def text2hosts(self, text, model='model.openai'):\n        prompt = {\n            'instruciton': 'given the text place into the following format',\n            'text': text,\n            'format': list(self.hosts().values())[0],\n            'output': None\n        }\n        model = c.module(model)\n        return model.generate(c.python2str(prompt))\n\n\n    # SEARCH TERM LAND\n\n    search_terms_path = 'search_terms'\n\n    def set_search_terms(self, search_terms):\n        path = self.search_terms_path\n        self.put(path, search_terms)\n        return {'status': 'success', 'msg': f'Search terms set', 'search_terms': search_terms}\n\n    def clear_terms(self):\n        path = self.search_terms_path\n        return  self.put(path, {'include': '', 'avoid': ''})\n\n    def avoid(self, *terms):\n        terms = ','.join(terms)\n        search_terms = self.get_search_terms()\n        search_terms['avoid'] = terms\n        self.set_search_terms(search_terms)\n        return {'status': 'success', 'msg': f'Added {terms} to avoid terms', 'search_terms': search_terms}\n    \n    def include(self, *terms):\n        terms = ','.join(terms)\n        search_terms = self.get_search_terms()\n        search_terms['include'] = terms\n        self.set_search_terms(search_terms)\n        return {'status': 'success', 'msg': f'Added {terms} to include terms', 'search_terms': search_terms}\n\n    def get_search_terms(self):\n        path = self.search_terms_path\n        return self.get(path, {'include': '', 'avoid': ''})\n    search_terms = get_search_terms\n\n    def filter_hosts(self, include=None, avoid=None, hosts=None):\n\n        host_map = hosts or self.hosts()\n        search_terms = self.search_terms()\n        if avoid != None:\n            search_terms['avoid'] = avoid\n        if include != None:\n            search_terms['include'] = include\n\n        for k, v in search_terms.items():\n            # \n            if v == None:\n                v = ''\n\n            if len(v) > 0:\n                if ',' in v:\n                    v = v.split(',')\n                else:\n                    v = [v]\n                \n                v = [a.strip() for a in v]\n            else:\n                v = []\n            search_terms[k] = v\n\n        def filter_host(host_name):\n            for avoid_term in search_terms[\"avoid\"]:\n                if avoid_term in host_name:\n                    return False\n            for include_term in search_terms[\"include\"]:\n                if not include_term in host_name:\n                    return False\n            return True\n\n        return {k:v for k,v in host_map.items() if filter_host(k)}\n\n    def pwds(self, search=None):\n        return {k:v['pwd'] for k,v in self.hosts(search=search).items()}\n\n    def host2ssh(self, search = None, host_map=None):\n        host_map = host_map or self.host_map(search=search)\n        c.print()\n        host2ssh = {}\n        for k, v in host_map.items():\n            host2ssh[k] = f'sshpass -p {v[\"pwd\"]} ssh {v[\"user\"]}@{v[\"host\"]} -p {v[\"port\"]}'\n        return host2ssh\n\n    \n    def call(self, fn:str='info' , *args, \n             search:str='module', \n             modules=None,  \n             network:str='remote',\n             avoid_hosts: str = 'root',\n               n:int=None, \n               return_future: bool = False, \n               timeout=4, **kwargs):\n        futures = {}\n        kwargs['network'] =  network\n            \n        namespace = c.namespace(search=search, network=network)\n\n        if modules != None:\n            assert isinstance(modules, list), f'modules must be a list, got {type(modules)}'\n            namespace = {k:v for k,v in namespace.items() if k in modules}\n        if n == None:\n            n = len(namespace)\n            \n        for name, address in c.shuffle(list(namespace.items()))[:n]:\n            c.print(f'Calling {name} {address}')\n            futures[name] = c.async_call(address, fn, *args)\n        \n        if return_future:\n            if len(futures) == 1:\n                return list(futures.values())[0]\n            return futures\n        else:\n            num_futures = len(futures)\n            results = {}\n            import tqdm \n\n            progress_bar = tqdm.tqdm(total=num_futures)\n            error_progress = tqdm.tqdm(total=num_futures)\n\n            results = c.gather(list(futures.values()), timeout=timeout)\n\n            for i, result in enumerate(results):\n                if c.is_error(result):\n                    # c.print(f'Error {result}')\n                    error_progress.update(1)\n                    continue\n\n                else:\n                    # c.print(f'Success {result}')\n                    results[i] = result\n                    progress_bar.update(1)\n            # if len(results) == 1:\n            #     return list(results.values())[0]\n        \n            return results\n\n    def app(self):\n        return c.module('remote.app').app()\n\n    def save_ssh_config(self, path=\"~/.ssh/config\"):\n        ssh_config = self.ssh_config()\n        return c.put_text(path, ssh_config) \n\n    def ssh_config(self, search=None):\n        \"\"\"\n        Host {name}\n          HostName 0.0.0.0.0\n          User fam\n          Port 8888\n        \"\"\"\n        host_map = self.host_map(search=search)\n        toml_text = ''\n        for k,v in host_map.items():\n            toml_text += f'Host {k}\\n'\n            toml_text += f'  HostName {v[\"host\"]}\\n'\n            toml_text += f'  User {v[\"user\"]}\\n'\n            toml_text += f'  Port {v[\"port\"]}\\n'\n        \n        return toml_text\n\n    def add_host_from_ssh(self, ssh: str, name: str = None):\n        \"\"\"\n        Adds a host using an SSH connection string format that includes the password using the -pwd flag.\n\n        :param ssh: SSH connection string, e.g., \"user@host:port -p ssh_port -pwd password\"\n        :param name: Optional name for the host; if not provided, a name will be generated\n        \"\"\"\n        # Regular expression to parse the SSH connection string including the password specified by -pwd flag\n        pattern = r'(?P<user>[^@]+)@(?P<host>[^:]+):(?P<port>\\d+).*?-p\\s*(?P<ssh_port>\\d+).*?-pwd\\s*(?P<pwd>[^\\s]+)'\n        match = re.match(pattern, ssh)\n        if not match:\n            raise ValueError(\"SSH string format is invalid. Expected format: 'user@host:port -p ssh_port -pwd password'\")\n\n        user = match.group('user')\n        pwd = match.group('pwd')\n        host = match.group('host')\n        # The port in the SSH string is not used for SSH connections in this context, so it's ignored\n        ssh_port = int(match.group('ssh_port'))\n\n        # Use the existing add_host method to add the host\n        return self.add_host(host=host, port=ssh_port, user=user, pwd=pwd, name=name)\n    \n    def pwd(self, host):\n        hosts = self.hosts(search=host)\n        if host not in hosts:\n            return {k:v['pwd'] for k,v in hosts.items()}\n        return self.hosts()[host]['pwd']\n    \n",
+        "ssh.py": "import commune as c\n\nimport commune as c\nimport streamlit as st\nfrom typing import *\nimport paramiko\n\nclass SSH(c.Module):\n    def __init__(self):\n        pass\n    def forward(self, *cmd_args, \n                cmd : str = None,\n                port = None, \n                user = None,\n                password = None,\n                host:str= None,  \n                cwd:str=None, \n                verbose=False, \n                sudo=False, \n                stream = False,\n                key=None, \n                timeout=10,  \n                key_policy = 'auto_add_policy',\n                **kwargs ):\n        \"\"\"s\n        Run a command on a remote server using Remote.\n\n        :param host: Hostname or IP address of the remote machine.\n        :param port: Remote port (typically 22).\n        :param username: Remote username.\n        :param password: Remote password.\n        :param command: Command to be executed on the remote machine.\n        :return: Command output.\n        \"\"\"\n        \n        if host == None:\n            if port == None or user == None or password == None:\n                host = list(self.hosts().values())[0]\n            else:\n                host = {\n                    'host': host,\n                    'port': port,\n                    'user': user,\n                    'pwd': password,\n                }\n        else:\n            host = cls.hosts().get(host, None)\n            \n        \n        host['name'] = f'{host[\"user\"]}@{host[\"host\"]}:{host[\"port\"]}'\n\n\n\n        # Create an Remote client instance.\n        client = paramiko.SSHClient()\n        # Automatically add the server's host key (this is insecure and used for demonstration; \n        # in production, you should have the remote server's public key in known_hosts)\n        if key_policy == 'auto_add_policy':\n            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n        else:\n            client.load_system_host_keys()\n                \n        # Connect to the remote server\n        client.connect(host['host'],\n                       port=host['port'], \n                       username=host['user'], \n                       password=host['pwd'])\n\n        # THE COMMAND\n\n        command = ' '.join(cmd_args).strip() if cmd == None else cmd\n        if cwd != None:\n            command = f'cd {cwd} && {command}'\n\n        # Execute the command on the remote server\n        if sudo and host['user'] != \"root\":\n            command = \"sudo -S -p '' %s\" % command\n\n        c.print(f'Running command: {command} on {host[\"name\"]}')\n\n        stdin, stdout, stderr = client.exec_command(command)\n\n        try:\n            if sudo:\n                \n                stdin.write(host['pwd'] + \"\\n\") # Send the password for sudo commands\n                stdin.flush() # Send the password\n\n            color = c.random_color()\n            # Print the output of ls command\n\n\n            def print_output():\n                for line in stdout.readlines():\n                    if verbose:\n                        c.print(f'[bold]{host[\"name\"]}[/bold]', line.strip('\\n'), color=color)\n                    yield line \n\n                for line in stderr.readlines():\n                    if verbose:\n                        c.print(f'[bold]{host[\"name\"]}[/bold]', line.strip('\\n'))\n                    yield line\n\n            if stream:\n                return print_output()\n            \n            else:\n                output = ''\n                for line in print_output():\n                    output += line \n    \n            # stdin.close()\n            # stdout.close()\n            # stderr.close()\n            # client.close()\n        except Exception as e:\n            c.print(e)\n\n        return output\n"
+    },
+    "schema": {
+        "add_admin": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "timeout": {
+                    "value": 10,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "add_admin",
+            "source": {
+                "start": 305,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:787b1e0ab5d8375d4c626f3002032383e197ada42589465ea5260df7f4c2f78b",
+                "end": 308
+            }
+        },
+        "add_host": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "host": {
+                    "value": "0.0.0.0",
+                    "type": "str"
+                },
+                "ip": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "port": {
+                    "value": 22,
+                    "type": "int"
+                },
+                "user": {
+                    "value": "root",
+                    "type": "str"
+                },
+                "pwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "password": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "name": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "metadata": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "add_host",
+            "source": {
+                "start": 128,
+                "length": 36,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:0764a18011b362b99182b283aaf7ad30b5e1fd60c7211cc99ec5a976311d2e4e",
+                "end": 164
+            }
+        },
+        "add_host_from_ssh": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "ssh": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Adds a host using an SSH connection string format that includes the password using the -pwd flag.\n\n        :param ssh: SSH connection string, e.g., \"user@host:port -p ssh_port -pwd password\"\n        :param name: Optional name for the host; if not provided, a name will be generated\n        ",
+            "cost": 1,
+            "name": "add_host_from_ssh",
+            "source": {
+                "start": 528,
+                "length": 21,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:f615739ee614ebedc249259d1c06864ce7db73bbfea21cc8dbfecde7d9909ec6",
+                "end": 549
+            }
+        },
+        "app": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "app",
+            "source": {
+                "start": 504,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:d347b73ecf8bc5ead1202c8bc4898f9baf76fcb8ef82f4c240c3af73852b9c5c",
+                "end": 506
+            }
+        },
+        "avoid": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "terms": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "avoid",
+            "source": {
+                "start": 385,
+                "length": 6,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:6def60a2b8f8ce0cda76b99b6457ab215e538cc068e69fdb465c7dffac3f9129",
+                "end": 391
+            }
+        },
+        "call": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "fn": {
+                    "value": "info",
+                    "type": "str"
+                },
+                "args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "modules": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "network": {
+                    "value": "remote",
+                    "type": "str"
+                },
+                "avoid_hosts": {
+                    "value": "root",
+                    "type": "str"
+                },
+                "n": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "return_future": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "timeout": {
+                    "value": 4,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "call",
+            "source": {
+                "start": 452,
+                "length": 51,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:6f4db51e03d8eb32f33d1cfac289decbb9cc3e293af06f90ef768faec1b2a796",
+                "end": 503
+            }
+        },
+        "clear_terms": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "clear_terms",
+            "source": {
+                "start": 381,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:6a5868be47aff15b6a3b5a16ddab20b023b0d64802babd0ea7443d1d2bfbd80e",
+                "end": 384
+            }
+        },
+        "cmd": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "commands": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "hosts": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "cwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "host": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "timeout": {
+                    "value": 5,
+                    "type": "int"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "cmd",
+            "source": {
+                "start": 252,
+                "length": 52,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:49afc07942268d6615e56cc68b09426d7e9fe441e1a8c5d4035dbf2b1fa55dee",
+                "end": 304
+            }
+        },
+        "enter": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "host": {
+                    "value": "root10",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "enter",
+            "source": {
+                "start": 352,
+                "length": 5,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:abd6eb5d76b311dda939596b876b21db52c34cb48109aad96c48612156b68490",
+                "end": 357
+            }
+        },
+        "filter_hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "include": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "avoid": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "hosts": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "filter_hosts",
+            "source": {
+                "start": 404,
+                "length": 35,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:ac23b485c85c06e75cf71813ab8bd7154b8760fe25b6aa455beccdb9e0dcce2d",
+                "end": 439
+            }
+        },
+        "get_search_terms": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_search_terms",
+            "source": {
+                "start": 399,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:ea71c4dbdd02bde00cf6db0598edc2bbd77518c6cd22c4b30cf2f0ad51ad8660",
+                "end": 402
+            }
+        },
+        "host": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "host",
+            "source": {
+                "start": 238,
+                "length": 7,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:1aab148d91ec25a7a418cbb638473f3e4d4808d8a104d3c59261d9b9a379e92b",
+                "end": 245
+            }
+        },
+        "host2ip": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "host2ip",
+            "source": {
+                "start": 216,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:6b2d41771865f298ea3a72000ac9f0d5dc7d4aee6eeadc10dcf338a38f06c3dd",
+                "end": 219
+            }
+        },
+        "host2name": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "host": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "host2name",
+            "source": {
+                "start": 227,
+                "length": 6,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:4c19aa85f0e57a09a76b1472033863b538a71ccdbbdec9ec661c1a4db0541a06",
+                "end": 233
+            }
+        },
+        "host2ssh": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "host_map": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "host2ssh",
+            "source": {
+                "start": 443,
+                "length": 7,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:dff31b15c928c75b8b40f437e6f9d81883eda2a55ee9990e63c49b62be2bdc86",
+                "end": 450
+            }
+        },
+        "hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "enable_search_terms": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "path": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "hosts",
+            "source": {
+                "start": 202,
+                "length": 11,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:8e39586e79a02b93cd514a0365a428a81882e620e53d9bb8df53213af5945585",
+                "end": 213
+            }
+        },
+        "include": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "terms": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "include",
+            "source": {
+                "start": 392,
+                "length": 6,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:f99963e804db841989c617546107c934e171d773dd005bf36c6d0eb0ea3a43c7",
+                "end": 398
+            }
+        },
+        "install": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "install",
+            "source": {
+                "start": 246,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:e39c337748f4b4a50dd0dfeee520769fa9b5350a199af1793cad04995106762d",
+                "end": 248
+            }
+        },
+        "ip2host": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "ip2host",
+            "source": {
+                "start": 220,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:b3910947b73eff898e04de35e843a25f2ae9b87d47a00bbb7cc601549131b037",
+                "end": 223
+            }
+        },
+        "is_admin": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "timeout": {
+                    "value": 10,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "is_admin",
+            "source": {
+                "start": 309,
+                "length": 6,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:1b57bf6874ca2d52219ab6c46db4cda1c83051fca3fb88f0d1c9e722b7c5e42e",
+                "end": 315
+            }
+        },
+        "load_hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "load_hosts",
+            "source": {
+                "start": 181,
+                "length": 4,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:261784f513f8fff2148d74c0fb16d8a0faebcc86b3e3cc06af102dc5ff7b7674",
+                "end": 185
+            }
+        },
+        "logs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "n": {
+                    "value": 3,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "logs",
+            "source": {
+                "start": 316,
+                "length": 9,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:bac56a142f8a33b8814b2d18e2d49f18dc3079c5caa162f8a9a15b82c6da8cdc",
+                "end": 325
+            }
+        },
+        "n": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "n",
+            "source": {
+                "start": 234,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:d5db0966af651b1cfe5b1dd53a754b34e885957ed878f259d8f5758962f4fd5d",
+                "end": 236
+            }
+        },
+        "names": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "names",
+            "source": {
+                "start": 224,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:4c36340ddd79a888109d5f75f253b94f7b0f44f3c9328bccf5d27c083b0986f2",
+                "end": 226
+            }
+        },
+        "pull": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "stash": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "hosts": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "pull",
+            "source": {
+                "start": 330,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:ca34161c943f2328d1f9840fef80e58df3a5aef38eb51ff9b2d2a1772cfee62f",
+                "end": 332
+            }
+        },
+        "push": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "push",
+            "source": {
+                "start": 335,
+                "length": 5,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:f0477e07afc6d5291b7967dcb54387fda078ba9ad29fde4b7fb016aecc860ae1",
+                "end": 340
+            }
+        },
+        "pwd": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "host": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "pwd",
+            "source": {
+                "start": 550,
+                "length": 5,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:00b680f275452835678b3a2113feaf6af42c40a3eab5655e7501d881fb60eebf",
+                "end": 555
+            }
+        },
+        "pwds": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "pwds",
+            "source": {
+                "start": 440,
+                "length": 2,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:eca2828f9924ee6885898f8d531ac612efa9c1e6a9ff862d7cba17946d19fe55",
+                "end": 442
+            }
+        },
+        "rm_host": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "rm_host",
+            "source": {
+                "start": 192,
+                "length": 9,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:a5a5978dc5e202596a82f3691f31d4bcf0b34ea65ddb005a0bab108c651ffc65",
+                "end": 201
+            }
+        },
+        "save_hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "hosts": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "path": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "save_hosts",
+            "source": {
+                "start": 166,
+                "length": 15,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:43e493506c7a8818808fcb153179f1d01d4ae883e6e323fed25cdda88f3d5689",
+                "end": 181
+            }
+        },
+        "save_ssh_config": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "~/.ssh/config",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "save_ssh_config",
+            "source": {
+                "start": 507,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:bed85f96c5d831033b7285e996c3b39c806d0f8d37eb4f293f4e8547d89aae2a",
+                "end": 510
+            }
+        },
+        "set_host_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "set_host_path",
+            "source": {
+                "start": 12,
+                "length": 5,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:9f5a7187d2e07d14c9ebe73c86cea03af5b91924ed27079745416224ed863157",
+                "end": 17
+            }
+        },
+        "set_search_terms": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search_terms": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "set_search_terms",
+            "source": {
+                "start": 376,
+                "length": 4,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:c495a22c172870802580637a785b466118512ed8605e5774238c2de179096e8e",
+                "end": 380
+            }
+        },
+        "setup": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "setup",
+            "source": {
+                "start": 344,
+                "length": 7,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:1ffba180c2a1cd810f165b0f83720e717f4dc7c51b0b50ee25ddcf5c53772f65",
+                "end": 351
+            }
+        },
+        "ssh_cmd": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "cmd_args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "cmd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "port": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "user": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "password": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "host": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "cwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "verbose": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "sudo": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "stream": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "timeout": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "container": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "key_policy": {
+                    "value": "auto_add_policy",
+                    "type": "str"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "s\n        Run a command on a remote server using Remote.\n\n        :param host: Hostname or IP address of the remote machine.\n        :param port: Remote port (typically 22).\n        :param username: Remote username.\n        :param password: Remote password.\n        :param command: Command to be executed on the remote machine.\n        :return: Command output.\n        ",
+            "cost": 1,
+            "name": "ssh_cmd",
+            "source": {
+                "start": 19,
+                "length": 107,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:928e9c34afbb26449cff8f5b2c08258101833d1696e4ceef5bdbed118026668a",
+                "end": 126
+            }
+        },
+        "ssh_config": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Host {name}\n          HostName 0.0.0.0.0\n          User fam\n          Port 8888\n        ",
+            "cost": 1,
+            "name": "ssh_config",
+            "source": {
+                "start": 511,
+                "length": 16,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:b7f1534fe80ba3cae372bd59a5da39066aadded1d8471387119853241d5fbb4b",
+                "end": 527
+            }
+        },
+        "switch_hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "switch_hosts",
+            "source": {
+                "start": 186,
+                "length": 4,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:f67431f3d988ad5a3c0bb1bad1b2c5efc792159dafa93c9804d18db359334d8a",
+                "end": 190
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 248,
+                "length": 3,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:495b5526354652b1144fd753496305a96f66b3572805ae7090fab9a84bae8b17",
+                "end": 251
+            }
+        },
+        "text2hosts": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "model": {
+                    "value": "model.openai",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "text2hosts",
+            "source": {
+                "start": 361,
+                "length": 9,
+                "path": "~/commune/commune/modules/remote/remote.py",
+                "code": null,
+                "hash": "sha256:15c1678eb1a0fcbbefe12e34f02e500e0433f9ee0a32d5dc42e17250d6208238",
+                "end": 370
+            }
+        }
+    },
+    "name": "remote",
+    "key": "5CDUUwdxEBA7qz6XYquyjvY7ipH9423dMbZ3iB3rFZpnPdAN",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:3d5427d9ff30c46a807faa7b4eff575652ef1e940bae501f2224aebb66c7d08b",
+    "time": 1746536281.169655,
+    "signature": "0x1682ca201c901faca164dda35837330b6bf2741fe237d56612725c4421bcd40058afe49ec5ae99a0acbd5b4133003e0d56223bc01b7e579b528e0a525f4ca083"
+}

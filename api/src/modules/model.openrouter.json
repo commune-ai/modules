@@ -1,0 +1,467 @@
+{
+    "code": {
+        "openrouter.py": "from typing import Generator\nimport requests\nimport json\nimport openai\nimport time\nimport commune as c\n\nclass OpenRouter:\n    api_key_path = 'apikeys' # path to store api keys (relative to storage_path)\n    def __init__(\n        self,\n        api_key = None,\n        url: str = 'https://openrouter.ai/api/v1',\n        timeout: float = None,\n        prompt:str=None,\n        max_retries: int = 10,\n        storage_path = '~/.commune/openrouter',\n        key = None,\n        **kwargs\n    ):\n        \"\"\"\n        Initialize the OpenAI with the specified model, API key, timeout, and max retries.\n\n        Args:\n            model (OPENAI_MODES): The OpenAI model to use.\n            api_key (API_KEY): The API key for authentication.\n            url (str, optional): can be used for openrouter api calls\n            timeout (float, optional): The timeout value for the client. Defaults to None.\n            max_retries (int, optional): The maximum number of retries for the client. Defaults to None.\n        \"\"\"\n        self.storage_path = storage_path\n        self.storage = c.module('storage')(storage_path)\n        self.url = url\n        self.client = openai.OpenAI(\n            base_url=self.url,\n            api_key=api_key or self.get_key(),\n            timeout=timeout,\n            max_retries=max_retries,\n        )\n        self.prompt = prompt\n        self.key = c.get_key(key)\n\n    def forward(\n        self,\n        message: str,\n        *extra_text , \n        history = None,\n        prompt: str =  None,\n        system_prompt: str = None,\n        stream: bool = False,\n        model:str = 'anthropic/claude-3.7-sonnet',\n        max_tokens: int = 10000000,\n        temperature: float = 1.0,\n        **kwargs\n    ) -> str :\n        \"\"\"\n        Generates a response using the OpenAI language model.\n\n        Args:\n            message (str): The message to send to the language model.\n            history (ChatHistory): The conversation history.\n            stream (bool): Whether to stream the response or not.\n            max_tokens (int): The maximum number of tokens to generate.\n            temperature (float): The sampling temperature to use.\n\n        Returns:\n        Generator[str] | str: A generator for streaming responses or the full streamed response.\n        \"\"\"\n        prompt = prompt or system_prompt\n        if len(extra_text) > 0:\n            message = message + ' '.join(extra_text)\n        history = history or []\n        prompt = prompt or self.prompt\n        message = message + prompt if prompt else message\n        print('model', model)\n        model = self.resolve_model(model)\n        model_info = self.get_model_info(model)\n        num_tokens = len(message)\n        print(f'Sending {num_tokens} tokens -> {model}')\n        max_tokens = min(max_tokens, model_info['context_length'] - num_tokens)\n        messages = history.copy()\n        messages.append({\"role\": \"user\", \"content\": message})\n        result = self.client.chat.completions.create(model=model, messages=messages, stream= bool(stream), max_tokens = max_tokens, temperature= temperature  )\n\n        item = {\n            'model': model,\n            'params': {\n                'messages': messages,\n                'max_tokens': max_tokens,\n                'temperature': temperature,\n            },\n            'time': time.time(),  \n        }\n        \n        item['hash'] = c.hash(item)\n        item['result'] = ''\n        path = f\"history/{item['hash']}\"\n        if stream:\n            def stream_generator( result):\n                for token in result:\n                    token = token.choices[0].delta.content\n                    item['result'] += token\n                    yield token\n                self.storage.put(path, item)\n            return stream_generator(result)\n        else:\n            item['result'] = result.choices[0].message.content\n            self.storage.put(path, item)\n            return item['result']\n        \n    generate = forward\n\n    def history(self, path:str = None, max_age:int = 0, update:bool = False):\n        \"\"\"\n        Get the history of the last requests\n        \"\"\"\n        history = self.storage.items('history', max_age=max_age, update=update)\n        return history\n\n    def resolve_model(self, model=None):\n        models =  self.models()\n        model = str(model)\n        if str(model) not in models:\n            if ',' in model:\n                models = [m for m in models if any([s in m for s in model.split(',')])]\n            else:\n                models = [m for m in models if str(model) in m]\n            print(f\"Model {model} not found. Using {models} instead.\")\n            print(model)\n            assert len(models) > 0\n            model = models[0]\n\n        return model\n\n    def get_key(self):\n        \"\"\"\n        get the api keys\n        \"\"\"\n        keys = self.storage.get(self.api_key_path, [])\n        if len(keys) > 0:\n            return c.choice(keys)\n        else:\n            return 'password'\n\n    def keys(self):\n        \"\"\"\n        Get the list of API keys\n        \"\"\"\n        return self.storage.get(self.api_key_path, [])\n\n    def add_key(self, key):\n        keys = self.storage.get(self.api_key_path, [])\n        keys.append(key)\n        keys = list(set(keys))\n        self.storage.put(self.api_key_path, keys)\n        return keys\n\n    @staticmethod\n    def resolve_path(path):\n        return c.storage_path + '/openrouter/' + path\n\n    def model2info(self, search: str = None, path='models', max_age=100, update=False):\n        path = self.resolve_path(path)\n        models = self.storage.get(path, default={}, max_age=max_age, update=update)\n        if len(models) == 0:\n            print('Updating models...')\n            response = requests.get(self.url + '/models')\n            models = json.loads(response.text)['data']\n            self.storage.put(path, models)\n        models = self.filter_models(models, search=search)\n        return {m['id']:m for m in models}\n    \n    def models(self, search: str = None, path='models', max_age=60, update=False):\n        return list(self.model2info(search=search, path=path, max_age=max_age, update=update).keys())\n\n    \n    def model_infos(self, search: str = None, path='models', max_age=0, update=False):\n        return list(self.model2info(search=search, path=path, max_age=max_age, update=update).values())\n    \n    def get_model_info(self, model):\n        model = self.resolve_model(model)\n        model2info = self.model2info()\n        return model2info[model]\n    \n    @classmethod\n    def filter_models(cls, models, search:str = None):\n        if search == None:\n            return models\n        if isinstance(models[0], str):\n            models = [{'id': m} for m in models]\n        if ',' in search:\n            search = [s.strip() for s in search.split(',')]\n        else:\n            search = [search]\n        models = [m for m in models if any([s in m['id'] for s in search])]\n        return [m for m in models]\n    \n    def pricing(self, search: str = None , ascending=False, sortby='completion',  **kwargs):\n        pricing =  [{'name': k , **v['pricing']} for k,v in self.model2info(search=search, **kwargs).items()]\n        return c.df(pricing).sort_values(sortby, ascending=ascending)\n    \n    def test(self):\n        response  =  self.forward('Hello, how are you?', stream=False)\n        print(response)\n        assert isinstance(response, str)\n        print('Test passed')\n        stream_response = self.forward('Hello, how are you?', stream=True)\n        print(next(stream_response))\n        return {'status': 'success'}"
+    },
+    "schema": {
+        "add_key": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "add_key",
+            "source": {
+                "start": 151,
+                "length": 6,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:416fb776ac0c72fcaf0a4d43ff5dda00ff348b7fd6379f4e68c9aad8d52e6763",
+                "end": 157
+            }
+        },
+        "filter_models": {
+            "input": {
+                "models": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "filter_models",
+            "source": {
+                "start": 185,
+                "length": 12,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:bb9a80a31923d2d26af859be3d1832cb0750818646965a4273942f247463c334",
+                "end": 197
+            }
+        },
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "message": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "extra_text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "history": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "prompt": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "system_prompt": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "stream": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "model": {
+                    "value": "anthropic/claude-3.7-sonnet",
+                    "type": "str"
+                },
+                "max_tokens": {
+                    "value": 10000000,
+                    "type": "int"
+                },
+                "temperature": {
+                    "value": 1.0,
+                    "type": "float"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Generates a response using the OpenAI language model.\n\n        Args:\n            message (str): The message to send to the language model.\n            history (ChatHistory): The conversation history.\n            stream (bool): Whether to stream the response or not.\n            max_tokens (int): The maximum number of tokens to generate.\n            temperature (float): The sampling temperature to use.\n\n        Returns:\n        Generator[str] | str: A generator for streaming responses or the full streamed response.\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 43,
+                "length": 67,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:a239f2c7b0669a9344981f365a4c1f7136492dd2da8e9eb184430e354baa980c",
+                "end": 110
+            }
+        },
+        "get_key": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        get the api keys\n        ",
+            "cost": 1,
+            "name": "get_key",
+            "source": {
+                "start": 135,
+                "length": 9,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:de4e1ecb95d953ff53dbdde80ebb0639aeb2608e4358b51c6348a2775085c563",
+                "end": 144
+            }
+        },
+        "get_model_info": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "model": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_model_info",
+            "source": {
+                "start": 180,
+                "length": 4,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:cfdb4ec8fba1362d6022feb7ef54e0069489a7d4bb63be178c7b0fe4e1b065ee",
+                "end": 184
+            }
+        },
+        "history": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "max_age": {
+                    "value": 0,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Get the history of the last requests\n        ",
+            "cost": 1,
+            "name": "history",
+            "source": {
+                "start": 113,
+                "length": 6,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:f5589f916919caa892290f80390334bf8bb300c65c797b161cb7ef2d109d7f46",
+                "end": 119
+            }
+        },
+        "keys": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Get the list of API keys\n        ",
+            "cost": 1,
+            "name": "keys",
+            "source": {
+                "start": 145,
+                "length": 5,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:38782825afe5c76bda947d64bce47d3656d81713a8566064d888eb89edcbf534",
+                "end": 150
+            }
+        },
+        "model2info": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "path": {
+                    "value": "models",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 100,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "model2info",
+            "source": {
+                "start": 162,
+                "length": 10,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:d2af6b3c536fdb61dbf7e45cac9252bfbf7fb97a892d5fed83007dfc2710b97c",
+                "end": 172
+            }
+        },
+        "model_infos": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "path": {
+                    "value": "models",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 0,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "model_infos",
+            "source": {
+                "start": 177,
+                "length": 2,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:c73d52830f7d72490556c4b43267d6f87fc8a1c5b424063755a95f200c7111de",
+                "end": 179
+            }
+        },
+        "models": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "path": {
+                    "value": "models",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 60,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "models",
+            "source": {
+                "start": 173,
+                "length": 2,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:841919a82acb31099b707085073e73b1947e2a3f960a99413c459ea720b2f855",
+                "end": 175
+            }
+        },
+        "pricing": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "ascending": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "sortby": {
+                    "value": "completion",
+                    "type": "str"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "pricing",
+            "source": {
+                "start": 198,
+                "length": 3,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:4bbde1b990b790d6d844230c3d4dddf261e92f790508b66affe74dc0c51209fd",
+                "end": 201
+            }
+        },
+        "resolve_model": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "model": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "resolve_model",
+            "source": {
+                "start": 120,
+                "length": 14,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:960cc1101809d93a4209dbc8433fe7d634e65c7b25505f7e576271e09b725dda",
+                "end": 134
+            }
+        },
+        "resolve_path": {
+            "input": {
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "resolve_path",
+            "source": {
+                "start": 158,
+                "length": 3,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:779c4eb1dd7b0bbf28d05383f68de92f1d38c9e1c79b1ec3dba1d4955fdac64e",
+                "end": 161
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 202,
+                "length": 8,
+                "path": "~/commune/commune/modules/model/model/openrouter/openrouter.py",
+                "code": null,
+                "hash": "sha256:28c94f230b2b7e1a0d9281a4ede8b7bacce765d2a5be6d20030300883737282d",
+                "end": 210
+            }
+        }
+    },
+    "name": "model.openrouter",
+    "key": "5FP1QbpSZpzms8ygjEbE4csT2ERnKcdTyPDgMG2GZKwo8TH8",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:9afacf68235d243ae5da855f949cdaa5e36aeebab77835024fc15e0fbc8e00ec",
+    "time": 1746536273.9153411,
+    "signature": "0x80a5a05733d03c8d7581cb77a7941c7c7f8c55e75055bf010181583550c6a945d20c75ade0a40c7928ecb6b414c686a4c5f7f5c795c7dd927ea134b8c8429984"
+}

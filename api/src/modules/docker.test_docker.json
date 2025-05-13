@@ -1,0 +1,287 @@
+{
+    "code": {
+        "test_docker.py": "\nimport pytest\nimport commune as c\nimport os\nimport pandas as pd\nfrom typing import Dict, List\n\nclass TestDocker:\n    def __init__(self):\n        self.docker =  c.module('docker')()\n\n    def test_init(self, docker):\n        assert docker.default_shm_size == '100g'\n        assert docker.default_network == 'host'\n\n    def test_file(self, docker, tmp_path):\n        # Create a temporary Dockerfile\n        dockerfile_path = tmp_path / \"Dockerfile\"\n        dockerfile_content = \"FROM python:3.8\\nWORKDIR /app\"\n        dockerfile_path.write_text(dockerfile_content)\n        \n        result = docker.file(str(tmp_path))\n        assert isinstance(result, str)\n        assert \"FROM python:3.8\" in result\n\n    def test_files(self, docker, tmp_path):\n        # Create multiple Dockerfiles\n        (tmp_path / \"Dockerfile\").write_text(\"FROM python:3.8\")\n        (tmp_path / \"subfolder\").mkdir()\n        (tmp_path / \"subfolder\" / \"Dockerfile\").write_text(\"FROM ubuntu:latest\")\n        \n        files = docker.files(str(tmp_path))\n        assert len(files) == 2\n        assert all(f.endswith('Dockerfile') for f in files)\n\n\n    def test_run(self, docker):\n        result = docker.run(\n            path='python:3.8-slim',\n            cmd='python --version',\n            volumes=['/tmp:/tmp'],\n            name='test_container',\n            gpus=[0],\n            shm_size='2g',\n            ports={'8080': 8080},\n            net='bridge',\n            daemon=True,\n            env_vars={'TEST_VAR': 'test_value'}\n        )\n        \n        assert isinstance(result, dict)\n        assert 'cmd' in result\n        assert 'docker run' in result['cmd']\n        assert '--shm-size 2g' in result['cmd']\n        assert '-p 8080:8080' in result['cmd']\n\n    def test_kill(self):\n        # First run a container\n        docker = self.docker\n        docker.run(\n            path='python:3.8-slim',\n            name='test_container_kill'\n        )\n        \n        result = docker.kill('test_container_kill')\n        assert result['status'] == 'killed'\n        assert result['name'] == 'test_container_kill'\n\n    def test_images(self, docker):\n        images = docker.images(to_records=False)\n        assert isinstance(images, pd.DataFrame)\n        assert not images.empty\n        assert 'repository' in images.columns\n\n    def test_logs(self, docker):\n        # Run a container that outputs something\n        docker.run(\n            path='python:3.8-slim',\n            name='test_logs',\n            cmd='echo \"test log message\"'\n        )\n        \n        logs = docker.logs('test_logs', tail=1)\n        assert isinstance(logs, str)\n        assert 'test log message' in logs\n\n    def test_stats(self, docker):\n        # Run a container\n        docker.run(\n            path='python:3.8-slim',\n            name='test_stats',\n            cmd='sleep 10'\n        )\n        \n        stats = docker.stats('test_stats')\n        assert isinstance(stats, pd.DataFrame)\n        assert not stats.empty\n\n    def test_prune(self, docker):\n        result = docker.prune(all=False)\n        assert isinstance(result, str)\n\n    @pytest.mark.cleanup\n    def test_kill_all(self, docker):\n        result = docker.kill_all(verbose=False)\n        assert result['status'] == 'all_containers_killed'\n\n"
+    },
+    "schema": {
+        "test_file": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "tmp_path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_file",
+            "source": {
+                "start": 16,
+                "length": 9,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:a1779f66dd37b243ed677d3340c283fe07f44361d0d97ea3f531817da60cbbf2",
+                "end": 25
+            }
+        },
+        "test_files": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "tmp_path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_files",
+            "source": {
+                "start": 26,
+                "length": 9,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:e0eed16539db3e13432660e239a5e945c632f8ccc099306b13b5c4697cf0e287",
+                "end": 35
+            }
+        },
+        "test_images": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_images",
+            "source": {
+                "start": 69,
+                "length": 5,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:76cded341c244c7eec56285ec8855ecf5a191c363598072f8a7893a6c8ffc903",
+                "end": 74
+            }
+        },
+        "test_init": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_init",
+            "source": {
+                "start": 12,
+                "length": 3,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:490d0061814a8d3af629586dc095e5234e287f634a704865319309892810055e",
+                "end": 15
+            }
+        },
+        "test_kill": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_kill",
+            "source": {
+                "start": 57,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:74502b00688cdaabeee59c133b78d14538676026a9e1d358062f0b5ab06cfb36",
+                "end": 68
+            }
+        },
+        "test_kill_all": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_kill_all",
+            "source": {
+                "start": 103,
+                "length": 4,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:d851e75ef41e8871f09478f6c817eaa11b517911ab50538d4ad481a3907f305d",
+                "end": 107
+            }
+        },
+        "test_logs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_logs",
+            "source": {
+                "start": 75,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:975269df1d17107832c726a22d5f0fef57d72ef35aeba56e220bd96c1e30c619",
+                "end": 86
+            }
+        },
+        "test_prune": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_prune",
+            "source": {
+                "start": 99,
+                "length": 3,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:5510c3b8a9aa01fee9e20f4fc3631326094689ec454b1bcd118cb58b855bdac8",
+                "end": 102
+            }
+        },
+        "test_run": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_run",
+            "source": {
+                "start": 37,
+                "length": 19,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:cd94e7877d0a44705096c354a33bf2029589191dda5d37639229f8d7ab37c41d",
+                "end": 56
+            }
+        },
+        "test_stats": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "docker": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_stats",
+            "source": {
+                "start": 87,
+                "length": 11,
+                "path": "~/commune/commune/modules/docker/test_docker.py",
+                "code": null,
+                "hash": "sha256:a5173f5c21e3e7f89b2b4a0d859ef0a65c34e37f8ef60def06163b895f078504",
+                "end": 98
+            }
+        }
+    },
+    "name": "docker.test_docker",
+    "key": "5FFBna91uZx19j23WCgGM8pKyLVQFaSjEHEQKvCwxCKBCccU",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:ecad34d57958cdd9ec13fef53d0cdc5afb79e4e5466dcbbbf75a9788b6439d3b",
+    "time": 1746536230.334618,
+    "signature": "0x5acdd39e3fb67ae080b19c4689a84f76a1f4d2e301717eb77a87ea6fed984a02723d2301fdad640fc9e3a87fb242b9f8b9f92649f132c798d2709e7aa3241d8c"
+}

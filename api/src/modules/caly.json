@@ -1,0 +1,44 @@
+{
+    "code": {
+        "caly.py": "import commune as c \nclass Caly:\n    \"\"\"\n    A base class that provides fundamental functionality for commune modules.\n    \"\"\"\n    def __init__(self, **kwargs):\n        \"\"\"\n        Initialize the base class with configurable parameters.\n        Args:\n            **kwargs: Arbitrary keyword arguments to configure the instance\n        \"\"\"\n        # Store configuration as a Munch object for dot notation access\n        self.model = c.module('openrouter')()\n        \n        \n    def forward(self, *extra_text, **kwargs):\n        \"\"\"\n        Forward the goals to the model.\n        Args:\n            *goals: Goals to be forwarded\n            **kwargs: Additional keyword arguments for the model\n        Returns:\n            The result of the model's forward method\n        \"\"\"\n        return self.model.forward(*goals, **kwargs)"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "extra_text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Forward the goals to the model.\n        Args:\n            *goals: Goals to be forwarded\n            **kwargs: Additional keyword arguments for the model\n        Returns:\n            The result of the model's forward method\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 16,
+                "length": 10,
+                "path": "~/commune/commune/modules/caly/caly.py",
+                "code": null,
+                "hash": "sha256:22e2b66d53702b08c28ab778d0339fe4e40c41d767a7e85a2667d659a2019738",
+                "end": 26
+            }
+        }
+    },
+    "name": "caly",
+    "key": "5G1W3RCeNtzHeNLULg5VnwWHNCUP8WzqerRsgbxk6rvGnjjh",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:7b6db0ff8edd0b4ce20f5d6d13a65c261b548afd2df69d163063eded41ebc45c",
+    "time": 1746536203.358803,
+    "signature": "0xa0a6d1261e5d3f12af68068a3bb948fee218ef1625e966ac4e430e318def4c06a3fa8618276c0d9c4b358e6d7483f5ad9d5a3dd498f2a6d0b73ace234e54c887"
+}

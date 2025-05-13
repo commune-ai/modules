@@ -1,0 +1,64 @@
+{
+    "code": {
+        "desc.py": "import commune as c\nimport os\nimport json\n\nclass Desc:\n    def forward(self,   \n                module='store', \n                task= 'summarize the following in the core pieces of info and ignore the rest',\n                model='anthropic/claude-3.5-sonnet',\n                max_age=200,\n                cache=True,\n                update=False,\n                 **kwargs):\n                 \n        code  = c.code(module)\n        code_hash =  c.hash(code)\n        path = c.abspath('~/.desc/' + code_hash + '.json')\n        \n        result = c.get(path, max_age=max_age, update=update)\n        if cache and result != None:\n            print(f'Found {module} in cache')\n            return result\n    \n        anchors = ['<JSONSTART>', '<JSONEND>']\n        text = f\"\"\"\n        --CONTEXT--\n        {code}\n        --TASK--\n        {task}\n        --FORMAT--\n        in json format please DICT(key->aboutkey) WHERE KEY IS THE OBJECT OF INTEREST AND VALUE IS THE VALUE\n        DO IT BETWEEN THESE TAGS FOR PARSING\n        {anchors[0]}DICT(key:value){anchors[1]}\n        \"\"\"\n        output = ''\n        for ch in c.ask(text, stream=1, **kwargs):\n            output += ch\n            print(ch, end='')\n        \n        output =  json.loads(output.split(anchors[0])[-1].split(anchors[1])[0])\n        c.put(path, output)\n        return output\n\n\n\n\n"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "store",
+                    "type": "str"
+                },
+                "task": {
+                    "value": "summarize the following in the core pieces of info and ignore the rest",
+                    "type": "str"
+                },
+                "model": {
+                    "value": "anthropic/claude-3.5-sonnet",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 200,
+                    "type": "int"
+                },
+                "cache": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 6,
+                "length": 37,
+                "path": "~/commune/commune/modules/desc/desc.py",
+                "code": null,
+                "hash": "sha256:c694b6738050ca81d98dec4e2b92f22952cb56a2bc170b46a936333ec80f6425",
+                "end": 43
+            }
+        }
+    },
+    "name": "desc",
+    "key": "5DUs84ja4GfLyQgXg9ABZPvXf4V3afCMC95XConAiiHAtLx4",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:522e99e3b35d96cb9b70e2fcac0e17dbf3aea26b5caf2ff1ad2acab7401f645c",
+    "time": 1746536203.5866802,
+    "signature": "0x24be2ad36a815c038bda49b8231aa42d5602ae62f70d1fd2e4f998c7ee911e3b72b5992f3dc6f6f2cf6479da0773112018496b48f31a58108eddd33adb562b8b"
+}

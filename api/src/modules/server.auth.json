@@ -1,0 +1,268 @@
+{
+    "code": {
+        "auth.py": "import base64\nimport hmac\nimport json\nimport time\nfrom typing import Dict, Optional, Any\n\nimport commune as c\n\nclass JWT:\n\n    def get_headers(self, data: Any, key:str=None, crypto_type='ecdsa', mode='dict') -> dict:\n        \"\"\"\n        Generate the headers with the JWT token\n        \"\"\"\n        headers =  self.get_token(c.hash(data), key=key, crypto_type=crypto_type, mode=mode)\n        return headers\n\n    def verify_headers(self, headers: str, data:Optional[Any]=None) -> Dict:\n        \"\"\"\n        Verify and decode a JWT token\n        \"\"\"\n        verified = self.verify_token(headers['token'])\n        assert verified, 'Invalid signature'\n        if data != None:\n            assert verified['data'] == c.hash(data), 'Invalid data {} != {}'.format(verified['data'], c.hash(data))\n        return verified\n\n    def check_crypto_type(self, crypto_type):\n        assert crypto_type in ['ecdsa', 'sr25519'], f'Invalid crypto_type {crypto_type}'\n\n    def get_token(self, data: Dict='hey',  key:Optional[str]=None,   crypto_type: str = 'ecdsa', expiration: int = 3600, mode='bytes') -> str:\n        \"\"\"\n        Generate a JWT token with the given data\n        Args:\n            data: Dictionary containing the data to encode in the token\n            expiration: Optional custom expiration time in seconds\n        Returns:\n            JWT token string\n        \"\"\"\n        if isinstance(key, str) or key == None:\n            key = c.get_key(key, crypto_type=crypto_type)\n        else:\n            key = key\n            if crypto_type != key.get_crypto_type(key.crypto_type):\n                crypto_type = key.get_crypto_type(key.crypto_type)\n\n        self.check_crypto_type(crypto_type)\n        if not isinstance(data, dict):\n            data = {'data': data }\n        token_data = data.copy()        \n        # Add standard JWT claims\n        token_data.update({\n            'iat': str(float(c.time())),  # Issued at time\n            'exp': str(float(c.time() + expiration)),  # Expiration time\n            'iss': key.key_address,  # Issuer (key address)\n        })\n        header = {\n            'alg': crypto_type,\n            'typ': 'JWT',\n        }\n        # Create message to sign\n        message = f\"{self._base64url_encode(header)}.{self._base64url_encode(token_data)}\"\n        # For asymmetric algorithms, use the key's sign method\n        signature = key.sign(message, mode='bytes')\n        signature_encoded = self._base64url_encode(signature)\n        # Combine to create the token\n        token = f\"{message}.{signature_encoded}\"\n        if mode == 'dict':\n            return self.verify_token(token)\n        elif mode == 'bytes':\n            return f\"{message}.{signature_encoded}\"\n        else:\n            raise ValueError(f\"Invalid mode: {mode}. Use 'bytes' or 'dict'.\")\n            \n    def verify_token(self, token: str) -> Dict:\n        \"\"\"\n        Verify and decode a JWT token\n        \"\"\"\n        if isinstance(token, dict) and 'token' in token:\n            token = token['token']\n        # Split the token into parts\n        header_encoded, data_encoded, signature_encoded = token.split('.')\n        # Decode the data\n        data = json.loads(self._base64url_decode(data_encoded))\n        headers = json.loads(self._base64url_decode(header_encoded))\n        # Check if token is expired\n        if 'exp' in data and float(data['exp']) < c.time():\n            raise Exception(\"Token has expired\")\n        # Verify signature\n        message = f\"{header_encoded}.{data_encoded}\"\n        signature = self._base64url_decode(signature_encoded)\n        assert c.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), \"Invalid token signature\"\n        # data['data'] = message\n        data['time'] = data['iat'] # set time field for semanitcally easy people\n        data['signature'] = '0x'+signature.hex()\n        data['alg'] = headers['alg']\n        data['typ'] = headers['typ']\n        data['token'] = token\n        data['key'] = data['iss']\n        return data\n\n    def _base64url_encode(self, data):\n        \"\"\"Encode data in base64url format\"\"\"\n        if isinstance(data, str):\n            data = data.encode('utf-8')\n        elif isinstance(data, dict):\n            data = json.dumps(data, separators=(',', ':')).encode('utf-8')\n        encoded = base64.urlsafe_b64encode(data).rstrip(b'=')\n        return encoded.decode('utf-8')\n    \n    def _base64url_decode(self, data):\n        \"\"\"Decode base64url data\"\"\"\n        padding = b'=' * (4 - (len(data) % 4))\n        return base64.urlsafe_b64decode(data.encode('utf-8') + padding)\n\n    def test_token(self, test_data = {'fam': 'fam', 'admin': 1} , crypto_type='ecdsa'):\n        \"\"\"\n        Test the JWT token functionality\n        \n        Returns:\n            Dictionary with test results\n        \"\"\"\n        # Generate a token\n        token = self.get_token(test_data, crypto_type=crypto_type)\n        # Verify the token\n        decoded = self.verify_token(token)\n        # Check if original data is in the decoded data\n        validation_passed = all(test_data[key] == decoded[key] for key in test_data)\n        assert validation_passed, \"Decoded data does not match original data\"\n        # Test token expiration\n        quick_token = self.get_token(test_data, expiration=0.1, crypto_type=crypto_type)\n        time.sleep(0.2)  # Wait for token to expire\n        \n        expired_token_caught = False\n        try:\n            decoded = self.verify_token(quick_token)\n        except Exception as e:\n            expired_token_caught = True\n        assert expired_token_caught, \"Expired token not caught\"\n        \n        return {\n            \"token\": token,\n            \"decoded_data\": decoded,\n            \"crypto_type\": crypto_type,\n            \"quick_token\": quick_token,\n            \"expired_token_caught\": expired_token_caught\n            }\n\n    def test_headers(self, key='test.jwt', crypto_type='ecdsa'):\n        data = {'fn': 'test', 'params': {'a': 1, 'b': 2}}\n        headers = self.get_headers(data, key=key, crypto_type=crypto_type)\n        verified = self.verify_headers(headers)\n        verified = self.verify_headers(headers, data=data)\n        return {'headers': headers, 'verified': verified}\n\n    def test(self):\n        return {\n            'token': self.test_token(),\n            'headers': self.test_headers()\n        }"
+    },
+    "schema": {
+        "check_crypto_type": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "crypto_type": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "check_crypto_type",
+            "source": {
+                "start": 28,
+                "length": 2,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:93a190969a2329511d73f79971b532b9b8599c02cc80aabf1d2dd7569f285f48",
+                "end": 30
+            }
+        },
+        "get_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "crypto_type": {
+                    "value": "ecdsa",
+                    "type": "str"
+                },
+                "mode": {
+                    "value": "dict",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'dict'>"
+            },
+            "docs": "\n        Generate the headers with the JWT token\n        ",
+            "cost": 1,
+            "name": "get_headers",
+            "source": {
+                "start": 11,
+                "length": 6,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:f6caeb6dffa388855d70c98fd5fdad0176a01f952dc0f7ebeb1806a57ba2b24b",
+                "end": 17
+            }
+        },
+        "get_token": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "hey",
+                    "type": "str"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "crypto_type": {
+                    "value": "ecdsa",
+                    "type": "str"
+                },
+                "expiration": {
+                    "value": 3600,
+                    "type": "int"
+                },
+                "mode": {
+                    "value": "bytes",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Generate a JWT token with the given data\n        Args:\n            data: Dictionary containing the data to encode in the token\n            expiration: Optional custom expiration time in seconds\n        Returns:\n            JWT token string\n        ",
+            "cost": 1,
+            "name": "get_token",
+            "source": {
+                "start": 31,
+                "length": 43,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:9b6c64dbfe593d40f151cd0216ac9629457c7c04654a3fb2c72c92a139759f4b",
+                "end": 74
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 156,
+                "length": 5,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:556a1813726c26adabf38918a16d4f8ddf574513e34f5a03ade2a57dcae1ef09",
+                "end": 161
+            }
+        },
+        "test_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "test.jwt",
+                    "type": "str"
+                },
+                "crypto_type": {
+                    "value": "ecdsa",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_headers",
+            "source": {
+                "start": 149,
+                "length": 6,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:25c0f9feab0b133127ca11a77dd913a6fc36acbca11411a72d9ef4f2594366c6",
+                "end": 155
+            }
+        },
+        "test_token": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "test_data": {
+                    "value": {
+                        "fam": "fam",
+                        "admin": 1
+                    },
+                    "type": "dict"
+                },
+                "crypto_type": {
+                    "value": "ecdsa",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Test the JWT token functionality\n        \n        Returns:\n            Dictionary with test results\n        ",
+            "cost": 1,
+            "name": "test_token",
+            "source": {
+                "start": 116,
+                "length": 32,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:4e07a227fb2bcb5751da04b94269011e2ab52de8b681062a4484d4cc0194bba9",
+                "end": 148
+            }
+        },
+        "verify_headers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "headers": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Verify and decode a JWT token\n        ",
+            "cost": 1,
+            "name": "verify_headers",
+            "source": {
+                "start": 18,
+                "length": 9,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:adc21b96158eb9a17771b1f6f6cafb466e468ec37ed4b84acfc5c39fd00aa595",
+                "end": 27
+            }
+        },
+        "verify_token": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "token": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Verify and decode a JWT token\n        ",
+            "cost": 1,
+            "name": "verify_token",
+            "source": {
+                "start": 75,
+                "length": 26,
+                "path": "~/commune/commune/core/server/auth.py",
+                "code": null,
+                "hash": "sha256:683ba5c1b148c369ab65a13689ebecfe500861fb4894b00c2b76b8dc4db08bc9",
+                "end": 101
+            }
+        }
+    },
+    "name": "server.auth",
+    "key": "5GbWNQ6hnT6nSzY8JtCLhEGKB2MQdcqDvoY2YEyWuoHHpfCj",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:40e48495d3d882172f3d8ca113155e28aae9b63826c38944550e38c12b72b163",
+    "time": 1746536232.861962,
+    "signature": "0xf21070e1a88d2662e70727ba5c4e354fb1f159d18dd97c70c0cc6ce2d7dbd27144bae8152a1c8acf34f612ce895b08b9808b82e331231c0930f7991fc23fe58a"
+}

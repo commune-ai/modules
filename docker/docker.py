@@ -53,10 +53,10 @@ class Docker:
         return c.cmd(cmd,  cwd=path)
 
     def run(self,
-            image: str = './',
+            name: Optional[str] = 'commune',
+            image  = 'commune',
             cmd: Optional[str] = None,
-            volumes: Dict[str, str] = None,
-            name: Optional[str] = None,
+            vol: Dict[str, str] = None,
             gpus: Union[List[int], str, bool] = False,
             shm_size: str = '100g',
             entrypoint = 'tail -f /dev/null',
@@ -66,14 +66,14 @@ class Docker:
             net: str = 'host',
             daemon: bool = True,
             cwd: Optional[str] = None,
-            env_vars: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+            env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         Run a Docker container with advanced configuration options.
 
         Args:
             path (str): Path to Dockerfile or image name.
             cmd (Optional[str]): Command to run in container.
-            volumes (Optional[Union[List[str], Dict[str, str], str]]): Volume mappings.
+            vol (Optional[Union[List[str], Dict[str, str], str]]): Volume mappings.
             name (Optional[str]): Container name.
             gpus (Union[List[int], str, bool]): GPU configuration.
             shm_size (str): Shared memory size.
@@ -83,12 +83,12 @@ class Docker:
             net (str): Network mode.
             daemon (bool): Run in daemon mode.
             cwd (Optional[str]): Working directory.
-            env_vars (Optional[Dict[str, str]]): Environment variables.
+            env (Optional[Dict[str, str]]): Environment variables.
 
         Returns:
             Dict[str, Any]: A dictionary containing the command and working directory.
         """
-
+        name = name or image
         self.kill(name)
         dcmd = ['docker', 'run']
         dcmd.extend(['--net', net])
@@ -110,23 +110,19 @@ class Docker:
                 dcmd.extend(['-p', f'{host_port}:{container_port}'])
             
         # Handle volume mappings
-        if volumes:
-            assert isinstance(volumes, dict)
-            volumes = [f'{k}:{v}' for k, v in volumes.items()]
-            for volume in volumes:
+        if vol:
+            assert isinstance(vol, dict)
+            vol = [f'{k}:{v}' for k, v in vol.items()]
+            for volume in vol:
                 dcmd.extend(['-v', volume])
         # Handle environment variables
-        if env_vars:
-            for key, value in env_vars.items():
+        if env:
+            for key, value in env.items():
                 dcmd.extend(['-e', f'{key}={value}'])
 
         # Set container name
         if name:
             dcmd.extend(['--name', name])
-
-        # Add entrypoint if specified
-        if entrypoint:
-            dcmd.extend(['--entrypoint', entrypoint])
 
         # Run in daemon mode
         if daemon:
@@ -140,7 +136,15 @@ class Docker:
             dcmd.append(cmd)
 
         command_str = ' '.join(dcmd)
+        print(f'Running command: {command_str}')
         return c.cmd(command_str, verbose=True)
+
+
+    def enter(self, contianer): 
+        cmd = f'docker exec -it {contianer} bash'
+        os.system(cmd)
+
+    
 
     def exists(self, name: str) -> bool:
         """
@@ -194,7 +198,7 @@ class Docker:
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
 
-    def images(self, to_records: bool = True) -> Union[pd.DataFrame, Any]:
+    def images(self, df: bool = True) -> Union[pd.DataFrame, Any]:
         """
         List all Docker images.
 
@@ -204,24 +208,22 @@ class Docker:
         Returns:
             Union[pd.DataFrame, Any]: A DataFrame or records of Docker images.
         """
-        try:
-            text = c.cmd('docker images', verbose=False)
-            rows = []
-            cols = []
+        text = c.cmd('docker images')
+        rows = []
+        for i, line in enumerate(text.split('\n')):
+            print(line)
+            if not line.strip():
+                continue
+            if i == 0:
+                cols = [col.strip().lower().replace(' ', '_') for col in line.split('  ') if col]
+            else:
+                rows.append([v.strip() for v in line.split('  ') if v])
 
-            for i, line in enumerate(text.split('\n')):
-                if not line.strip():
-                    continue
-                if i == 0:
-                    cols = [col.strip().lower().replace(' ', '_') for col in line.split() if col]
-                else:
-                    rows.append([col.strip() for col in line.split() if col])
-
-            df = pd.DataFrame(rows, columns=cols)
-            return df.to_records() if to_records else df
-        except Exception as e:
-            c.print(f"Error listing images: {e}", color='red')
-            return {'status': 'error', 'error': str(e)}
+        results = pd.DataFrame(rows, columns=cols)
+        if not df:
+            return results['repository'].tolist()
+        else:
+            return results
 
     def logs(self,
              name: str,
@@ -246,8 +248,6 @@ class Docker:
         """
         cmd = ['docker', 'logs']
 
-        if follow:
-            cmd.append('-f')
         if tail:
             cmd.extend(['--tail', str(tail)])
         if since:
@@ -624,7 +624,7 @@ class Docker:
             config_path = self.get_path(f'configs/{config_name}.json')
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
             
-            # Get container details including image, ports, volumes, etc.
+            # Get container details including image, ports, vol, etc.
             container_configs = []
             for _, container in containers.iterrows():
                 name = container.get('names', '')
@@ -644,7 +644,7 @@ class Docker:
                         'entrypoint': container_info.get('Config', {}).get('Entrypoint', []),
                         'env': container_info.get('Config', {}).get('Env', []),
                         'ports': container_info.get('HostConfig', {}).get('PortBindings', {}),
-                        'volumes': container_info.get('HostConfig', {}).get('Binds', []),
+                        'vol': container_info.get('HostConfig', {}).get('Binds', []),
                         'network_mode': container_info.get('HostConfig', {}).get('NetworkMode', ''),
                         'restart_policy': container_info.get('HostConfig', {}).get('RestartPolicy', {}),
                         'status': container_info.get('State', {}).get('Status', '')
@@ -701,19 +701,19 @@ class Docker:
                         if host_port:
                             ports[host_port] = container_port.split('/')[0]
                 
-                # Convert volumes format
-                volumes = {}
-                for volume in config.get('volumes', []):
+                # Convert vol format
+                vol = {}
+                for volume in config.get('vol', []):
                     if ':' in volume:
                         host_path, container_path = volume.split(':', 1)
-                        volumes[host_path] = container_path
+                        vol[host_path] = container_path
                 
                 # Convert environment variables
-                env_vars = {}
+                env = {}
                 for env in config.get('env', []):
                     if '=' in env:
                         key, value = env.split('=', 1)
-                        env_vars[key] = value
+                        env[key] = value
                 
                 # Start the container
                 try:
@@ -722,9 +722,9 @@ class Docker:
                         name=name,
                         cmd=' '.join(config.get('command', [])) if config.get('command') else None,
                         entrypoint=' '.join(config.get('entrypoint', [])) if config.get('entrypoint') else None,
-                        volumes=volumes,
+                        vol=vol,
                         ports=ports,
-                        env_vars=env_vars,
+                        env=env,
                         net=config.get('network_mode', 'bridge')
                     )
                     results.append({'name': name, 'status': 'started', 'result': result})

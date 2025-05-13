@@ -1,0 +1,98 @@
+{
+    "code": {
+        "torch.py": "\nclass TorchSerializer:\n    def deserialize(self, data: dict) -> 'torch.Tensor':\n        from safetensors.torch import load\n        if isinstance(data, str):\n            data = self.str2bytes(data)\n        data = load(data)\n        return data['data']\n\n    def serialize(self, data: 'torch.Tensor') -> 'DataBlock':     \n        from safetensors.torch import save\n        return save({'data':data}).hex()\n    \n    def str2bytes(self, data: str, mode: str = 'hex') -> bytes:\n        if mode in ['utf-8']:\n            return bytes(data, mode)\n        elif mode in ['hex']:\n            return bytes.fromhex(data)\n  "
+    },
+    "schema": {
+        "deserialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "torch.Tensor"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "deserialize",
+            "source": {
+                "start": 3,
+                "length": 6,
+                "path": "~/commune/commune/modules/serializer/types/torch.py",
+                "code": null,
+                "hash": "sha256:74f4fa69c14b2ae6414d9a7eb1807628475c77de4efa2cedbd65427676418483",
+                "end": 9
+            }
+        },
+        "serialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "DataBlock"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "serialize",
+            "source": {
+                "start": 10,
+                "length": 3,
+                "path": "~/commune/commune/modules/serializer/types/torch.py",
+                "code": null,
+                "hash": "sha256:a0237d3ba469bac75f64e04e7e1ddb022fcbb45ceac8765dfc40b8c775d7ed34",
+                "end": 13
+            }
+        },
+        "str2bytes": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "mode": {
+                    "value": "hex",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bytes'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "str2bytes",
+            "source": {
+                "start": 14,
+                "length": 5,
+                "path": "~/commune/commune/modules/serializer/types/torch.py",
+                "code": null,
+                "hash": "sha256:37f82ae9e247d9e7da1ad08a0c8f2f1676017dc57fa375e280210e51c1947022",
+                "end": 19
+            }
+        }
+    },
+    "name": "serializer.types.torch",
+    "key": "5D57QzCc4pDEW9yiX4oL7agVbhF5dzmFn3qmXbGey4GxjQYF",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:b3d110e3c368b691583ccfe45c1f50438ac0d9ae0eff085b2afe632bdb10a38a",
+    "time": 1746536232.124185,
+    "signature": "0x2223a5a9a63f00d12a53fa024e568f546b51d0920d1996b44500b7ac7337b25e64db71dfb24deb8a819b86c09e32f8ea11f86f18d3c9acebb0da64f60d320e81"
+}

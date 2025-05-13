@@ -1,0 +1,44 @@
+{
+    "code": {
+        "task.py": "class Task:\n    description = 'Base task for commune'\n    features = ['url', 'name', 'score']\n\n    def __init__(self, fn='info', params=None):\n        \"\"\"\n        Initialize the task with a function and parameters\n        \"\"\"\n        self.fn = fn\n        self.params = params or {}\n\n    def forward(self,module, **params):\n        params = {**self.params, **params}\n        result =  getattr(module, self.fn)(**params)\n        if 'url' in result:\n            score = 1\n        else: \n            score = 0\n        return {'score': score}"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "params": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 12,
+                "length": 8,
+                "path": "~/commune/commune/core/vali/task.py",
+                "code": null,
+                "hash": "sha256:380e717008b43144030f92c80eb2b4257d5d02fdd4445ae43920ec71e43ec4b4",
+                "end": 20
+            }
+        }
+    },
+    "name": "vali.task",
+    "key": "5FyPk87SwJGMKK8tjTkLvVpmc6p8VieBJPJGx5e4XmprtDVb",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:e1026dbe4abf76d47fdfcbe47197d2e06a7df8bb98a9b30f610173a55e84bb57",
+    "time": 1746536275.2208278,
+    "signature": "0xc01fca0a6f85bc544963b5ef8a2578e4e0247cc2da1c9db9d676a1a4cbadb21b496e40ae68d92629121ec4786ac4c55611ef536aa9a2ff2336ce4b0c09a61884"
+}

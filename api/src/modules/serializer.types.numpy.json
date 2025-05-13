@@ -1,0 +1,175 @@
+{
+    "code": {
+        "numpy.py": "class NumpySerializer:\n    \n    def serialize(self, data: 'np.ndarray') -> 'np.ndarray':     \n        return  self.numpy2bytes(data).hex()\n\n    def deserialize(self, data: bytes) -> 'np.ndarray':     \n        if isinstance(data, str):\n            data = bytes.fromhex(data)\n        return self.bytes2numpy(data)\n\n    def bytes2numpy(self, data:bytes) -> 'np.ndarray':\n        import msgpack_numpy\n        import msgpack\n        output = msgpack.unpackb(data, object_hook=msgpack_numpy.decode)\n        return output\n    \n    def numpy2bytes(self, data:'np.ndarray')-> bytes:\n        import msgpack_numpy\n        import msgpack\n        output = msgpack.packb(data, default=msgpack_numpy.encode)\n        return output\n    \n    @classmethod\n    def bytes2str(cls, x, **kwargs):\n        return x.hex()\n    \n    @classmethod\n    def str2bytes(cls, data: str, mode: str = 'hex') -> bytes:\n        if mode in ['utf-8']:\n            return bytes(data, mode)\n        elif mode in ['hex']:\n            return bytes.fromhex(data)\n    "
+    },
+    "schema": {
+        "bytes2numpy": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "np.ndarray"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "bytes2numpy",
+            "source": {
+                "start": 11,
+                "length": 5,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:f9fdeee269f5d104c55e7eacad4163e00d1e76369358cebf7df9f95459163c02",
+                "end": 16
+            }
+        },
+        "bytes2str": {
+            "input": {
+                "x": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "bytes2str",
+            "source": {
+                "start": 23,
+                "length": 3,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:6549302e3762892bf6f2099f6e081330b43030c702f37236106734ca9f49bd36",
+                "end": 26
+            }
+        },
+        "deserialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "np.ndarray"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "deserialize",
+            "source": {
+                "start": 6,
+                "length": 4,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:f4a09ea1f2f8d3acdfea3a4916084042f9da038b848778f08daf0c6130ca7dfd",
+                "end": 10
+            }
+        },
+        "numpy2bytes": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bytes'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "numpy2bytes",
+            "source": {
+                "start": 17,
+                "length": 5,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:0f8d5d6b1ded4b3070188cfe6026848356b452c7be13417c385c5398cd41ebf1",
+                "end": 22
+            }
+        },
+        "serialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "np.ndarray"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "serialize",
+            "source": {
+                "start": 3,
+                "length": 2,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:83f40f520fdf8ee902f0967883744bee464522e895d196b52ec964846ee188e3",
+                "end": 5
+            }
+        },
+        "str2bytes": {
+            "input": {
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "mode": {
+                    "value": "hex",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bytes'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "str2bytes",
+            "source": {
+                "start": 27,
+                "length": 6,
+                "path": "~/commune/commune/modules/serializer/types/numpy.py",
+                "code": null,
+                "hash": "sha256:4143c5f4e3570302d77a518618442c200c6d9177aaa91b75b710bf924e0048e0",
+                "end": 33
+            }
+        }
+    },
+    "name": "serializer.types.numpy",
+    "key": "5HGgbUMuzLNkgUcNVewx1jr5sHpmJV7rvB6VPcfsdwCTCvJe",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:d6c2eeb120091f52afd814ded90f0e066123b645f877dd36b28838b6be12689c",
+    "time": 1746536231.172698,
+    "signature": "0xf2dfe31f8cf4a4b8fdab5d7262ed093eb57b7fe036c43c201d73d71b37c3df219d0054f6afc39b4740234d31d7f097cfc5939e10995532e801e6906ca1b72787"
+}

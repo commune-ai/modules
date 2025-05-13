@@ -1,0 +1,226 @@
+{
+    "code": {
+        "dh.py": "import commune as c\nimport hashlib\nimport hmac\nimport os\nimport random\nimport base64\nfrom Crypto.Cipher import AES\nfrom Crypto import Random\n\nclass DiffieHellman:\n    \"\"\"\n    Implementation of Diffie-Hellman key exchange protocol.\n    This allows two parties to establish a shared secret over an insecure channel.\n    \"\"\"\n    \n    def __init__(self, key: 'Key' = None, group_size: int = 2048, crypto_type: str = 'sr25519'):\n        \"\"\"\n        Initialize a Diffie-Hellman key exchange instance\n        \n        Args:\n            key: Key instance to use for deriving values (optional)\n            group_size: Size of the prime number in bits (default: 2048)\n            crypto_type: Cryptography type to use for the key\n        \"\"\"\n        self.group_size = group_size\n        self.key = self.get_key(key, crypto_type=crypto_type)\n        \n        # Standard primes for Diffie-Hellman\n        # Using MODP group from RFC 3526\n        if group_size == 2048:\n            # 2048-bit MODP Group\n            self.p = int('FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1'\n                         '29024E088A67CC74020BBEA63B139B22514A08798E3404DD'\n                         'EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245'\n                         'E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED'\n                         'EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D'\n                         'C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F'\n                         '83655D23DCA3AD961C62F356208552BB9ED529077096966D'\n                         '670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B'\n                         'E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9'\n                         'DE2BCBF6955817183995497CEA956AE515D2261898FA0510'\n                         '15728E5A8AACAA68FFFFFFFFFFFFFFFF', 16)\n        elif group_size == 4096:\n            # 4096-bit MODP Group\n            self.p = int('FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1'\n                         '29024E088A67CC74020BBEA63B139B22514A08798E3404DD'\n                         'EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245'\n                         'E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED'\n                         'EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D'\n                         'C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F'\n                         '83655D23DCA3AD961C62F356208552BB9ED529077096966D'\n                         '670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B'\n                         'E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9'\n                         'DE2BCBF6955817183995497CEA956AE515D2261898FA0510'\n                         '15728E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64'\n                         'ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7'\n                         'ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6B'\n                         'F12FFA06D98A0864D87602733EC86A64521F2B18177B200C'\n                         'BBE117577A615D6C770988C0BAD946E208E24FA074E5AB31'\n                         '43DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF', 16)\n        else:\n            raise ValueError(f\"Unsupported group size: {group_size}. Use 2048 or 4096.\")\n            \n        # Generator\n        self.g = 2\n        \n        # Generate private value from key or randomly\n        self.private_value = self._generate_private_value()\n        \n        # Calculate public value\n        self.public_value = self._calculate_public_value()\n        \n    def get_key(self, key, crypto_type='sr25519'):\n        \"\"\"Get or create a key for use in the exchange\"\"\"\n        if key is None and hasattr(self, 'key'):\n            key = self.key\n        else:\n            key = c.get_key(key, crypto_type=crypto_type) \n        return key\n    \n    def _generate_private_value(self):\n        \"\"\"Generate a private value using the key or random generation\"\"\"\n        if self.key:\n            # Derive a private value from the key\n            # hash it using SHA-256 and use the first 16 bytes as seed\n            seed = int.from_bytes(hashlib.sha256(self.key.private_key).digest()[:16], byteorder='big')\n            # Use the key to seed a random generator\n            random.seed(seed)\n            # Generate a random value between 2 and p-2\n            return random.randint(2, self.p - 2)\n        else:\n            # Generate a cryptographically secure random number\n            return int.from_bytes(os.urandom(self.group_size // 8), byteorder='big') % (self.p - 3) + 2\n    \n    def _calculate_public_value(self):\n        \"\"\"Calculate the public value: g^private_value mod p\"\"\"\n        return pow(self.g, self.private_value, self.p)\n    \n    def get_public_value(self):\n        \"\"\"Return the public value to be shared with the other party\"\"\"\n        return self.public_value\n    \n    def compute_shared_secret(self, other_public_value):\n        \"\"\"\n        Compute the shared secret using the other party's public value\n        \n        Args:\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            The computed shared secret\n        \"\"\"\n        # Validate the other party's public value\n        if not 2 <= other_public_value <= self.p - 2:\n            raise ValueError(\"Invalid public value received\")\n            \n        # Calculate the shared secret: (other_public_value)^private_value mod p\n        shared_secret = pow(other_public_value, self.private_value, self.p)\n        \n        # Convert to bytes for use as a key\n        shared_secret_bytes = shared_secret.to_bytes((shared_secret.bit_length() + 7) // 8, byteorder='big')\n        \n        # Hash the shared secret to get a fixed-length key\n        return hashlib.sha256(shared_secret_bytes).digest()\n    \n    def derive_key(self, other_public_value, salt=None, info=None, key_length=32):\n        \"\"\"\n        Derive a key from the shared secret using HKDF\n        \n        Args:\n            other_public_value: The public value received from the other party\n            salt: Optional salt value for HKDF\n            info: Optional context and application specific information\n            key_length: Length of the derived key in bytes\n            \n        Returns:\n            The derived key\n        \"\"\"\n        shared_secret = self.compute_shared_secret(other_public_value)\n        \n        # Use HKDF to derive a key of the specified length\n        if salt is None:\n            salt = b'\\x00' * 32\n            \n        if info is None:\n            info = b'diffie-hellman-key-exchange'\n            \n        # HKDF implementation\n        # 1. Extract phase\n        prk = hmac.new(salt, shared_secret, hashlib.sha256).digest()\n        \n        # 2. Expand phase\n        t = b\"\"\n        okm = b\"\"\n        for i in range(1, (key_length + 32 - 1) // 32 + 1):\n            t = hmac.new(prk, t + info + bytes(), hashlib.sha256).digest()\n            okm += t\n            \n        return okm[:key_length]\n    \n    def encrypt(self, data, other_public_value, **kwargs):\n        \"\"\"\n        Encrypt data using a key derived from the shared secret\n        \n        Args:\n            data: Data to encrypt\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            Encrypted data\n        \"\"\"\n        if not isinstance(data, str):\n            data = str(data)\n            \n        # Derive a key for encryption\n        key = self.derive_key(other_public_value)\n        \n        # Generate a random IV\n        iv = Random.new().read(AES.block_size)\n        \n        # Pad the data\n        data = data + (AES.block_size - len(data) % AES.block_size) * chr(AES.block_size - len(data) % AES.block_size)\n        \n        # Create cipher and encrypt\n        cipher = AES.new(key, AES.MODE_CBC, iv)\n        encrypted_bytes = base64.b64encode(iv + cipher.encrypt(data.encode()))\n        \n        return encrypted_bytes.decode()\n    \n    def decrypt(self, data, other_public_value, **kwargs):\n        \"\"\"\n        Decrypt data using a key derived from the shared secret\n        \n        Args:\n            data: Encrypted data to decrypt\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            Decrypted data\n        \"\"\"\n        # Derive the same key for decryption\n        key = self.derive_key(other_public_value)\n        \n        # Decode the base64 data\n        data = base64.b64decode(data)\n        \n        # Extract the IV\n        iv = data[:AES.block_size]\n        \n        # Create cipher and decrypt\n        cipher = AES.new(key, AES.MODE_CBC, iv)\n        decrypted_data = cipher.decrypt(data[AES.block_size:])\n        \n        # Remove padding\n        padding_length = decrypted_data[-1]\n        decrypted_data = decrypted_data[:-padding_length]\n        \n        return decrypted_data.decode('utf-8')\n    \n    def test(self):\n        \"\"\"\n        Test the Diffie-Hellman key exchange functionality\n        \n        Returns:\n            Dictionary with test results\n        \"\"\"\n        # Create two instances to simulate two parties\n        alice = DiffieHellman('alice')\n        bob = DiffieHellman('bob')\n        \n        # Exchange public values\n        alice_public = alice.get_public_value()\n        bob_public = bob.get_public_value()\n        \n        # Compute shared secrets\n        alice_secret = alice.compute_shared_secret(bob_public)\n        bob_secret = bob.compute_shared_secret(alice_public)\n        \n        # Check if both parties computed the same secret\n        secrets_match = alice_secret == bob_secret\n        \n        # Test encryption and decryption\n        test_message = \"This is a secret message for testing\"\n        encrypted = alice.encrypt(test_message, bob_public)\n        decrypted = bob.decrypt(encrypted, alice_public)\n        \n        encryption_works = test_message == decrypted\n        \n        return {\n            \"success\": secrets_match and encryption_works,\n            \"secrets_match\": secrets_match,\n            \"encryption_works\": encryption_works,\n            \"alice_public\": alice_public,\n            \"bob_public\": bob_public,\n            \"test_message\": test_message,\n            \"encrypted\": encrypted,\n            \"decrypted\": decrypted\n        }"
+    },
+    "schema": {
+        "compute_shared_secret": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "other_public_value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Compute the shared secret using the other party's public value\n        \n        Args:\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            The computed shared secret\n        ",
+            "cost": 1,
+            "name": "compute_shared_secret",
+            "source": {
+                "start": 103,
+                "length": 22,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:880713063966aaad0af132248abbf35112b38084c9ae83716b87090314d9947b",
+                "end": 125
+            }
+        },
+        "decrypt": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "other_public_value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Decrypt data using a key derived from the shared secret\n        \n        Args:\n            data: Encrypted data to decrypt\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            Decrypted data\n        ",
+            "cost": 1,
+            "name": "decrypt",
+            "source": {
+                "start": 190,
+                "length": 29,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:205828995bdfdb203d761f585022becc5dfad48dcaab2ab3f8c6c8f3cb20e3b2",
+                "end": 219
+            }
+        },
+        "derive_key": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "other_public_value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "salt": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "info": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "key_length": {
+                    "value": 32,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Derive a key from the shared secret using HKDF\n        \n        Args:\n            other_public_value: The public value received from the other party\n            salt: Optional salt value for HKDF\n            info: Optional context and application specific information\n            key_length: Length of the derived key in bytes\n            \n        Returns:\n            The derived key\n        ",
+            "cost": 1,
+            "name": "derive_key",
+            "source": {
+                "start": 126,
+                "length": 34,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:24d07cfa4950370321acaace4c5e3235aa12e24bf15bb09d8adcf710ee991e44",
+                "end": 160
+            }
+        },
+        "encrypt": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "other_public_value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Encrypt data using a key derived from the shared secret\n        \n        Args:\n            data: Data to encrypt\n            other_public_value: The public value received from the other party\n            \n        Returns:\n            Encrypted data\n        ",
+            "cost": 1,
+            "name": "encrypt",
+            "source": {
+                "start": 161,
+                "length": 28,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:820a0444871e5218d627c85f0da501d25c7c8a40bc7810778bffb706a6d42445",
+                "end": 189
+            }
+        },
+        "get_key": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "crypto_type": {
+                    "value": "sr25519",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Get or create a key for use in the exchange",
+            "cost": 1,
+            "name": "get_key",
+            "source": {
+                "start": 73,
+                "length": 7,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:b3c6b30d41dea8805e32228ed57f05b1c642b6720114bd22cc34e1ebdd30d7b7",
+                "end": 80
+            }
+        },
+        "get_public_value": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Return the public value to be shared with the other party",
+            "cost": 1,
+            "name": "get_public_value",
+            "source": {
+                "start": 99,
+                "length": 3,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:db19c4c342580f7d8dd4d2c3c0dfe35d1ed6a506826ef0655d18cb830c9c97b9",
+                "end": 102
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Test the Diffie-Hellman key exchange functionality\n        \n        Returns:\n            Dictionary with test results\n        ",
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 220,
+                "length": 39,
+                "path": "~/commune/commune/modules/dh/dh.py",
+                "code": null,
+                "hash": "sha256:72dad16f8d00d2ed392ca262ed4f3fc19a1c7ed231e1497ff95e62f473bce01c",
+                "end": 259
+            }
+        }
+    },
+    "name": "dh",
+    "key": "5Eycqz4ufNv491zKY5zAuw7cUb3dEXKDnKc54NJjyA25i5hY",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:2f472146328a9da0e7eab4abd2c6a9651ee26f1515886104801c5f5044e427d9",
+    "time": 1746536214.083128,
+    "signature": "0xe68c5b7c47585a442d9c741a929717c9943586ef7b6d7a69e0d9ed4afefd1b4490ea841b4cfc1db5eb4836fcff389b253043aeb409923887effa3dde0abade8c"
+}

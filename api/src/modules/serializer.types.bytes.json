@@ -1,0 +1,67 @@
+{
+    "code": {
+        "bytes.py": "\nclass BytesSerializer:\n\n    def serialize(self, data: dict) -> bytes:\n        return data.hex()\n        \n    def deserialize(self, data: bytes) -> 'DataBlock':\n        if isinstance(data, str):\n            data = bytes.fromhex(data)\n        return data\n"
+    },
+    "schema": {
+        "deserialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "DataBlock"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "deserialize",
+            "source": {
+                "start": 7,
+                "length": 4,
+                "path": "~/commune/commune/modules/serializer/types/bytes.py",
+                "code": null,
+                "hash": "sha256:42e28cb71777570c55986851007495e881e635f62aeb6cd3a416b66181df3f15",
+                "end": 11
+            }
+        },
+        "serialize": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bytes'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "serialize",
+            "source": {
+                "start": 4,
+                "length": 2,
+                "path": "~/commune/commune/modules/serializer/types/bytes.py",
+                "code": null,
+                "hash": "sha256:fdcbcd852a1b9a54424d150d95eedccb468f8bfc99f8683aaaa6b9b13f501470",
+                "end": 6
+            }
+        }
+    },
+    "name": "serializer.types.bytes",
+    "key": "5FC9Ez5bqa4jQzAs8sea5jte8HYV1QuxmQoayJiSwb2aPDNS",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:98e58c68f2fa906e12d4ce3468db56e4127203fc062283b0f50e2e3a73f5d576",
+    "time": 1746536231.400269,
+    "signature": "0xf40a31d4ef2e86324e9881c964f15fe2217ad5728b11e9551943df9c407ef00a0dca18c66b3fef9edf92d6b9b142da361117cb8081e743113f06b8a177940686"
+}

@@ -1,0 +1,219 @@
+{
+    "code": {
+        "supabase/supabase.py": "import os\nfrom typing import Dict, List, Any, Optional, Union\nimport requests\nimport json\nfrom .table import TableQuery\n\n\n\nclass SupabaseClient:\n    \"\"\"\n    A Python client for interacting with Supabase.\n    \n    This class provides methods to perform CRUD operations on Supabase tables,\n    handle authentication, and manage storage.\n    \"\"\"\n    \n    def __init__(self, supabase_url: str, supabase_key: str):\n        \"\"\"\n        Initialize the Supabase client.\n        \n        Args:\n            supabase_url: Your Supabase project URL\n            supabase_key: Your Supabase API key\n        \"\"\"\n        self.supabase_url = supabase_url.rstrip('/')\n        self.supabase_key = supabase_key\n        self.headers = {\n            \"apikey\": supabase_key,\n            \"Content-Type\": \"application/json\",\n            \"Prefer\": \"return=representation\"\n        }\n        self.auth_token = None\n    \n    def _build_url(self, path: str) -> str:\n        \"\"\"Build a URL for the Supabase API.\"\"\"\n        return f\"{self.supabase_url}/{path}\"\n    \n    def _handle_response(self, response: requests.Response) -> Dict:\n        \"\"\"Handle the API response.\"\"\"\n        if response.status_code >= 400:\n            raise Exception(f\"Error: {response.status_code}, {response.text}\")\n        return response.json()\n    \n    def set_auth_token(self, token: str) -> None:\n        \"\"\"\n        Set the authentication token for authenticated requests.\n        \n        Args:\n            token: JWT token from sign_in or sign_up\n        \"\"\"\n        self.auth_token = token\n        self.headers[\"Authorization\"] = f\"Bearer {token}\"\n    \n    # Database operations\n    \n    def from_table(self, table_name: str) -> 'TableQuery':\n        \"\"\"\n        Create a query builder for a specific table.\n        \n        Args:\n            table_name: The name of the table to query\n            \n        Returns:\n            TableQuery object for chaining query operations\n        \"\"\"\n        return TableQuery(self, table_name)\n    \n    # Auth operations\n    \n    def sign_up(self, email: str, password: str) -> Dict:\n        \"\"\"\n        Register a new user with email and password.\n        \n        Args:\n            email: User's email\n            password: User's password\n            \n        Returns:\n            Response containing user data and session\n        \"\"\"\n        url = self._build_url(\"auth/v1/signup\")\n        data = {\"email\": email, \"password\": password}\n        response = requests.post(url, headers=self.headers, json=data)\n        result = self._handle_response(response)\n        \n        if \"access_token\" in result:\n            self.set_auth_token(result[\"access_token\"])\n        \n        return result\n    \n    def sign_in(self, email: str, password: str) -> Dict:\n        \"\"\"\n        Sign in an existing user with email and password.\n        \n        Args:\n            email: User's email\n            password: User's password\n            \n        Returns:\n            Response containing user data and session\n        \"\"\"\n        url = self._build_url(\"auth/v1/token?grant_type=password\")\n        data = {\"email\": email, \"password\": password}\n        response = requests.post(url, headers=self.headers, json=data)\n        result = self._handle_response(response)\n        \n        if \"access_token\" in result:\n            self.set_auth_token(result[\"access_token\"])\n        \n        return result\n    \n    def sign_out(self) -> Dict:\n        \"\"\"\n        Sign out the current user.\n        \n        Returns:\n            Response indicating success\n        \"\"\"\n        if not self.auth_token:\n            raise Exception(\"No active session\")\n            \n        url = self._build_url(\"auth/v1/logout\")\n        response = requests.post(url, headers=self.headers)\n        self.auth_token = None\n        self.headers.pop(\"Authorization\", None)\n        return self._handle_response(response)\n    \n    # Storage operations\n    \n    def upload_file(self, bucket: str, path: str, file_path: str) -> Dict:\n        \"\"\"\n        Upload a file to Supabase Storage.\n        \n        Args:\n            bucket: Storage bucket name\n            path: Path within the bucket\n            file_path: Local file path to upload\n            \n        Returns:\n            Response with file metadata\n        \"\"\"\n        url = self._build_url(f\"storage/v1/object/{bucket}/{path}\")\n        \n        with open(file_path, \"rb\") as f:\n            file_data = f.read()\n            \n        # Remove Content-Type for multipart form\n        headers = self.headers.copy()\n        headers.pop(\"Content-Type\", None)\n        \n        response = requests.post(url, headers=headers, data=file_data)\n        return self._handle_response(response)\n    \n    def get_file_url(self, bucket: str, path: str) -> str:\n        \"\"\"\n        Get a public URL for a file.\n        \n        Args:\n            bucket: Storage bucket name\n            path: Path to the file within the bucket\n            \n        Returns:\n            Public URL for the file\n        \"\"\"\n        url = self._build_url(f\"storage/v1/object/public/{bucket}/{path}\")\n        return url\n\n",
+        "supabase/table.py": "\nfrom typing import Any, Dict, List, Union\n\nclass TableQuery:\n    \"\"\"Helper class for building queries against a specific table.\"\"\"\n    \n    def __init__(self, client: 'SupabaseClient', table_name: str):\n        \"\"\"\n        Initialize a query builder for a table.\n        \n        Args:\n            client: SupabaseClient instance\n            table_name: Name of the table to query\n        \"\"\"\n        self.client = client\n        self.table_name = table_name\n        self.query_params = {}\n        self.headers = client.headers.copy()\n    \n    def select(self, columns: str = \"*\") -> 'TableQuery':\n        \"\"\"\n        Specify columns to select.\n        \n        Args:\n            columns: Comma-separated column names or \"*\" for all\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"select\"] = columns\n        return self\n    \n    def eq(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add an equality filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.headers[\"Prefer\"] = \"return=representation\"\n        self.query_params[column] = f\"eq.{value}\"\n        return self\n    \n    def gt(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add a greater than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[column] = f\"gt.{value}\"\n        return self\n    \n    def lt(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add a less than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[column] = f\"lt.{value}\"\n        return self\n    \n    def order(self, column: str, ascending: bool = True) -> 'TableQuery':\n        \"\"\"\n        Add ordering.\n        \n        Args:\n            column: Column to order by\n            ascending: If True, order ascending; if False, descending\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        direction = \"asc\" if ascending else \"desc\"\n        self.query_params[\"order\"] = f\"{column}.{direction}\"\n        return self\n    \n    def limit(self, count: int) -> 'TableQuery':\n        \"\"\"\n        Limit the number of rows returned.\n        \n        Args:\n            count: Maximum number of rows\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"limit\"] = count\n        return self\n    \n    def offset(self, count: int) -> 'TableQuery':\n        \"\"\"\n        Skip a number of rows.\n        \n        Args:\n            count: Number of rows to skip\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"offset\"] = count\n        return self\n    \n    def execute(self) -> List[Dict]:\n        \"\"\"\n        Execute the query and return results.\n        \n        Returns:\n            List of records matching the query\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.get(url, headers=self.headers, params=self.query_params)\n        return self.client._handle_response(response)\n    \n    def insert(self, data: Union[Dict, List[Dict]]) -> Dict:\n        \"\"\"\n        Insert one or more rows.\n        \n        Args:\n            data: Dictionary or list of dictionaries with column values\n            \n        Returns:\n            Inserted records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.post(url, headers=self.headers, json=data)\n        return self.client._handle_response(response)\n    \n    def update(self, data: Dict) -> Dict:\n        \"\"\"\n        Update rows that match the query.\n        \n        Args:\n            data: Dictionary with column values to update\n            \n        Returns:\n            Updated records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.patch(url, headers=self.headers, \n                                 params=self.query_params, json=data)\n        return self.client._handle_response(response)\n    \n    def delete(self) -> Dict:\n        \"\"\"\n        Delete rows that match the query.\n        \n        Returns:\n            Deleted records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        self.headers[\"Prefer\"] = \"return=representation\"\n        response = requests.delete(url, headers=self.headers, params=self.query_params)\n        return self.client._handle_response(response)\n\n"
+    },
+    "schema": {
+        "from_table": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "table_name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Create a query builder for a specific table.\n        \n        Args:\n            table_name: The name of the table to query\n            \n        Returns:\n            TableQuery object for chaining query operations\n        ",
+            "cost": 1,
+            "name": "from_table",
+            "source": {
+                "start": 56,
+                "length": 11,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:9119a8746eb594c6291f1bc1815988e49070d1d5ee7ad7e5cfb4d8a2b82ee7a5",
+                "end": 67
+            }
+        },
+        "get_file_url": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "bucket": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": "\n        Get a public URL for a file.\n        \n        Args:\n            bucket: Storage bucket name\n            path: Path to the file within the bucket\n            \n        Returns:\n            Public URL for the file\n        ",
+            "cost": 1,
+            "name": "get_file_url",
+            "source": {
+                "start": 154,
+                "length": 13,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:bfb1b5205b6602a668fc72c02fac0ae22f138aa53bece51cb17fa4caf87486c3",
+                "end": 167
+            }
+        },
+        "set_auth_token": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "token": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Set the authentication token for authenticated requests.\n        \n        Args:\n            token: JWT token from sign_in or sign_up\n        ",
+            "cost": 1,
+            "name": "set_auth_token",
+            "source": {
+                "start": 44,
+                "length": 9,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:cd43779da0d02c0a1f938349dadff44b23bae3efa028bb4f97888c8d59211fdb",
+                "end": 53
+            }
+        },
+        "sign_in": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "email": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "password": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Sign in an existing user with email and password.\n        \n        Args:\n            email: User's email\n            password: User's password\n            \n        Returns:\n            Response containing user data and session\n        ",
+            "cost": 1,
+            "name": "sign_in",
+            "source": {
+                "start": 91,
+                "length": 20,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:ffae583adcb8d62ee0ffbfab3cf5b4261bf6b56836f394bcc0b0c69099e6b79e",
+                "end": 111
+            }
+        },
+        "sign_out": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Sign out the current user.\n        \n        Returns:\n            Response indicating success\n        ",
+            "cost": 1,
+            "name": "sign_out",
+            "source": {
+                "start": 112,
+                "length": 15,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:8df70d70c504834b89e79e394c0efa8d538323fca380395005d52c9088873c68",
+                "end": 127
+            }
+        },
+        "sign_up": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "email": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "password": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Register a new user with email and password.\n        \n        Args:\n            email: User's email\n            password: User's password\n            \n        Returns:\n            Response containing user data and session\n        ",
+            "cost": 1,
+            "name": "sign_up",
+            "source": {
+                "start": 70,
+                "length": 20,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:2d7ba2274c7304d636f5c0c1de8f34599a47ca178d0d4e3b9714a3b7c9a0321e",
+                "end": 90
+            }
+        },
+        "upload_file": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "bucket": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "file_path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Upload a file to Supabase Storage.\n        \n        Args:\n            bucket: Storage bucket name\n            path: Path within the bucket\n            file_path: Local file path to upload\n            \n        Returns:\n            Response with file metadata\n        ",
+            "cost": 1,
+            "name": "upload_file",
+            "source": {
+                "start": 130,
+                "length": 23,
+                "path": "~/commune/commune/modules/supabase/supabase/supabase.py",
+                "code": null,
+                "hash": "sha256:be281bfba1c62fc24119210043f9b267a7ae566b22bb2b9b32b313eaaa1fd3b8",
+                "end": 153
+            }
+        }
+    },
+    "name": "supabase",
+    "key": "5GbZKdea9zuzXATcaUGrqDMCcHdWPJ4Uiy3fJP8kJ5RJo7ZY",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:860dbae668b8b316e650837b75dc0f73dc20605dd2596f21c51731dd2aea692a",
+    "time": 1746536249.51598,
+    "signature": "0xd6510f410df65867ebc2bc7269efe58991105e599f4483f29461c3382f6ca43250b5580152870f4ad087dd2688a82dc815b9c904240e9a9677262ea792ec268b"
+}

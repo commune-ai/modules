@@ -1,0 +1,71 @@
+{
+    "code": {
+        "task.py": "class BaseTask:\n    description = 'Base task for commune'\n    features = ['url', 'name', 'score']\n\n    def __init__(self, fn='info', params=None):\n        \"\"\"\n        Initialize the task with a function and parameters\n        \"\"\"\n        self.fn = fn\n        self.params = params or {}\n\n    def get_params(self,params=None):\n        \"\"\"\n        Get a sample from the module\n        \"\"\"\n        if params == None:\n            params = {\n                'fn': self.fn,\n                'params': self.params,\n            }\n\n        assert isinstance(params, dict)\n        assert 'fn' in params\n        assert 'params' in params\n\n        return params\n\n    def forward(self,module, params=None):\n        params = self.get_params(params)\n        result =  getattr(module, params['fn'])(**params['params'])\n        assert isinstance(result, dict)\n        assert 'name' in result\n        return 1"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "params": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 28,
+                "length": 6,
+                "path": "~/commune/commune/modules/task/base/task.py",
+                "code": null,
+                "hash": "sha256:6ee9d9abdd04386be80f6e20971f12d0d02c2aa7b50ae2f96fefad2887ce9766",
+                "end": 34
+            }
+        },
+        "get_params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "params": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Get a sample from the module\n        ",
+            "cost": 1,
+            "name": "get_params",
+            "source": {
+                "start": 12,
+                "length": 15,
+                "path": "~/commune/commune/modules/task/base/task.py",
+                "code": null,
+                "hash": "sha256:b0363718aa6d7ca56b118935ba5d232e61028b9da12d247b3026106b902097d3",
+                "end": 27
+            }
+        }
+    },
+    "name": "task.base",
+    "key": "5Fjkqi4cmHT9ZRJV8Qj3HQqC4YZ5Totbv7TQQc8nSpgUiAdJ",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:0753cbc11ab07f60733123c8e32eaae3f3c2ca253ba171d1ae32566250c54ab4",
+    "time": 1746536252.002974,
+    "signature": "0x842ef57a1317dbec81fe88d66de771cc9a52a67f2b48997c43e628b84df8eb65a1b3782a44f943f69ac8269417c9b7465c1e74dbdadd55786d8189fe21b2bc88"
+}

@@ -1,0 +1,52 @@
+{
+    "code": {
+        "fal.py": "import commune as c \nclass Fal:\n    \"\"\"\n    A base class that provides fundamental functionality for commune modules.\n    \"\"\"\n    def __init__(self, **kwargs):\n        \"\"\"\n        Initialize the base class with configurable parameters.\n        Args:\n            **kwargs: Arbitrary keyword arguments to configure the instance\n        \"\"\"\n        # Store configuration as a Munch object for dot notation access\n        self.model = c.module('openrouter')()\n        \n        \n    def forward(self, module: str='explain', *args, stream=1,  **kwargs):\n        \"\"\"\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        \"\"\"\n        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)\n"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "explain",
+                    "type": "str"
+                },
+                "args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "stream": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 16,
+                "length": 11,
+                "path": "~/commune/commune/modules/fal/fal.py",
+                "code": null,
+                "hash": "sha256:5b3694c1e3cd9e84f23812f7f8b5b1fd64164119452e81426632b99613aca40a",
+                "end": 27
+            }
+        }
+    },
+    "name": "fal",
+    "key": "5DvEEihw8ZnUNiDP1f9hvDgd9qmoxWRpvUJjjSaX2WzFXYNM",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:347816b82ba97832389d44a1bb7ad191e1a03c6d77ccc164433a7f8a58197563",
+    "time": 1746536218.644484,
+    "signature": "0x10726328ed1f158e9bf0c0e148608a49992de0689176c05582aae983f75fb01fb03043531c590113bda80b063cbe7ffdf719f9afb57edff0de27e8bd725b3c88"
+}

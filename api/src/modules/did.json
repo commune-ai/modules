@@ -1,0 +1,52 @@
+{
+    "code": {
+        "did.py": "import commune as c \nclass Did:\n    \"\"\"\n    A base class that provides fundamental functionality for commune modules.\n    \"\"\"\n    def __init__(self, **kwargs):\n        \"\"\"\n        Initialize the base class with configurable parameters.\n        Args:\n            **kwargs: Arbitrary keyword arguments to configure the instance\n        \"\"\"\n        # Store configuration as a Munch object for dot notation access\n        self.model = c.module('openrouter')()\n        \n        \n    def forward(self, module: str='explain', *args, stream=1,  **kwargs):\n        \"\"\"\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        \"\"\"\n        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)\n"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "explain",
+                    "type": "str"
+                },
+                "args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "stream": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 16,
+                "length": 11,
+                "path": "~/commune/commune/modules/did/did.py",
+                "code": null,
+                "hash": "sha256:5b3694c1e3cd9e84f23812f7f8b5b1fd64164119452e81426632b99613aca40a",
+                "end": 27
+            }
+        }
+    },
+    "name": "did",
+    "key": "5EeHqJ1GzxtXmqavNBk6r4sXEgC3GsBXiVmHm7P1i8xth6qt",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:9999fa646359f2b10b3d3a275cf870d4fd1875ce532a64ddad5c893af0440e76",
+    "time": 1746536213.342425,
+    "signature": "0xc25f0cd53a132f12fc32e65770f5f401ef5bedd71730542a296742bf6db2035582e6d43bc8b6f571fd960a54076db5ab2010454cc2ac78783a7d106c71271881"
+}

@@ -1,0 +1,56 @@
+{
+    "code": {
+        "agent/plan.py": "\n\nimport os\nimport json\nimport commune as c\n\nclass Agent:\n    def __init__(self, agent='agent'):\n        self.agent = c.module(agent)()\n    def forward(self, text, *extra_text, path='./', run=False, **kwargs):\n        text = text + ' '.join(list(map(str, extra_text)))\n        anchors= ['<START_OUTPUT>','<END_OUTPUT>']\n        prompt = f\"\"\"\n\n        INSTRUCTION:\n        YOU NEED TO PLAN THE NEXT SET OF ACTIONS IN THE COMMAND LINE\n        IF YOU ARE UNSURE YOU CAN READ THE FILE AND THEN DECIDE YOU CAN \n        DECIDE TO RUN THE COMMANDS AND WE CAN FEED IT TO YOU AGAIN SO YOU \n        HAVE MULTIPLE CHANCES TO GET IT RIGHT\n        TASK:\n        {text}\n        CONTEXT:\n        {c.files(path)}\n        OUTPUT FORMAT:\n        {anchors[0]}LIST[dict(cmd:str, reason:str)]{anchors[1]}\n        \"\"\"\n\n        output = ''\n        for ch in self.agent.forward(prompt, **kwargs):\n            output += ch\n            print(ch, end='')\n            if anchors[1] in output:\n                break\n        \n        plan =  json.loads(output.split(anchors[0])[1].split(anchors[1])[0])\n\n        if run:\n            input_response = input(f'Run plan? (y/n): {plan}')\n            if input_response.lower() in ['y', 'yes']:\n                for p in plan:\n                    print('Running command:', p['cmd'])\n                    c.cmd(p['cmd'])\n\n        return plan\n\n   "
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "extra_text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "./",
+                    "type": "str"
+                },
+                "run": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 10,
+                "length": 35,
+                "path": "~/commune/commune/modules/agent/agent/plan.py",
+                "code": null,
+                "hash": "sha256:a27ed830bfbbb9c2b0dd42ebb2201bd0d626a52f5d1a9c88a162a4ff0551b160",
+                "end": 45
+            }
+        }
+    },
+    "name": "agent.plan",
+    "key": "5ExzxfDFVxDX7iSt6zcrov1iTJoCYgzfUVn5CS8NP3YL6uVj",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:e4cd358a58fa23ae201c09537e4dda9cb6d802f0da8f592d5fa301f6c9a76f19",
+    "time": 1746536169.699769,
+    "signature": "0x7e07cf8e1577f8faefeb8365c80534498017876a6140a06976ca3d6fd32cb1530cf9e04cc14a2ad100099b43155fe3de29c60e5bd606ca6d76506d9bbbfe0584"
+}

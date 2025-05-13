@@ -1,0 +1,143 @@
+{
+    "code": {
+        "test.py": "import commune as c\n\n\nclass Test:\n\n    def test_global_params(self):\n        self = c.module('chain')()\n        global_params = self.global_params()\n        assert isinstance(global_params, dict)\n        return {'msg': 'global_params test passed', 'success': True}\n\n    def test_subnet_params(self, subnet=0):\n        self = c.module('chain')()\n        subnet_params = self.subnet_params(subnet=subnet)\n        assert isinstance(subnet_params, dict), f'{subnet_params} is not a dict'\n        return {'msg': 'subnet_params test passed', 'success': True}\n\n\n    def test_module_params(self, keys=['dividends', 'incentive'], subnet=0):\n        self = c.module('chain')()\n        key = self.keys(subnet)[0]\n        module_info = self.module(key, subnet=subnet)\n        assert isinstance(module_info, dict)\n        for k in keys:\n            assert k in module_info, f'{k} not in {module_info}'\n\n        return {'msg': 'module_params test passed', 'success': True, 'module_info': module_info}\n\n\n    def test_substrate(self):\n        self = c.module('chain')()\n        for i in range(3):\n            t1 = c.time()\n            c.print(self.substrate)\n            t2 = c.time()\n            c.print(f'{t2-t1:.2f} seconds')\n        return {'msg': 'substrate test passed', 'success': True}\n\n\n    def test(self):\n        fns = [f for f in dir(self) if 'test_' in f]\n        fn2result = {}\n        fn2error = {}\n        for fn in fns:\n            try:\n                result = getattr(self, fn)()\n                fn2result[fn] = result\n            except Exception as e:\n                fn2error[fn] = {'success': False, 'msg': str(e)}\n        if len(fn2error) > 0:\n            raise Exception(f'Errors: {fn2error}')\n           \n        return fn2result\n\n\n\n\n\n"
+    },
+    "schema": {
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 40,
+                "length": 14,
+                "path": "~/commune/commune/modules/subspace/test.py",
+                "code": null,
+                "hash": "sha256:774e881626b8472d85b9d22b872dfb4b8f5144c2169323c59df983ebff626a1b",
+                "end": 54
+            }
+        },
+        "test_global_params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_global_params",
+            "source": {
+                "start": 6,
+                "length": 5,
+                "path": "~/commune/commune/modules/subspace/test.py",
+                "code": null,
+                "hash": "sha256:687f0c0ce1004baa9cd665e15b500cddb00d307f9199f976dcef2d4784ddf151",
+                "end": 11
+            }
+        },
+        "test_module_params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "keys": {
+                    "value": [
+                        "dividends",
+                        "incentive"
+                    ],
+                    "type": "list"
+                },
+                "subnet": {
+                    "value": 0,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_module_params",
+            "source": {
+                "start": 19,
+                "length": 9,
+                "path": "~/commune/commune/modules/subspace/test.py",
+                "code": null,
+                "hash": "sha256:b927309a33ccf63db2d3c0e7953356101def770b8c8c26b1db893b42fb04fe66",
+                "end": 28
+            }
+        },
+        "test_subnet_params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "subnet": {
+                    "value": 0,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_subnet_params",
+            "source": {
+                "start": 12,
+                "length": 5,
+                "path": "~/commune/commune/modules/subspace/test.py",
+                "code": null,
+                "hash": "sha256:ae831aa52f58c1504e47323a5d66432034e37d3078231072f89fe2c838359f50",
+                "end": 17
+            }
+        },
+        "test_substrate": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test_substrate",
+            "source": {
+                "start": 30,
+                "length": 8,
+                "path": "~/commune/commune/modules/subspace/test.py",
+                "code": null,
+                "hash": "sha256:e57de38b2ba50bef7b2a145afe8f50d1ad6f6a054cd35a14e798905ef9b9fb4b",
+                "end": 38
+            }
+        }
+    },
+    "name": "subspace.test",
+    "key": "5DPWHCVtHq9A863gmvgfBf6CHSwzmh3q9HhMWAYpWn3YXSQU",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:036fd24e2af2595ab485b2b6a55f772c61328783e2d89d3910d0c2e0102deb8a",
+    "time": 1746536245.864265,
+    "signature": "0x02da6bcad476d902bd695ec85fd25b43d1e517d0ed4da4925328b317976260266db4341548749fdfce03db38f887ce003b5c2a5bacdb191f7fe94f0141e05482"
+}

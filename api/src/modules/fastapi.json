@@ -1,0 +1,63 @@
+{
+    "code": {
+        "fastapi.py": "\nimport requests\nclass FastAPI:\n\n    def schema(self, base_url=\"https://api.app.trustedstake.ai/api\"):\n        \"\"\"\n        Retrieves the OpenAPI schema from a FastAPI application.\n        \n        Args:\n            base_url (str): The base URL of the FastAPI application\n            \n        Returns:\n            dict: The OpenAPI schema as a dictionary\n        \"\"\"\n        # FastAPI typically exposes the OpenAPI schema at /openapi.json\n        schema_url = f\"{base_url.rstrip('/')}/openapi.json\"\n        \n        try:\n            response = requests.get(schema_url)\n            response.raise_for_status()  # Raise an exception for HTTP errors\n            return response.json()\n        except requests.exceptions.HTTPError as e:\n            if response.status_code == 404:\n                # Try alternative location\n                alt_schema_url = f\"{base_url.rstrip('/')}/docs/openapi.json\"\n                try:\n                    alt_response = requests.get(alt_schema_url)\n                    alt_response.raise_for_status()\n                    return alt_response.json()\n                except:\n                    print(f\"Could not find schema at {schema_url} or {alt_schema_url}\")\n                    raise e\n            print(f\"HTTP Error: {e}\")\n            raise\n        except requests.exceptions.RequestException as e:\n            print(f\"Request Error: {e}\")\n            raise\n        except json.JSONDecodeError:\n            print(\"Failed to decode JSON response\")\n            raise\n\n    def test(self):\n        \n        api_url=\"https://api.app.trustedstake.ai/api\"\n        try:\n            schema = self.schema(api_url)\n            \n            # Print the schema overview\n            print(f\"API Title: {schema.get('info', {}).get('title')}\")\n            print(f\"Version: {schema.get('info', {}).get('version')}\")\n            print(f\"Number of endpoints: {len(schema.get('paths', {}))}\")\n            \n            # Save the full schema to a file\n            with open(\"fastapi_schema.json\", \"w\") as f:\n                json.dump(schema, f, indent=2)\n            \n            print(\"\\nFull schema saved to 'fastapi_schema.json'\")\n            \n            # Print available endpoints\n            print(\"\\nAvailable Endpoints:\")\n            for path, methods in schema.get('paths', {}).items():\n                for method in methods:\n                    print(f\"{method.upper()} {path}\")\n                    \n        except Exception as e:\n            print(f\"Failed to retrieve schema: {e}\")"
+    },
+    "schema": {
+        "schema": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "base_url": {
+                    "value": "https://api.app.trustedstake.ai/api",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Retrieves the OpenAPI schema from a FastAPI application.\n        \n        Args:\n            base_url (str): The base URL of the FastAPI application\n            \n        Returns:\n            dict: The OpenAPI schema as a dictionary\n        ",
+            "cost": 1,
+            "name": "schema",
+            "source": {
+                "start": 5,
+                "length": 36,
+                "path": "~/commune/commune/modules/fastapi/fastapi.py",
+                "code": null,
+                "hash": "sha256:6e50b0b2d6c0966bfd2a152b6279f71e5c66811b05e8a8a74bdfe6fb54e6d553",
+                "end": 41
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 42,
+                "length": 25,
+                "path": "~/commune/commune/modules/fastapi/fastapi.py",
+                "code": null,
+                "hash": "sha256:9827dd1d898a183bf62f34b025b97db1fc6b980395e97aa3155fef1cb7828fb1",
+                "end": 67
+            }
+        }
+    },
+    "name": "fastapi",
+    "key": "5C5jUJWaFBdGLPPrMSsi6kKEFt9Ptc8VntnA9A7weysKpPnw",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:7c2406f58dc5c740c3bd51f81a8a150a2d8661996502cdaf039720482dabc05c",
+    "time": 1746536218.464438,
+    "signature": "0x1043e409b33ea14795bf6edd483a2649d7205553da8d24b088893f551ef520116e7a5efa9f3e8a0d621aa45b2f76a52f4cc7fcd9fec9c1985a13363490c22781"
+}

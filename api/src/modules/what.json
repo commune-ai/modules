@@ -1,0 +1,52 @@
+{
+    "code": {
+        "what.py": "import commune as c \nclass What:\n    \"\"\"\n    A base class that provides fundamental functionality for commune modules.\n    \"\"\"\n    def __init__(self, **kwargs):\n        \"\"\"\n        Initialize the base class with configurable parameters.\n        Args:\n            **kwargs: Arbitrary keyword arguments to configure the instance\n        \"\"\"\n        # Store configuration as a Munch object for dot notation access\n        self.model = c.module('openrouter')()\n        \n        \n    def forward(self, text, *extra_text, stream=1,  **kwargs):\n        \"\"\"\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        \"\"\"\n        query = ' '.join([text] + list(extra_text))\n        return c.fn('find/')(c.modules())\n"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "extra_text": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "stream": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 16,
+                "length": 12,
+                "path": "~/commune/commune/modules/what/what.py",
+                "code": null,
+                "hash": "sha256:5bce46c0a2724a611900ae33c494576eae0ef907fe192b20b6fe01fe7ada9b69",
+                "end": 28
+            }
+        }
+    },
+    "name": "what",
+    "key": "5EAcXRiAhabqXLXGCZAyuxWrcbyYrpe3pofzkHsCqcvsT9A7",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:950af711fe11bf2e27436e2ec307b09190cf7635871331e067483a2ba44d0c1e",
+    "time": 1746536278.115325,
+    "signature": "0x4a22b49d8639512ae32e61edbae24afb33c67956f4d622a41bee6dbbf09c992e05c802f361a4b9a102c8d11e5aa766c7e83f57c860776b2e143ad13855288584"
+}

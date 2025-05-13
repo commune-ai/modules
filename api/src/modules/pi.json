@@ -1,0 +1,52 @@
+{
+    "code": {
+        "pi/pi.py": "import commune as c \nclass PiPi:\n    \"\"\"\n    A base class that provides fundamental functionality for commune modules.\n    \"\"\"\n    def __init__(self, **kwargs):\n        \"\"\"\n        Initialize the base class with configurable parameters.\n        Args:\n            **kwargs: Arbitrary keyword arguments to configure the instance\n        \"\"\"\n        # Store configuration as a Munch object for dot notation access\n        self.model = c.module('openrouter')()\n        \n        \n    def forward(self, module: str='explain', *args, stream=1,  **kwargs):\n        \"\"\"\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        \"\"\"\n        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)\n"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "explain",
+                    "type": "str"
+                },
+                "args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "stream": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Dynamically call a method of the class.\n        Args:\n            fn_name (str): Name of the method to call\n            *args: Positional arguments to pass to the method\n            **kwargs: Keyword arguments to pass to the method\n        Returns:\n            Result of the called method\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 16,
+                "length": 11,
+                "path": "~/commune/commune/modules/pi/pi/pi.py",
+                "code": null,
+                "hash": "sha256:5b3694c1e3cd9e84f23812f7f8b5b1fd64164119452e81426632b99613aca40a",
+                "end": 27
+            }
+        }
+    },
+    "name": "pi",
+    "key": "5C5Hmv2DRPTRB3skW7zbM9vhGW6eLXchwCyx4ogjAx4jKSV8",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:aa45ee6b2b1d53b9d23474b3975acedda9424ecc5f3efd291f35885a6c545e7a",
+    "time": 1746536228.145493,
+    "signature": "0x689e1d90703eb8fc1abfa64af8a623b360d5b23b234d140d2ed9d45743556c5784271a367586a0b78557083789f2bf62549339a1ed026134e4580ef43285e081"
+}

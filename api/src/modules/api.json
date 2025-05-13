@@ -1,0 +1,587 @@
+{
+    "code": {
+        "src/__init__.py": "",
+        "src/api.py": "from fastapi import FastAPI, HTTPException\nimport uvicorn\nimport os\nimport json\nfrom pydantic import BaseModel\nfrom typing import Dict, Optional\nimport commune as c \n# Pydantic model for module dat\nimport requests\nimport requests\nfrom .utils import load_json, save_json, logs\n\nclass Api:\n    tempo = 600\n    port = 8000\n    app_name =  __file__.split('/')[-3] + '_app' \n    model='anthropic/claude-3.5-sonnet'\n    free = True\n    endpoints = [\n                'modules', \n                'add_module', \n                'remove', \n                'update', \n                'test', \n                'get_module',\n                'info', \n                'functions']\n\n    modules_path = __file__.replace(__file__.split('/')[-1], 'modules')\n\n    def get_info(self, module:str='module', **kwargs):\n        return c.info(module, **kwargs)\n\n    def infos(self, \n                        tempo=None, \n                        update=False, \n                        lite=False, \n                        page=1, \n                        timeout=30, \n                        page_size=100, \n                        verbose=False):\n        modules =  c.get_modules() \n        tempo = tempo or self.tempo\n        params_id = c.hash({'lite': lite})\n        path = self.resolve_path(f'modules/{params_id}')\n        module_infos = c.get(path,[], max_age=tempo, update=update)\n        if len(module_infos) == 0:\n            progress = c.tqdm(modules, desc=\"Loading modules\", unit=\"module\")\n            module_infos = []\n            future2module = {}\n            for module in c.get_modules():\n                future = c.submit(c.info, {'module': module, 'lite': lite, 'timeout': timeout})  \n                future2module[future] = module \n\n\n            try:\n                for future in c.as_completed(future2module):\n                    module = future2module[future]\n                    try:\n                        module_infos.append(info)\n                        progress.update(1)\n                    except Exception as e:\n                        if verbose:\n                            print(f\"Error loading module {module}: {e}\")\n            except Exception as e:\n                pass\n                \n            c.put(path, module_infos)\n        # get the page\n        if page is not None:\n            start = (page - 1) * page_size\n            end = start + page_size\n            module_infos = module_infos[start:end]\n        return module_infos\n\n    def names(self):\n        return [m['name'] for m in self.module_infos()]\n\n    def get_module(self, module:str, **kwargs):\n        info =  c.info(module, lite=False, **kwargs)\n        prefix = info['name'].split('.')[0]\n        return info\n\n    def get_module_path(self, module):\n        return f\"{self.modules_path}/{module}.json\"\n\n    def ls(self, path=modules_path):\n        if not os.path.exists(path):\n            print('WARNING IN LS --> Path does not exist:', path)\n            return []\n        path = os.path.abspath(path)\n        return c.ls(path)\n\n    def logs(name):\n        return c.logs(name)\n\n    def check_module(self, module):\n        features = ['name', 'url', 'key']  \n        if isinstance(module, str):\n            module = self.get_module(module)\n        if not isinstance(module, dict):\n            return False\n        assert all([f in module for f in features]), f\"Missing feature in module: {module}\"\n        return True\n\n    def check_modules(self):\n        checks = []\n        for m in self.module_infos():\n            try:\n                self.check_module(m)\n                m['check'] = True\n            except Exception as e:\n                print(e)\n                m['check'] = False\n            checks += [m]\n        return checks\n\n    def save_module(self, module):\n        self.check_module(module)\n        module_path = self.get_module_path(module[\"name\"])\n        save_json(module_path, module)\n        return {\"message\": f\"Module {module['key']} updated successfully\"}\n\n    def clear_modules(self):\n        for module_path in self.ls(self.modules_path):\n            print('Removing:', module_path)\n            os.remove(module_path)\n        return {\"message\": \"All modules removed\"}\n    \n    def resolve_path(self, path):\n        return os.path.expanduser('~/.hub/api/') + path\n\n    def info(self, module:str, **kwargs):\n        return c.info(module,  **kwargs)\n\n    def add_module(self, \n                   name  = \"module\", \n                   key  = \"module_key\", \n                   code = None, \n                   url  = \"0.0.0.0:8000\", \n                   app = None,\n                   **kwargs ):\n        \n        module = { \"name\": name, \"url\": url, \"key\": key, \"code\": code,  **kwargs }\n        self.save_module(module)\n        result =  {\"message\": f\"Module {module['name']} added successfully\", \"module\": module}\n        print('RESULT',result)\n        return result\n\n    def root():\n        return {\"message\": \"Module Management API\"}\n\n\n    def remove(self, module: str):\n        assert self.module_exists(module), \"Module not found\"\n        os.remove(self.get_module_path(module))\n        return {\"message\": f\"Module {module} removed successfully\"}\n\n    def module_exists(self, module: str):\n        return os.path.exists(self.get_module_path(module))\n\n    def update(self, module: str):\n        if not self.module_exists(module):\n            raise HTTPException(status_code=404, detail=\"Module not found\")\n        module = self.get_module(module)\n        \n        self.save_module(module, module)\n\n    def test(self):\n        \n        # Test module data\n        test_module = {\n            \"name\": \"test_module\",\n            \"url\": \"http://test.com\",\n            \"key\": \"test_key\",\n            \"key_type\": \"string\",\n            \"description\": \"Test module description\"\n        }\n        # Add module\n        self.add_module(test_module)\n        assert self.module_exists(test_module['name']), \"Module not added\"\n        self.remove_module(test_module['name'])\n        assert not self.module_exists(test_module['name']), \"Module not removed\"\n        return {\"message\": \"All tests passed\"}\n    \n\n    def get_key(self, password, **kwargs):\n        return c.str2key(password, **kwargs)\n",
+        "src/user.py": "\nimport commune as c\nclass User(object):\n    def __init__(self, password=\"whadup\"):\n        self.key = c.str2key(c.hash(password))\n\n    def get_name(self):\n        return self.name\n\n    def get_age(self):\n        return self.age\n\n    def __str__(self):\n        return \"User(name={}, age={})\".format(self.name, self.age)",
+        "src/utils.py": "\nimport json\nimport commune as c\nimport os\n\n\n\ndef expanduser(path):\n    return os.path.expanduser(path)\n\ndef load_json(file_path):\n    try:\n        with open(file_path, 'r') as f:\n            return json.load(f)\n    except:\n        return {}\n\ndef save_json(file_path, data):\n    dir_path = os.path.dirname(file_path)\n    if not os.path.isdir(dir_path):\n        os.makedirs(dir_path, exist_ok=True)\n    with open(file_path, 'w') as f:\n        json.dump(data, f, indent=4)\n\ndef logs(name):\n    return c.logs(name)\n    "
+    },
+    "schema": {
+        "add_module": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "key": {
+                    "value": "module_key",
+                    "type": "str"
+                },
+                "code": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "url": {
+                    "value": "0.0.0.0:8000",
+                    "type": "str"
+                },
+                "app": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "add_module",
+            "source": {
+                "start": 136,
+                "length": 13,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:3fc0708fec1aa0d82f55fb0420e1ce2eafb8d76cce11c45258c2056ff9817517",
+                "end": 149
+            }
+        },
+        "check_module": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "check_module",
+            "source": {
+                "start": 97,
+                "length": 8,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:98d760c311d708932cf79420e1dacd5ae0a97a5da437d24d657cc6cbc8fba344",
+                "end": 105
+            }
+        },
+        "check_modules": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "check_modules",
+            "source": {
+                "start": 106,
+                "length": 11,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:1a7223a71d9c92cec32c065fee9bc9d975108c510529dfb948130a645a3fa2c8",
+                "end": 117
+            }
+        },
+        "clear_modules": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "clear_modules",
+            "source": {
+                "start": 124,
+                "length": 5,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:e93d72a59ad4d42ce1821bb2285d44092c83bdbaaf3d0615b2d80cf6ee6d6629",
+                "end": 129
+            }
+        },
+        "get_info": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_info",
+            "source": {
+                "start": 31,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:aab77007ca5a82de4f9bb2a8b9978c73b2b3040472cae9170c507faf7ce5dc54",
+                "end": 33
+            }
+        },
+        "get_key": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "password": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_key",
+            "source": {
+                "start": 187,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:3e0e4c8008191b7e0e21ed5a4fe9fb747b6f22acc6364e5fb08aff0600927784",
+                "end": 189
+            }
+        },
+        "get_module": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_module",
+            "source": {
+                "start": 79,
+                "length": 4,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:fc2f50bd7efc086059817ddd90d3e4d86379d09bfb68b45de92d16721aa6f416",
+                "end": 83
+            }
+        },
+        "get_module_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_module_path",
+            "source": {
+                "start": 84,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:bae771c31f1a776647137adcd3b445714e42f6c01c11e78d4ce97628a155da04",
+                "end": 86
+            }
+        },
+        "info": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "info",
+            "source": {
+                "start": 133,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:44fd2bca3d4a1bcfb561d089923040bbf57141d5c98d8b37dc2d932008a43650",
+                "end": 135
+            }
+        },
+        "infos": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "tempo": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "lite": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "page": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "timeout": {
+                    "value": 30,
+                    "type": "int"
+                },
+                "page_size": {
+                    "value": 100,
+                    "type": "int"
+                },
+                "verbose": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "infos",
+            "source": {
+                "start": 34,
+                "length": 41,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:c1e1e86ab7a42ee565270f8f3b9d2acafb75c5e86d33c2fe1817e80451adc986",
+                "end": 75
+            }
+        },
+        "logs": {
+            "input": {
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "logs",
+            "source": {
+                "start": 94,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:bc47ff681fcafc784c42f4eef6f22107093a94cf115d43f0ba3cb8a7ca72ae10",
+                "end": 96
+            }
+        },
+        "ls": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "/Users/homie/commune/commune/modules/api/src/modules",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "ls",
+            "source": {
+                "start": 87,
+                "length": 6,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:14453b4ceeb9646bcdb9362e76f31bc34dab6573e06d7a48376231dce5a9a918",
+                "end": 93
+            }
+        },
+        "module_exists": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "module_exists",
+            "source": {
+                "start": 159,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:d8de6928a8dc46719cf7bc6c842126fc112d845c5a2664ccd39e1d905ed54f7e",
+                "end": 161
+            }
+        },
+        "names": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "names",
+            "source": {
+                "start": 76,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:62e647d155d91e64fc9233e6bda03998d77ee315a3303c77b953e35868a22fc9",
+                "end": 78
+            }
+        },
+        "remove": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "remove",
+            "source": {
+                "start": 154,
+                "length": 4,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:030171c995474c869a032c7c7b139bc8b9839ac82761b0724ef21f3cff4f065f",
+                "end": 158
+            }
+        },
+        "resolve_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "resolve_path",
+            "source": {
+                "start": 130,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:0e5afc30c37a7a3db8dc389499628965aff5eb34a672e6a568da10bc975d5f6e",
+                "end": 132
+            }
+        },
+        "root": {
+            "input": {},
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "root",
+            "source": {
+                "start": 150,
+                "length": 2,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:a9638de0646b54ed0371ee899b50f74f9c600ca355628db077737692585e6a51",
+                "end": 152
+            }
+        },
+        "save_module": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "save_module",
+            "source": {
+                "start": 118,
+                "length": 5,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:03a7897cfc611c8564768527231b5b5e77fc50631edb8f631a32361e3ec88928",
+                "end": 123
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 169,
+                "length": 16,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:beacc6239c9ffc824da5f09006305ea9e94b31d5db3f065be9b8bbc12cc8ec69",
+                "end": 185
+            }
+        },
+        "update": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "update",
+            "source": {
+                "start": 162,
+                "length": 6,
+                "path": "~/commune/commune/modules/api/src/api.py",
+                "code": null,
+                "hash": "sha256:e8ad04afd1841cd36d4775b9f7aca5cd91e421759dcdead24587f7064d81f5a7",
+                "end": 168
+            }
+        }
+    },
+    "name": "api",
+    "key": "5C85Bx8YWCQe6XQiKePMwCiQqREzDaCYpt6RgpUDMCBEgH2D",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:ad5e52f4805049ad6fc2f0f9bf2ae071870a881c5486a9277dd1027da3bf85cd",
+    "time": 1746536170.054358,
+    "signature": "0x380fd4815ddeb93ca1c34143e730f5661c427f5de61c4386aada4e0577d22e38c2b9dce77f3920bb5a1647453eb496f647a2883bee1849db0a9d2299234ccb88"
+}

@@ -1,0 +1,142 @@
+{
+    "code": {
+        "select_files.py": "\nimport commune as c\nimport json\nimport os\nfrom typing import List, Dict, Union, Optional, Any\n\nprint = c.print\nclass SelectFiles:\n    \"\"\"\n    Advanced search and relevance ranking module powered by LLMs.\n    \n    This module helps find the most relevant items from a list of options based on a query,\n    using LLM-based semantic understanding to rank and filter options.\n    \"\"\"\n\n    def __init__(self, provider='dev.model.openrouter'):\n        \"\"\"\n        Initialize the Find module.\n        \n        Args:\n            model: Pre-initialized model instance (optional)\n            default_provider: Provider to use if no model is provided\n            default_model: Default model to use for ranking\n        \"\"\"\n        self.model = c.module(provider)()\n\n    def forward(self,  \n              query: str = 'most relevant', \n              path: Union[List[str], Dict[Any, str]] = './',  \n              n: int = 10,  \n              trials: int = 3,\n              min_score: int = 0,\n              max_score: int = 10,\n              threshold: int = 5,\n              model: str = None,\n              context: Optional[str] = None,\n              temperature: float = 0.5,\n              allow_selection: bool = False,\n              verbose: bool = True) -> List[str]:\n        \"\"\"\n        Find the most relevant options based on a query.\n        \n        Args:\n            options: List of options or dictionary of options\n            query: Search query to match against options\n            n: Maximum number of results to return\n            trials: Number of retry attempts if an error occurs\n            min_score: Minimum possible score\n            max_score: Maximum possible score\n            threshold: Minimum score required to include in results\n            model: Model to use for ranking\n            context: Additional context to help with ranking\n            temperature: Temperature for generation (lower = more deterministic)\n            allow_selection: Whether to allow user to select files by index\n            verbose: Whether to print output during generation\n            \n        Returns:\n            List of the most relevant options\n        \"\"\"\n        \n\n        anchors = [\"<START_JSON>\", \"</END_JSON>\"]\n        options = self.files(path)\n        home_path = os.path.expanduser(\"~\")\n        idx2options = {i: option.replace(home_path, '~') for i, option in enumerate(options)}\n        if not idx2options:\n            return []\n           \n        # Format context if provided\n        context_str = f\"\\nCONTEXT:\\n{context}\" if context else \"\"\n        \n        # Build the prompt\n\n        prompt = f'''\n        --QUERY--\n        {query}\n        {context_str}\n        --OPTIONS--\n        {idx2options} \n        --RULES--\n        - Evaluate each option based on its relevance to the query\n        - Return at most {n} options with their scores\n        - Score range: {min_score} (lowest) to {max_score} (highest)\n        - Only include options with scores >= {threshold}\n        - Be conservative with scoring to prioritize quality over quantity\n        - Respond ONLY with the JSON format specified below\n        --OUTPUT_FORMAT--\n        {anchors[0]}(data:(idx:INT, score:INT)]){anchors[1]}\n        '''\n        \n        # Generate the response\n        output = ''\n\n        response = self.model.forward( \n            prompt, \n            model=model, \n            stream=True,\n            temperature=temperature\n        )\n        for ch in response: \n            if verbose:\n                print(ch, end='')\n            output += ch\n            if anchors[1] in output:\n                break\n                \n        # Extract and parse the JSON\n        try:\n            if anchors[0] in output:\n                json_str = output.split(anchors[0])[1].split(anchors[1])[0]\n            else:\n                json_str = output\n                \n            if verbose:\n                print(\"\\nParsing response...\", color=\"cyan\")\n                \n            result = json.loads(json_str)\n            \n            # Validate the response structure\n            if not isinstance(result, dict) or \"data\" not in result:\n                if verbose:\n                    print(\"Invalid response format, missing 'data' field\", color=\"red\")\n                result = {\"data\": []}\n                \n            # Filter and convert to final output format\n            filtered_options = []\n            for item in result[\"data\"]:\n                if isinstance(item, dict) and \"idx\" in item and \"score\" in item:\n                    idx, score = item[\"idx\"], item[\"score\"]\n                    if score >= threshold and idx in idx2options:\n                        filtered_options.append((idx, idx2options[idx]))         \n            if verbose:\n                print(f\"Found {filtered_options} relevant options\", color=\"green\")\n            # Allow user to select files by index if requested\n            if allow_selection and filtered_options:\n                selected_options = self.select_by_index(filtered_options, verbose)\n                return [option[1] for option in selected_options]\n            return [os.path.expanduser(option[1]) for option in filtered_options]\n            \n        except json.JSONDecodeError as e:\n            if verbose:\n                print(f\"JSON parsing error: {e}\", color=\"red\")\n                print(f\"Raw output: {output}\", color=\"red\")\n            if trials > 0:\n                print(f\"Retrying... ({trials} attempts left)\", color=\"yellow\")\n                return self.forward(options, query, n, trials - 1, min_score, max_score, threshold, model, context, temperature, allow_selection, verbose)\n            raise ValueError(f\"Failed to parse LLM response as JSON: {e}\")\n    \n    def select_by_index(self, options, verbose=True):\n        \"\"\"\n        Allow user to select files by index from a list of options.\n        \n        Args:\n            options: List of tuples containing (idx, option)\n            verbose: Whether to print output during selection\n            \n        Returns:\n            List of selected options\n        \"\"\"\n        if verbose:\n            print(\"\\nSelect files by index (comma-separated, e.g. '0,2,3')\", color=\"yellow\")\n            print(\"Press Enter to accept all files, or Ctrl+C to cancel\", color=\"yellow\")\n            \n        # Display options with indices\n        for i, (idx, option) in enumerate(options):\n            print(f\"[{i}] {option}\", color=\"cyan\")\n        \n        try:\n            # Get user input\n            selection = input(\"\\nEnter indices of files to select: \")\n            \n            # If empty, select all\n            if not selection.strip():\n                if verbose:\n                    print(\"Selecting all files\", color=\"green\")\n                return options\n            \n            # Parse selection\n            selected_indices = [int(idx.strip()) for idx in selection.split(',') if idx.strip().isdigit()]\n            selected_options = [options[idx] for idx in selected_indices if 0 <= idx < len(options)]\n            \n            if verbose:\n                print(f\"Selected {len(selected_options)} files\", color=\"green\")\n            \n            return selected_options\n            \n        except (KeyboardInterrupt, EOFError):\n            # Handle keyboard interrupt (Ctrl+C) or EOF\n            if verbose:\n                print(\"\\nSelection cancelled, defaulting to all files\", color=\"yellow\")\n            return options\n        except Exception as e:\n            # Handle any other errors\n            if verbose:\n                print(f\"\\nError during selection: {e}\", color=\"red\")\n                print(\"Defaulting to all files\", color=\"yellow\")\n            return options\n\n    def files(self, path: str) -> List[str]:\n        return c.files(path)"
+    },
+    "schema": {
+        "files": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "files",
+            "source": {
+                "start": 199,
+                "length": 2,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/select_files.py",
+                "code": null,
+                "hash": "sha256:e1373dde9bd44648503335d2c2140e8fce24ff48b76ac8a7a428be595ca28a96",
+                "end": 201
+            }
+        },
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "query": {
+                    "value": "most relevant",
+                    "type": "str"
+                },
+                "path": {
+                    "value": "./",
+                    "type": "str"
+                },
+                "n": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "trials": {
+                    "value": 3,
+                    "type": "int"
+                },
+                "min_score": {
+                    "value": 0,
+                    "type": "int"
+                },
+                "max_score": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "threshold": {
+                    "value": 5,
+                    "type": "int"
+                },
+                "model": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "context": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "temperature": {
+                    "value": 0.5,
+                    "type": "float"
+                },
+                "allow_selection": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": "\n        Find the most relevant options based on a query.\n        \n        Args:\n            options: List of options or dictionary of options\n            query: Search query to match against options\n            n: Maximum number of results to return\n            trials: Number of retry attempts if an error occurs\n            min_score: Minimum possible score\n            max_score: Maximum possible score\n            threshold: Minimum score required to include in results\n            model: Model to use for ranking\n            context: Additional context to help with ranking\n            temperature: Temperature for generation (lower = more deterministic)\n            allow_selection: Whether to allow user to select files by index\n            verbose: Whether to print output during generation\n            \n        Returns:\n            List of the most relevant options\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 27,
+                "length": 121,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/select_files.py",
+                "code": null,
+                "hash": "sha256:35e51a81a8d4a133982d70cd600e5bb2f0462ba510762551d794b5f93c368bb0",
+                "end": 148
+            }
+        },
+        "select_by_index": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "options": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Allow user to select files by index from a list of options.\n        \n        Args:\n            options: List of tuples containing (idx, option)\n            verbose: Whether to print output during selection\n            \n        Returns:\n            List of selected options\n        ",
+            "cost": 1,
+            "name": "select_by_index",
+            "source": {
+                "start": 149,
+                "length": 49,
+                "path": "~/commune/commune/modules/dev/src/dev/tool/select_files.py",
+                "code": null,
+                "hash": "sha256:03b08945c2b89716b8048f071e6a441c81f2b6bb1cf4fc0362b2415a3ac04716",
+                "end": 198
+            }
+        }
+    },
+    "name": "dev.tool.select_files",
+    "key": "5GwxBefs3imkU2q5xdu7s4DPw5z777s6hXdRcUfN39pRrgnc",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:547449b9b0a90019eb9dac6e93cbe635536cc5ded1140e823e1fc2a0d4aed1a9",
+    "time": 1746536302.104956,
+    "signature": "0x981b90131bbdf74a3bf2aff5c468cbab2ad18b79a51a736d89c4c3a35116967bf8d29644b4e09abc660e49ce4edcbfeebd4fde5596ba8fc5af4276bd49cfb58a"
+}

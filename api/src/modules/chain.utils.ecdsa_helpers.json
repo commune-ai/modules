@@ -1,0 +1,36 @@
+{
+    "code": {
+        "ecdsa_helpers.py": "# Python Substrate Interface Library\n#\n# Copyright 2018-2021 Stichting Polkascan (Polkascan Foundation).\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n# http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nimport hashlib\nimport hmac\nimport struct\n\nfrom ecdsa.curves import SECP256k1\nfrom eth_keys.datatypes import Signature, PrivateKey\nfrom eth_utils import to_checksum_address, keccak as eth_utils_keccak\n\nBIP39_PBKDF2_ROUNDS = 2048\nBIP39_SALT_MODIFIER = \"mnemonic\"\nBIP32_PRIVDEV = 0x80000000\nBIP32_CURVE = SECP256k1\nBIP32_SEED_MODIFIER = b'Bitcoin seed'\nETH_DERIVATION_PATH = \"m/44'/60'/0'/0\"\n\n\nclass PublicKey:\n    def __init__(self, private_key):\n        self.point = int.from_bytes(private_key, byteorder='big') * BIP32_CURVE.generator\n\n    def __bytes__(self):\n        xstr = int(self.point.x()).to_bytes(32, byteorder='big')\n        parity = int(self.point.y()) & 1\n        return (2 + parity).to_bytes(1, byteorder='big') + xstr\n\n    def address(self):\n        x = int(self.point.x())\n        y = int(self.point.y())\n        s = x.to_bytes(32, 'big') + y.to_bytes(32, 'big')\n        return to_checksum_address(eth_utils_keccak(s)[12:])\n\n\ndef mnemonic_to_bip39seed(mnemonic, passphrase):\n    mnemonic = bytes(mnemonic, 'utf8')\n    salt = bytes(BIP39_SALT_MODIFIER + passphrase, 'utf8')\n    return hashlib.pbkdf2_hmac('sha512', mnemonic, salt, BIP39_PBKDF2_ROUNDS)\n\n\ndef bip39seed_to_bip32masternode(seed):\n    h = hmac.new(BIP32_SEED_MODIFIER, seed, hashlib.sha512).digest()\n    key, chain_code = h[:32], h[32:]\n    return key, chain_code\n\n\ndef derive_bip32childkey(parent_key, parent_chain_code, i):\n    assert len(parent_key) == 32\n    assert len(parent_chain_code) == 32\n    k = parent_chain_code\n    if (i & BIP32_PRIVDEV) != 0:\n        key = b'\\x00' + parent_key\n    else:\n        key = bytes(PublicKey(parent_key))\n    d = key + struct.pack('>L', i)\n    while True:\n        h = hmac.new(k, d, hashlib.sha512).digest()\n        key, chain_code = h[:32], h[32:]\n        a = int.from_bytes(key, byteorder='big')\n        b = int.from_bytes(parent_key, byteorder='big')\n        key = (a + b) % int(BIP32_CURVE.order)\n        if a < BIP32_CURVE.order and key != 0:\n            key = key.to_bytes(32, byteorder='big')\n            break\n        d = b'\\x01' + h[32:] + struct.pack('>L', i)\n    return key, chain_code\n\n\ndef parse_derivation_path(str_derivation_path):\n    path = []\n    if str_derivation_path[0:2] != 'm/':\n        raise ValueError(\"Can't recognize derivation path. It should look like \\\"m/44'/60/0'/0\\\".\")\n    for i in str_derivation_path.lstrip('m/').split('/'):\n        if \"'\" in i:\n            path.append(BIP32_PRIVDEV + int(i[:-1]))\n        else:\n            path.append(int(i))\n    return path\n\n\ndef mnemonic_to_ecdsa_private_key(mnemonic: str, str_derivation_path: str = None, passphrase: str = \"\") -> bytes:\n\n    if str_derivation_path is None:\n        str_derivation_path = f'{ETH_DERIVATION_PATH}/0'\n\n    derivation_path = parse_derivation_path(str_derivation_path)\n    bip39seed = mnemonic_to_bip39seed(mnemonic, passphrase)\n    master_private_key, master_chain_code = bip39seed_to_bip32masternode(bip39seed)\n    private_key, chain_code = master_private_key, master_chain_code\n    for i in derivation_path:\n        private_key, chain_code = derive_bip32childkey(private_key, chain_code, i)\n    return private_key\n\n\ndef ecdsa_sign(private_key: bytes, message: bytes) -> bytes:\n    signer = PrivateKey(private_key)\n    return signer.sign_msg(message).to_bytes()\n\n\ndef ecdsa_verify(signature: bytes, data: bytes, address: bytes) -> bool:\n    signature_obj = Signature(signature)\n    recovered_pubkey = signature_obj.recover_public_key_from_msg(data)\n    return recovered_pubkey.to_canonical_address() == address\n"
+    },
+    "schema": {
+        "address": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "address",
+            "source": {
+                "start": 42,
+                "length": 5,
+                "path": "~/commune/commune/core/chain/utils/ecdsa_helpers.py",
+                "code": null,
+                "hash": "sha256:5c9a6c754963cb96cfcae6f9aca8407f94505e9bdea9c2ff5a1a90a53696f220",
+                "end": 47
+            }
+        }
+    },
+    "name": "chain.utils.ecdsa_helpers",
+    "key": "5HjJSxzRRM2MdvjeLHamM6JqxwEZFzzaqLbMqPCxrCtkhVz7",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:d4d4ec46fa5906b48c16868b41639901bc50041e5c9cd890d6a8c8b2cb799c6b",
+    "time": 1746536277.4648268,
+    "signature": "0xb8b0ac95e202b681e14ab2fb58c032690f94eec3f8ba1e123f080e63ce041a1c2189f4436caef00753c9d0535c5926cc88e0e85db0d168c9865d04d1bc466b81"
+}

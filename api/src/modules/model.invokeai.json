@@ -1,0 +1,12 @@
+{
+    "code": {
+        "model.py": "\n\nclass Invoke:\n    code_url = 'https://github.com/invoke-ai/InvokeAI.git'\n"
+    },
+    "schema": {},
+    "name": "model.invokeai",
+    "key": "5F7WF2LLCDHwVFxuRhvUAFih8R5hf6xgRNPtvfLXCNLxTeEe",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:50d3c467388ec717442ff4727c6f5de0e4da1d3f644f2513684288b028998340",
+    "time": 1746536224.163892,
+    "signature": "0x302da75cd2d8b4fa4dd52fb16ad8b4db3047eca0f97a65959c7c60456e357415f4e878e70c2f8bf8b5699858db261ac84b10c7c553d2b07891b16b1655fab288"
+}

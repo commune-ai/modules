@@ -1,0 +1,364 @@
+{
+    "code": {
+        "txhistory.py": "import os\nimport json\nimport datetime\nimport pandas as pd\nfrom typing import List, Optional, Union, Dict, Any\nimport commune as c\n\nclass History:\n    def __init__(self, path: Optional = None):\n        \"\"\"\n        Initialize the History class to manage server call history\n        \n        Args:\n            server: The server instance this history belongs to\n            storage_path: Path to store history data\n            tempo: Maximum age of history records in seconds\n        \"\"\"\n        self.storage_path =  path or c.abspath('~/commune/history')\n        \n    def save_data(self,path:str, data: Dict) -> Dict:\n        \"\"\"Save call data to history\"\"\"\n        path = f'{self.storage_path}/{path}'\n        c.put(path, data) # save the call data\n        return {'message': f'Saved data to {path}', 'success': True}\n    \n    def call_paths(self, address: str = '') -> List:\n        \"\"\"Get all call paths for a specific address\"\"\"\n        path = self.storage_path + '/' + address\n        user_paths = c.glob(path)\n        return sorted(user_paths, key=self.get_path_time)\n    \n    def get_path_time(self, path: str) -> float:\n        \"\"\"Extract timestamp from path\"\"\"\n        path_time = os.path.getmtime(path)\n        if isinstance(path_time, str):\n            path_time = float(path_time)\n        return path_time\n    \n    def get_path_age(self, path: str) -> float:\n        \"\"\"Calculate age of a path in seconds\"\"\"\n        return c.time() - self.get_path_time(path)\n    \n    def path2age(self, address: str = 'module') -> Dict:\n        \"\"\"Map paths to their ages\"\"\"\n        user_paths = self.call_paths(address)\n        user_path2time = {p: self.get_path_age(p) for p in user_paths}\n        return user_path2time\n    \n    def get_history(self, address: str = '', paths: Optional[List] = None, df: bool = True, features: List = ['time', 'fn', 'cost', 'duration', 'client', 'server']) -> Union[pd.DataFrame, List[Dict]]:\n        \"\"\"\n        Get history data for a specific address\n        \n        Args:\n            address: The address to get history for\n            paths: Optional list of paths to load from\n            as_df: Whether to return as pandas DataFrame\n            features: Features to include\n            \n        Returns:\n            DataFrame or list of history records\n        \"\"\"\n        paths = paths or self.call_paths(address)\n        history = [c.get_json(p)[\"data\"] for p in paths]\n        history = [h for h in history if isinstance(h, dict) and all([f in h for f in features])]\n        print(f'History({address}) --> {len(history)}')\n        \n        if df:\n            history =c.df(history)\n            if len(history) == 0:\n                return history\n                \n            history['age'] = history['time'].apply(lambda x:c.time() - float(x))\n            history['time'] = history['time'].apply(lambda x: datetime.datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S') \n                                         if isinstance(x, float) else x)\n\n            def headers2key(x):\n                if isinstance(x, dict):\n                    k = x.get('key', None)\n                    return address2key.get(k, k)\n                return x\n\n            history['client'] = history['client'].apply(lambda x: headers2key(x))\n            history['server'] = history['server'].apply(lambda x: headers2key(x))\n            \n            display_features = ['fn', 'cost', 'time', 'duration', 'age', 'client', 'server']\n            return history[display_features]\n        \n        return history\n    \n    def clear_history(self, address: str = 'module') -> Dict[str, Any]:\n        \"\"\"Clear history for a specific address\"\"\"\n        paths = self.call_paths(address)\n        for p in paths:\n           c.rm(p)\n        assert len(self.call_paths(address)) == 0, f'Failed to clear paths for {address}'\n        return {'message': f'Cleared {len(paths)} paths for {address}'}\n    \n    def num_calls(self, address: str = 'module') -> int:\n        \"\"\"Count number of calls for an address\"\"\"\n        return len(self.call_paths(address))\n    \n    def callers(self, module: str = 'module') -> List:\n        \"\"\"Get all callers for a module\"\"\"\n        return [p.split('/')[-1] for p in c.ls(self.storage_path + '/' + module)]\n    \n    def caller2calls(self, module: str = 'module') -> Dict[str, int]:\n        \"\"\"Map callers to their call counts\"\"\"\n        return {u: self.num_calls(module+'/'+u) for u in self.callers(module)}\n    \n    def clear_module_history(self, module: str = 'module') -> int:\n        \"\"\"Clear history for a specific module\"\"\"\n        return os.system(f'rm -r {self.storage_path}/{module}')\n    \n    def get_stats(self, address: str = '', as_df: bool = True) -> Union:\n        \"\"\"Get call statistics for an address\"\"\"\n        history = self.get_history(address, as_df=False)\n        if not history:\n            return pd.DataFrame() if as_df else {}\n            \n        stats = {\n            'total_calls': len(history),\n            'unique_functions': len(set(h['fn'] for h in history)),\n            'avg_duration': sum(h['duration'] for h in history) / len(history),\n            'total_cost': sum(h.get('cost', 0) for h in history),\n            'first_call': min(h['time'] for h in history),\n            'last_call': max(h['time'] for h in history)\n        }\n        \n        if as_df:\n            return pd.DataFrame()\n        return stats\n"
+    },
+    "schema": {
+        "call_paths": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List"
+            },
+            "docs": "Get all call paths for a specific address",
+            "cost": 1,
+            "name": "call_paths",
+            "source": {
+                "start": 26,
+                "length": 5,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:601babf96f9f535726730cf607fa71c2147239f3bd0a7f3f1df7d2602d51b71f",
+                "end": 31
+            }
+        },
+        "caller2calls": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, int]"
+            },
+            "docs": "Map callers to their call counts",
+            "cost": 1,
+            "name": "caller2calls",
+            "source": {
+                "start": 106,
+                "length": 3,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:9e214b0ded0b9214b1f1da16d842d4e4aff1b046c0c36c4e8fd31add353c762c",
+                "end": 109
+            }
+        },
+        "callers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List"
+            },
+            "docs": "Get all callers for a module",
+            "cost": 1,
+            "name": "callers",
+            "source": {
+                "start": 102,
+                "length": 3,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:045d30ea8919eacc1b8ae3c2db8fca6ccf9a2903206f020e1460af08abeaf71a",
+                "end": 105
+            }
+        },
+        "clear_history": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict[str, typing.Any]"
+            },
+            "docs": "Clear history for a specific address",
+            "cost": 1,
+            "name": "clear_history",
+            "source": {
+                "start": 90,
+                "length": 7,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:42ec3ecc79a42507a6d329c5ef9948de53b2d68f9e171f183731d960bcbdbdaf",
+                "end": 97
+            }
+        },
+        "clear_module_history": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'int'>"
+            },
+            "docs": "Clear history for a specific module",
+            "cost": 1,
+            "name": "clear_module_history",
+            "source": {
+                "start": 110,
+                "length": 3,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:67ac7feb7bd2d29d6805abc9a139cc2cb971e8e1882c7682478a8752837fd7bf",
+                "end": 113
+            }
+        },
+        "get_history": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "",
+                    "type": "str"
+                },
+                "paths": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "df": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "features": {
+                    "value": [
+                        "time",
+                        "fn",
+                        "cost",
+                        "duration",
+                        "client",
+                        "server"
+                    ],
+                    "type": "list"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Union[pandas.core.frame.DataFrame, typing.List[typing.Dict]]"
+            },
+            "docs": "\n        Get history data for a specific address\n        \n        Args:\n            address: The address to get history for\n            paths: Optional list of paths to load from\n            as_df: Whether to return as pandas DataFrame\n            features: Features to include\n            \n        Returns:\n            DataFrame or list of history records\n        ",
+            "cost": 1,
+            "name": "get_history",
+            "source": {
+                "start": 49,
+                "length": 40,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:297f1d4f148199acf2d5205a43f4f55be065be6f474c3fb1ce87b66ba6540c49",
+                "end": 89
+            }
+        },
+        "get_path_age": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'float'>"
+            },
+            "docs": "Calculate age of a path in seconds",
+            "cost": 1,
+            "name": "get_path_age",
+            "source": {
+                "start": 39,
+                "length": 3,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:5dc31464e8d200c0301987ed89d7193e73b6f0f2486e439f4e103b73a10fedf5",
+                "end": 42
+            }
+        },
+        "get_path_time": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'float'>"
+            },
+            "docs": "Extract timestamp from path",
+            "cost": 1,
+            "name": "get_path_time",
+            "source": {
+                "start": 32,
+                "length": 6,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:db2c512cfb46b6450f4a2cb96bce643f592362591443876d7f2a98a8dcdcd74a",
+                "end": 38
+            }
+        },
+        "get_stats": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "",
+                    "type": "str"
+                },
+                "as_df": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Union"
+            },
+            "docs": "Get call statistics for an address",
+            "cost": 1,
+            "name": "get_stats",
+            "source": {
+                "start": 114,
+                "length": 18,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:5c7ba77a270a1245242e8526cf0e21aad37763f1b9b61edd800ba79eb1b06d14",
+                "end": 132
+            }
+        },
+        "num_calls": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'int'>"
+            },
+            "docs": "Count number of calls for an address",
+            "cost": 1,
+            "name": "num_calls",
+            "source": {
+                "start": 98,
+                "length": 3,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:147e1a6da46649138614c6b75ff7317e7907351b79f2482407fd3fdb5aa5db3b",
+                "end": 101
+            }
+        },
+        "path2age": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "address": {
+                    "value": "module",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "Map paths to their ages",
+            "cost": 1,
+            "name": "path2age",
+            "source": {
+                "start": 43,
+                "length": 5,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:cb13f0943102110b89ae12fffca9bfacc708b04e7ba0a7fff4d605ccb5f20e73",
+                "end": 48
+            }
+        },
+        "save_data": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "Save call data to history",
+            "cost": 1,
+            "name": "save_data",
+            "source": {
+                "start": 20,
+                "length": 5,
+                "path": "~/commune/commune/modules/txhistory/txhistory.py",
+                "code": null,
+                "hash": "sha256:4da9a980e98b61a7863b680c62d0d24b868d717c5a7e430dbdab386aae76ae3d",
+                "end": 25
+            }
+        }
+    },
+    "name": "txhistory",
+    "key": "5DwT4aqD487yMorXxKJBQhCv6hLwLgyefre2RqEBNgR7RnC1",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:9c348e2e55121892ec1ed6012f56ffb67ad705a9fedcf8c26e66871e444de9cf",
+    "time": 1746536275.905741,
+    "signature": "0x46825b6366e2471f89c59d256bffe08890ace313793e26c63d09f30a6d99140e3c25e261abd9b514a779b1f396f54952830d2708ecbd89554df96af128f4aa86"
+}

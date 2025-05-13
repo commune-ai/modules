@@ -1,0 +1,318 @@
+{
+    "code": {
+        "supabase/table.py": "\nfrom typing import Any, Dict, List, Union\n\nclass TableQuery:\n    \"\"\"Helper class for building queries against a specific table.\"\"\"\n    \n    def __init__(self, client: 'SupabaseClient', table_name: str):\n        \"\"\"\n        Initialize a query builder for a table.\n        \n        Args:\n            client: SupabaseClient instance\n            table_name: Name of the table to query\n        \"\"\"\n        self.client = client\n        self.table_name = table_name\n        self.query_params = {}\n        self.headers = client.headers.copy()\n    \n    def select(self, columns: str = \"*\") -> 'TableQuery':\n        \"\"\"\n        Specify columns to select.\n        \n        Args:\n            columns: Comma-separated column names or \"*\" for all\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"select\"] = columns\n        return self\n    \n    def eq(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add an equality filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.headers[\"Prefer\"] = \"return=representation\"\n        self.query_params[column] = f\"eq.{value}\"\n        return self\n    \n    def gt(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add a greater than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[column] = f\"gt.{value}\"\n        return self\n    \n    def lt(self, column: str, value: Any) -> 'TableQuery':\n        \"\"\"\n        Add a less than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[column] = f\"lt.{value}\"\n        return self\n    \n    def order(self, column: str, ascending: bool = True) -> 'TableQuery':\n        \"\"\"\n        Add ordering.\n        \n        Args:\n            column: Column to order by\n            ascending: If True, order ascending; if False, descending\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        direction = \"asc\" if ascending else \"desc\"\n        self.query_params[\"order\"] = f\"{column}.{direction}\"\n        return self\n    \n    def limit(self, count: int) -> 'TableQuery':\n        \"\"\"\n        Limit the number of rows returned.\n        \n        Args:\n            count: Maximum number of rows\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"limit\"] = count\n        return self\n    \n    def offset(self, count: int) -> 'TableQuery':\n        \"\"\"\n        Skip a number of rows.\n        \n        Args:\n            count: Number of rows to skip\n            \n        Returns:\n            Self for chaining\n        \"\"\"\n        self.query_params[\"offset\"] = count\n        return self\n    \n    def execute(self) -> List[Dict]:\n        \"\"\"\n        Execute the query and return results.\n        \n        Returns:\n            List of records matching the query\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.get(url, headers=self.headers, params=self.query_params)\n        return self.client._handle_response(response)\n    \n    def insert(self, data: Union[Dict, List[Dict]]) -> Dict:\n        \"\"\"\n        Insert one or more rows.\n        \n        Args:\n            data: Dictionary or list of dictionaries with column values\n            \n        Returns:\n            Inserted records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.post(url, headers=self.headers, json=data)\n        return self.client._handle_response(response)\n    \n    def update(self, data: Dict) -> Dict:\n        \"\"\"\n        Update rows that match the query.\n        \n        Args:\n            data: Dictionary with column values to update\n            \n        Returns:\n            Updated records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        response = requests.patch(url, headers=self.headers, \n                                 params=self.query_params, json=data)\n        return self.client._handle_response(response)\n    \n    def delete(self) -> Dict:\n        \"\"\"\n        Delete rows that match the query.\n        \n        Returns:\n            Deleted records\n        \"\"\"\n        url = self.client._build_url(f\"rest/v1/{self.table_name}\")\n        self.headers[\"Prefer\"] = \"return=representation\"\n        response = requests.delete(url, headers=self.headers, params=self.query_params)\n        return self.client._handle_response(response)\n\n"
+    },
+    "schema": {
+        "delete": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Delete rows that match the query.\n        \n        Returns:\n            Deleted records\n        ",
+            "cost": 1,
+            "name": "delete",
+            "source": {
+                "start": 157,
+                "length": 11,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:15c8102290454ac96d19cc3143ec818a79b303a59109ce348418535c057c1b61",
+                "end": 168
+            }
+        },
+        "eq": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "column": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Add an equality filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "eq",
+            "source": {
+                "start": 33,
+                "length": 14,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:f9839cfb2acccb778939e32e83b9dfc344b2336538bd8cce866aa38dd5ac0303",
+                "end": 47
+            }
+        },
+        "execute": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[typing.Dict]"
+            },
+            "docs": "\n        Execute the query and return results.\n        \n        Returns:\n            List of records matching the query\n        ",
+            "cost": 1,
+            "name": "execute",
+            "source": {
+                "start": 117,
+                "length": 10,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:d6b750a8f1c22b0c392ccf4fc1e4a17829ab17c5332e72515f9b40320f32e7d1",
+                "end": 127
+            }
+        },
+        "gt": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "column": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Add a greater than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "gt",
+            "source": {
+                "start": 48,
+                "length": 13,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:6f0ff9a5736ccee00604ba16736a044f045989a784104d23f98f41f14964911b",
+                "end": 61
+            }
+        },
+        "insert": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Insert one or more rows.\n        \n        Args:\n            data: Dictionary or list of dictionaries with column values\n            \n        Returns:\n            Inserted records\n        ",
+            "cost": 1,
+            "name": "insert",
+            "source": {
+                "start": 128,
+                "length": 13,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:996cc53baf895e165003cff1a4cdac640d3d52eab853ea9f6264a0decb094496",
+                "end": 141
+            }
+        },
+        "limit": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "count": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Limit the number of rows returned.\n        \n        Args:\n            count: Maximum number of rows\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "limit",
+            "source": {
+                "start": 91,
+                "length": 12,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:2f225e19315bf5ba92df27dde96fec95d3e2919baf77059451a22af9935a2fcc",
+                "end": 103
+            }
+        },
+        "lt": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "column": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "value": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Add a less than filter.\n        \n        Args:\n            column: Column name\n            value: Value to compare\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "lt",
+            "source": {
+                "start": 62,
+                "length": 13,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:b60af9a9ba77c5166642c75c22592231d8ed9c16428056ff8035de2388541c79",
+                "end": 75
+            }
+        },
+        "offset": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "count": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Skip a number of rows.\n        \n        Args:\n            count: Number of rows to skip\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "offset",
+            "source": {
+                "start": 104,
+                "length": 12,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:1d3aa602a0882cca651dd52198aa3655636b329ecb84143d9b24e2f4ca641779",
+                "end": 116
+            }
+        },
+        "order": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "column": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "ascending": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Add ordering.\n        \n        Args:\n            column: Column to order by\n            ascending: If True, order ascending; if False, descending\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "order",
+            "source": {
+                "start": 76,
+                "length": 14,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:1bcd9f09cc4a73855ccbc6590f17ebac502546e7e85f8765cc4e6f2bb5b2c649",
+                "end": 90
+            }
+        },
+        "select": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "columns": {
+                    "value": "*",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "TableQuery"
+            },
+            "docs": "\n        Specify columns to select.\n        \n        Args:\n            columns: Comma-separated column names or \"*\" for all\n            \n        Returns:\n            Self for chaining\n        ",
+            "cost": 1,
+            "name": "select",
+            "source": {
+                "start": 20,
+                "length": 12,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:7c181b3bb78b5234274707e1877298cc1e7a9259b7852dbe01a8556a7ba31510",
+                "end": 32
+            }
+        },
+        "update": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Dict"
+            },
+            "docs": "\n        Update rows that match the query.\n        \n        Args:\n            data: Dictionary with column values to update\n            \n        Returns:\n            Updated records\n        ",
+            "cost": 1,
+            "name": "update",
+            "source": {
+                "start": 142,
+                "length": 14,
+                "path": "~/commune/commune/modules/supabase/supabase/table.py",
+                "code": null,
+                "hash": "sha256:ba6a47650c06112de07a715f78b32304f41cbed9ffc0c7c8ca8e15e15abbc71a",
+                "end": 156
+            }
+        }
+    },
+    "name": "supabase.table",
+    "key": "5EUkg4KLTqPkSiqny6zsz4x9Kt2NGuw4jpi7zKqsVkhYhAYG",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:fed3a72869261421481d23d8770394feb87ff84a7dcbed33f89b316a88ab3ff2",
+    "time": 1746536244.246495,
+    "signature": "0x2231ff61c1a28b3670bb6c591aa051f66e2821def4aa088b509f0e099503b85190bd8e3ca0c355758321062f4e928aca28f7b2eb289c1f2dbdbf835656260988"
+}

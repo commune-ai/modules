@@ -1,0 +1,40 @@
+{
+    "code": {
+        "miner.py": "import commune as c\n\nclass Miner:\n    def forward(self, x):\n        return x"
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "x": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 4,
+                "length": 2,
+                "path": "~/commune/commune/modules/subnet/miner.py",
+                "code": null,
+                "hash": "sha256:5852b8383f0301f296ea27cb991974ab8394ba2d3da2e00d84e874c78ddb8a91",
+                "end": 6
+            }
+        }
+    },
+    "name": "subnet.miner",
+    "key": "5HiqT9BxjHPyp2Xj4xQboaPc8zfzR6Dcjgtd5yRJ7CFF6AFG",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:2cec74ab1a78fc8b98cca05ec2ab6e321d7524d112e489a025158441ccfebe82",
+    "time": 1746536242.263851,
+    "signature": "0x1200cd2a22feb5aa331bc3987fca41a220a51b44e2cf2f924b108cacb4c12c12fe64dcc86dab8f7e9117482f58899bac09081535f9383730417d0464fa13ce80"
+}

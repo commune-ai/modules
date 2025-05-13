@@ -1,0 +1,893 @@
+{
+    "code": {
+        "auth.py": "import base64\nimport hmac\nimport json\nimport time\nfrom typing import Dict, Optional, Any\n\nimport commune as c\n\nclass JWT:\n\n    def get_headers(self, data: Any, key:str=None, crypto_type='ecdsa', mode='dict') -> dict:\n        \"\"\"\n        Generate the headers with the JWT token\n        \"\"\"\n        headers =  self.get_token(c.hash(data), key=key, crypto_type=crypto_type, mode=mode)\n        return headers\n\n    def verify_headers(self, headers: str, data:Optional[Any]=None) -> Dict:\n        \"\"\"\n        Verify and decode a JWT token\n        \"\"\"\n        verified = self.verify_token(headers['token'])\n        assert verified, 'Invalid signature'\n        if data != None:\n            assert verified['data'] == c.hash(data), 'Invalid data {} != {}'.format(verified['data'], c.hash(data))\n        return verified\n\n    def check_crypto_type(self, crypto_type):\n        assert crypto_type in ['ecdsa', 'sr25519'], f'Invalid crypto_type {crypto_type}'\n\n    def get_token(self, data: Dict='hey',  key:Optional[str]=None,   crypto_type: str = 'ecdsa', expiration: int = 3600, mode='bytes') -> str:\n        \"\"\"\n        Generate a JWT token with the given data\n        Args:\n            data: Dictionary containing the data to encode in the token\n            expiration: Optional custom expiration time in seconds\n        Returns:\n            JWT token string\n        \"\"\"\n        if isinstance(key, str) or key == None:\n            key = c.get_key(key, crypto_type=crypto_type)\n        else:\n            key = key\n            if crypto_type != key.get_crypto_type(key.crypto_type):\n                crypto_type = key.get_crypto_type(key.crypto_type)\n\n        self.check_crypto_type(crypto_type)\n        if not isinstance(data, dict):\n            data = {'data': data }\n        token_data = data.copy()        \n        # Add standard JWT claims\n        token_data.update({\n            'iat': str(float(c.time())),  # Issued at time\n            'exp': str(float(c.time() + expiration)),  # Expiration time\n            'iss': key.key_address,  # Issuer (key address)\n        })\n        header = {\n            'alg': crypto_type,\n            'typ': 'JWT',\n        }\n        # Create message to sign\n        message = f\"{self._base64url_encode(header)}.{self._base64url_encode(token_data)}\"\n        # For asymmetric algorithms, use the key's sign method\n        signature = key.sign(message, mode='bytes')\n        signature_encoded = self._base64url_encode(signature)\n        # Combine to create the token\n        token = f\"{message}.{signature_encoded}\"\n        if mode == 'dict':\n            return self.verify_token(token)\n        elif mode == 'bytes':\n            return f\"{message}.{signature_encoded}\"\n        else:\n            raise ValueError(f\"Invalid mode: {mode}. Use 'bytes' or 'dict'.\")\n            \n    def verify_token(self, token: str) -> Dict:\n        \"\"\"\n        Verify and decode a JWT token\n        \"\"\"\n        if isinstance(token, dict) and 'token' in token:\n            token = token['token']\n        # Split the token into parts\n        header_encoded, data_encoded, signature_encoded = token.split('.')\n        # Decode the data\n        data = json.loads(self._base64url_decode(data_encoded))\n        headers = json.loads(self._base64url_decode(header_encoded))\n        # Check if token is expired\n        if 'exp' in data and float(data['exp']) < c.time():\n            raise Exception(\"Token has expired\")\n        # Verify signature\n        message = f\"{header_encoded}.{data_encoded}\"\n        signature = self._base64url_decode(signature_encoded)\n        assert c.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), \"Invalid token signature\"\n        # data['data'] = message\n        data['time'] = data['iat'] # set time field for semanitcally easy people\n        data['signature'] = '0x'+signature.hex()\n        data['alg'] = headers['alg']\n        data['typ'] = headers['typ']\n        data['token'] = token\n        data['key'] = data['iss']\n        return data\n\n    def _base64url_encode(self, data):\n        \"\"\"Encode data in base64url format\"\"\"\n        if isinstance(data, str):\n            data = data.encode('utf-8')\n        elif isinstance(data, dict):\n            data = json.dumps(data, separators=(',', ':')).encode('utf-8')\n        encoded = base64.urlsafe_b64encode(data).rstrip(b'=')\n        return encoded.decode('utf-8')\n    \n    def _base64url_decode(self, data):\n        \"\"\"Decode base64url data\"\"\"\n        padding = b'=' * (4 - (len(data) % 4))\n        return base64.urlsafe_b64decode(data.encode('utf-8') + padding)\n\n    def test_token(self, test_data = {'fam': 'fam', 'admin': 1} , crypto_type='ecdsa'):\n        \"\"\"\n        Test the JWT token functionality\n        \n        Returns:\n            Dictionary with test results\n        \"\"\"\n        # Generate a token\n        token = self.get_token(test_data, crypto_type=crypto_type)\n        # Verify the token\n        decoded = self.verify_token(token)\n        # Check if original data is in the decoded data\n        validation_passed = all(test_data[key] == decoded[key] for key in test_data)\n        assert validation_passed, \"Decoded data does not match original data\"\n        # Test token expiration\n        quick_token = self.get_token(test_data, expiration=0.1, crypto_type=crypto_type)\n        time.sleep(0.2)  # Wait for token to expire\n        \n        expired_token_caught = False\n        try:\n            decoded = self.verify_token(quick_token)\n        except Exception as e:\n            expired_token_caught = True\n        assert expired_token_caught, \"Expired token not caught\"\n        \n        return {\n            \"token\": token,\n            \"decoded_data\": decoded,\n            \"crypto_type\": crypto_type,\n            \"quick_token\": quick_token,\n            \"expired_token_caught\": expired_token_caught\n            }\n\n    def test_headers(self, key='test.jwt', crypto_type='ecdsa'):\n        data = {'fn': 'test', 'params': {'a': 1, 'b': 2}}\n        headers = self.get_headers(data, key=key, crypto_type=crypto_type)\n        verified = self.verify_headers(headers)\n        verified = self.verify_headers(headers, data=data)\n        return {'headers': headers, 'verified': verified}\n\n    def test(self):\n        return {\n            'token': self.test_token(),\n            'headers': self.test_headers()\n        }",
+        "client.py": "\n\nfrom typing import *\nimport asyncio\nimport json\nimport requests\nimport os\nimport commune as c\n\nclass Client:\n    def __init__( self,  \n                 url : str = 'module',  \n                 key : Optional[str]= None,  \n                 network: Optional[bool] = 'local', \n                 auth = 'auth.jwt',\n                 mode='http',\n                 **kwargs):\n        self.auth = c.module(auth)()\n        self.key  = c.get_key(key)\n        self.url = url\n\n    def forward(self, \n                fn  = 'info', \n                params: Optional[Union[list, dict]] = None, # if you want to pass params as a list or dict\n                # if you want to pass positional arguments to the function, use args \n                args : Optional[list] = [], \n                kwargs : Optional[dict] = {},      \n                ## adduitional parameters\n                timeout:int=2,  # the timeout for the request\n                key : str = None,  # the key to use for the request\n                mode: str  = 'http', # the mode of the request\n                stream: bool = False, # if the response is a stream\n                **extra_kwargs \n    ):\n        if '/' in str(fn):\n            url, fn = '/'.join(fn.split('/')[:-1]), fn.split('/')[-1]\n        else :\n            url = self.url\n            fn = str(fn)\n        url = self.get_url(url, mode=mode)\n        key = self.get_key(key) # step 1: get the key\n        params = self.get_params(params=params, args=args, kwargs=kwargs, extra_kwargs=extra_kwargs) # step 3: get the params\n        headers = self.auth.get_headers(params, key=key) # step 4: get the headers\n        with requests.Session() as conn:\n            response = conn.post( f\"{url}/{fn}/\", json=params,  headers=headers, timeout=timeout, stream=stream)\n        ## handle the response\n        if response.status_code != 200:\n            raise Exception(response.text)\n        if 'text/event-stream' in response.headers.get('Content-Type', ''):\n            result = self.stream(response)\n        else:\n            if 'application/json' in response.headers.get('Content-Type', ''):\n                result = response.json()\n            elif 'text/plain' in response.headers.get('Content-Type', ''):\n                result = response.text\n            else:\n                result = response.content\n                if response.status_code != 200:\n                    raise Exception(result)\n        return result\n    \n    def get_key(self,key=None):\n        if key == None:\n            return self.key\n        if isinstance(key, str):\n            key = c.get_key(key)\n        return key\n\n    def get_params(self, params=None, args=[], kwargs={}, extra_kwargs={}):\n        if isinstance(params, dict) and 'args' in params and 'kwargs' in params:\n            return params\n        params = params or {}\n        args = args or []\n        kwargs = kwargs or {}\n        kwargs.update(extra_kwargs)\n        if params:\n            if isinstance(params, dict):\n                kwargs = {**kwargs, **params}\n            elif isinstance(params, list):\n                args = params\n            else:\n                raise Exception(f'Invalid params {params}')\n        params = {\"args\": args, \"kwargs\": kwargs}\n        return params\n\n\n    def get_url(self, url, mode='http'):\n        if c.is_url(url):\n            url = url\n        elif c.is_int(url):\n            url = f'0.0.0.0:{url}'\n        else:\n            url = c.namespace().get(str(url), url)\n        url = url if url.startswith(mode) else f'{mode}://{url}'\n        return url\n\n\n    @classmethod\n    def call(cls, \n                fn:str = 'module/info',\n                *args,\n                params = None,\n                module : str = None,\n                network:str = 'local',\n                key: Optional[str] = None, # defaults to module key (c.default_key)\n                timeout=40,\n                **kwargs) -> None:\n        fn = str(fn)\n        if '/' in fn and not '//' in fn:\n            module, fn = '.'.join(fn.split('/')[:-1]), fn.split('/')[-1]\n        else:\n            module, fn = fn, 'info'\n        kwargs.update(params or {}) \n        return cls(url=module, network=network).forward(fn=fn, \n                                                            params={'args': args, 'kwargs': kwargs},\n                                                            timeout=timeout, \n                                                            key=key)\n\n    def stream(self, response):\n        def process_stream_line(line , stream_prefix = 'data: '):\n            event_data = line.decode('utf-8')\n            if event_data.startswith(stream_prefix):\n                event_data = event_data[len(stream_prefix):] \n            if event_data == \"\": # skip empty lines if the event data is empty\n                return ''\n            if isinstance(event_data, str):\n                if event_data.startswith('{') and event_data.endswith('}') and 'data' in event_data:\n                    event_data = json.loads(event_data)['data']\n            return event_data\n        try:\n            for chunk in response.iter_lines():\n                yield process_stream_line(chunk)\n        except Exception as e:\n            yield c.detailed_error(e)\n\n    def is_url(self,  url:str) -> bool:\n        if not isinstance(url, str):\n            return False\n        if '://' in url:\n            return True\n        conds = []\n        conds.append(isinstance(url, str))\n        conds.append(':' in url)\n        conds.append(c.is_int(url.split(':')[-1]))\n        return all(conds)\n\n    def client(self, module:str = 'module', network : str = 'local', virtual:bool = True, **kwargs):\n        \"\"\"\n        Create a client instance.\n        \"\"\"\n        class ClientVirtual:\n            def __init__(self, client):\n                self.client = client\n            def remote_call(self, *args, remote_fn, timeout:int=10, key=None, **kwargs):\n                return self.client.forward(fn=remote_fn, args=args, kwargs=kwargs, timeout=timeout, key=key)\n            def __getattr__(self, key):\n                if key in [ 'client', 'remote_call'] :\n                    return getattr(self, key)\n                else:\n                    return lambda *args, **kwargs : self.remote_call(*args, remote_fn=key, **kwargs)\n        client = Client(url=module)\n        return ClientVirtual(client) if virtual else client\n\n    def connect(self, module:str, **kwargs):\n        \"\"\"\n        Connect to a module and return a client instance.\n        \"\"\"\n        return self.client(module, **kwargs)",
+        "middleware.py": "\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse\nimport json\nimport commune as c\nimport time\nimport asyncio\n\nclass Middleware(BaseHTTPMiddleware):\n    def __init__(self, app, \n                max_bytes: int = 1000000, \n                max_requests: int = 1000,\n                auth_module = 'server.auth',\n                tx_collector_module = 'server.txcollector',\n                ):\n        super().__init__(app)\n        self.max_bytes = max_bytes\n        self.max_requests = max_requests\n        self.auth = c.module(auth_module)()\n        self.tx_collector = c.module(tx_collector_module)()\n        self.request_count = 0\n        self.last_reset = time.time()\n        \n    async def dispatch(self, request: Request, call_next):\n        # Rate limiting\n        current_time = time.time()\n        if current_time - self.last_reset > 60:  # Reset counter every minute\n            self.request_count = 0\n            self.last_reset = current_time\n            \n        self.request_count += 1\n        if self.request_count > self.max_requests:\n            return JSONResponse(\n                status_code=429, \n                content={\"error\": \"Too many requests\", \"retry_after\": 60 - (current_time - self.last_reset)}\n            )\n            \n        # Size validation\n        content_length = request.headers.get('content-length')\n        if content_length and int(content_length) > self.max_bytes:\n            return JSONResponse(status_code=413, content={\"error\": \"Request too large\"})\n        \n        # Verify authentication\n        try:\n            # Clone the request headers for verification\n            headers = dict(request.headers)\n            \n            # For POST requests with JSON body, verify the payload matches the signature\n            if request.method == \"POST\" and 'token' in headers:\n                body = await request.body()\n                if len(body) > self.max_bytes:\n                    return JSONResponse(status_code=413, content={\"error\": \"Request too large\"})\n                \n                # Parse the body to verify it against the token\n                try:\n                    body_json = json.loads(body)\n                    # Verify the token matches the request data\n                    verified = self.auth.verify_headers(headers, data=body_json)\n                    \n                    # Store request metadata for transaction tracking\n                    request_info = {\n                        'client': verified,\n                        'timestamp': time.time(),\n                        'path': str(request.url.path),\n                        'method': request.method,\n                        'ip': request.client.host if request.client else None\n                    }\n                    \n                    # Asynchronously log the transaction\n                    asyncio.create_task(self.tx_collector.record_transaction(request_info))\n                    \n                except json.JSONDecodeError:\n                    return JSONResponse(status_code=400, content={\"error\": \"Invalid JSON in request body\"})\n                except Exception as e:\n                    return JSONResponse(status_code=401, content={\"error\": f\"Authentication failed: {str(e)}\"})\n        except Exception as e:\n            # If verification fails but no token was provided, let the request through\n            # The endpoint will handle authentication if needed\n            pass\n            \n        # Continue processing the request\n        response = await call_next(request)\n        return response\n",
+        "pm.py": "import commune as c \nfrom typing import *\nimport json\nimport os\nclass Pm2:\n\n    def __init__(self, process_prefix='proc/', **kwargs):\n        self.process_prefix = process_prefix\n        self.process_manager_path = c.abspath('~/.pm2')\n        self.sync_env()\n\n    def get_procname(self, name:str, **kwargs) -> str:\n        if  name != None and not name.startswith(self.process_prefix):\n            name = self.process_prefix + name\n        return name\n        \n    def proc_exists(self, name:str, **kwargs) -> bool:\n        name = self.get_procname(name)\n        return name in self.procs(**kwargs)\n\n    def procs(self, search=None,  **kwargs) -> List[str]:\n        output_string = c.cmd('pm2 status')\n        procs = []\n        tag = ' default '\n        for line in output_string.split('\\n'):\n            if  tag in line:\n                name = line.split(tag)[0].strip()\n                name = name.split(' ')[-1]\n                procs += [name]\n        if search != None:\n            search = self.get_procname(search)\n            procs = [m for m in procs if search in m]\n        procs = sorted(list(set(procs)))\n        return procs\n\n    def run(self, \n                  fn: str = 'serve',\n                   name:str = None, \n                   module:str = 'server',  \n                   params: dict = None,\n                   network:str = 'local',\n                   interpreter:str='python3', \n                   verbose: bool = False , \n                   cwd : str = None,\n                    max_age = 10,\n                    trials:int=3,\n                    trial_backoff:int=1,\n                    refresh:bool=True ):\n        \"\"\"\n        run a process with pm2\n\n        Args:\n            fn (str, optional): The function to run. Defaults to 'serve'.\n            name (str, optional): The name of the proc. Defaults to None.\n            module (str, optional): The module to run. Defaults to 'server'.\n            params (dict, optional): The parameters for the function. Defaults to None.\n            interpreter (str, optional): The interpreter to use. Defaults to 'python3'.\n            verbose (bool, optional): Whether to print the output. Defaults to False.\n            wait_for_server (bool, optional): Whether to wait for the server to start. Defaults to True.\n            cwd (str, optional): The current working directory. Defaults to None.\n            refresh (bool, optional): Whether to refresh the environment. Defaults to True.\n        Returns:\n            dict: The result of the command\n         \n        \"\"\"\n        self.sync_env()\n        params['remote'] = False\n        name = name or module\n        if '/' in fn:\n            module, fn = fn.split('/')\n        else:\n            module = 'server'\n            fn = fn\n        params_str = json.dumps({'fn': module +'/' + fn, 'params': params or {}}).replace('\"','\\\\\"')\n        proc_name = self.get_procname(name)\n        if self.proc_exists(proc_name):\n            self.kill(proc_name, rm_server=False)\n        cmd = f\"pm2 start {c.filepath()} --name {proc_name} --interpreter {interpreter} -f --no-autorestart -- --fn run_fn --params \\\"{params_str}\\\"\"\n        c.cmd(cmd, verbose=verbose, cwd=c.lib_path)\n        return {'success':True, 'message':f'Running {proc_name}'}\n\n    def kill(self, name:str, verbose:bool = True, rm_server=True, **kwargs):\n        proc_name = self.get_procname(name)\n        try:\n            c.cmd(f\"pm2 delete {proc_name}\", verbose=False)\n            for m in ['out', 'error']:\n                os.remove(self.get_logs_path(name, m))\n            result =  {'message':f'Killed {proc_name}', 'success':True}\n        except Exception as e:\n            result =  {'message':f'Error killing {proc_name}', 'success':False, 'error':e}\n        return result\n    \n    def kill_all(self, verbose:bool = True, timeout=20):\n        servers = self.procs()\n        futures = [c.submit(self.kill, kwargs={'name':s, 'update': False}) for s in servers]\n        results = c.wait(futures, timeout=timeout)\n        return results\n    \n    def killall(self, **kwargs):\n        return self.kill_all(**kwargs)\n\n    def get_logs_path(self, name:str, mode='out')->str:\n        assert mode in ['out', 'error'], f'Invalid mode {mode}'\n        name = self.get_procname(name)\n        return f'{self.process_manager_path}/logs/{name.replace(\"/\", \"-\")}-{mode}.log'.replace(':', '-').replace('_', '-') \n\n    def logs(self, module:str, top=None, tail: int =None , stream=True, **kwargs):\n        module = self.get_procname(module)\n        if tail or top:\n            stream = False\n        if stream:\n            return c.cmd(f\"pm2 logs {module}\", verbose=True)\n        else:\n            text = ''\n            for m in ['out', 'error']:\n                # I know, this is fucked \n                path = self.get_logs_path(module, m)\n                try:\n                    text +=  c.get_text(path)\n                except Exception as e:\n                    c.print('ERROR GETTING LOGS -->' , e)\n            if top != None:\n                text = '\\n'.join(text.split('\\n')[:top])\n            if tail != None:\n                text = '\\n'.join(text.split('\\n')[-tail:])\n        return text\n\n    def sync_env(self,**kwargs):\n        '''ensure that the environment variables are set for the proc'''\n        is_pm2_installed = bool( '/bin/pm2' in c.cmd('which pm2', verbose=False))\n        if not is_pm2_installed:\n            c.cmd('npm install -g pm2')\n            c.cmd('pm2 update')\n        return {'success':True, 'message':f'Ensured env '}\n  \n   ",
+        "server.py": "from typing import *\nfrom fastapi import FastAPI, Request\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom sse_starlette.sse import EventSourceResponse\nimport uvicorn\nimport os\nimport hashlib\nimport os\nimport pandas as pd\nimport json\nimport asyncio\nimport commune as c\nfrom .utils import shortkey, abspath\nprint = c.print\nclass Server:\n\n    def __init__(\n        self, \n        module: Union[str, object] = 'module',\n        key: Optional[str] = None, # key for the server (str), defaults to being the name of the server\n        params : Optional[dict] = None, # the kwargs for the module\n        \n        # FUNCTIONS\n        functions:Optional[List[Union[str, callable]]] = None, # list of endpoints\n        # NETWORK\n        port: Optional[int] = None, # the port the server is running on\n        tempo:int = 10000, # (in seconds) the maximum age of the history\n        name: Optional[str] = None, # the name of the server, \n        network: Optional[str] = 'local', # the network the server is running on\n        timeout:int = 10, # (in seconds) the maximum time to wait for a response\n\n        # EXTERNAL MODULES\n        auth = 'server.auth', # the auth for the server,\n        middleware = 'server.middleware', # the middleware for the server\n        store = 'server.store', # the history for the server\n        pm = 'pm2', # the process manager for the server\n        helper_functions  = ['info', 'forward'], # the helper functions\n\n        # MISC\n        verbose:bool = True, # whether to print the output\n        info = None, # the info for the server\n        run_api : Optional[bool] = False, # if the server should be run as an api\n        path = '~/.commune/server' # the path to store the server data\n        ):\n\n        self.path = abspath(path)\n        self.helper_functions = helper_functions\n        self.network = network or 'local'\n        self.tempo = tempo\n        self.verbose = verbose\n        self.timeout = timeout\n        self.pm = c.module(pm)(proc_prefix= 'server/' + network + '/')\n        self.set_module(module=module, name=name, key=key, params=params, functions=functions, port=port)\n        self.store = c.module(store)(abspath(path))\n        # set modules \n        if run_api:\n            self.auth = c.module(auth)()\n            self.loop = asyncio.get_event_loop() # get the event loop\n            app = FastAPI()\n            app.add_middleware(c.module(middleware))\n            app.add_middleware(\n                CORSMiddleware,\n                allow_origins=[\"*\"],  # or your specific origins\n                allow_credentials=True,\n                allow_methods=[\"*\"],\n                allow_headers=[\"*\"],\n            )\n            def server_function(fn: str, request: Request):\n                try:\n                    return self.forward(fn, request)\n                except Exception as e:\n                    err = c.detailed_error(e)\n                    print(f'Error({fn}) --> {err}', color='red')\n                    return err\n            app.post(\"/{fn}\")(server_function)\n            print(f'Served({self.module.info})', color='purple')\n            uvicorn.run(app, host='0.0.0.0', port=self.module.port, loop='asyncio')\n\n    def fleet(self, module='module', n=2, timeout=10):\n        if '::' not in module:\n            module = module + '::'\n        names = [module+str(i) for i in range(n)]\n        return c.wait([c.submit(self.serve, [names[i]])  for i in range(n)], timeout=timeout)\n\n    def get_params(self, request: Request):\n        params = self.loop.run_until_complete(request.json())\n        params = json.loads(params) if isinstance(params, str) else params\n        if len(params) == 2 and 'args' in params and 'kwargs' in params :\n            kwargs = dict(params.get('kwargs')) \n            args = list(params.get('args'))\n        else:\n            args = []\n            kwargs = dict(params)\n        params = {\"args\": args, \"kwargs\": kwargs}\n        return params\n\n    def forward(self, fn:str, request: Request):\n\n        \"\"\"\n        gets and verifies the request\n        params:\n            fn : str\n                the function to call\n            request : dict\n                the request object\n        result:\n            data : dict\n                fn : str\n                params : dict\n                client : dict (headers)\n        \"\"\"\n        headers = dict(request.headers)\n        params = self.get_params(request)\n        data = {'fn': fn, 'params': params}\n        data['client'] = self.auth.verify_headers(headers=headers, data=params) # verify the headers\n        self.rate_limit(data)   # check the rate limit\n        fn_obj = getattr(self.module, fn)\n        args, kwargs = params['args'], params['kwargs']\n        result = fn_obj(*args, **kwargs) if callable(fn_obj) else fn_obj\n        if c.is_generator(result):\n            output = str(result)\n            def generator_wrapper(generator):\n                for item in generator:\n                    print(item, end='')\n                    yield item\n            result = EventSourceResponse(generator_wrapper(result))   \n        data['time'] = data['client']['time']\n        data[f'result'] = 'stream' if isinstance(result, EventSourceResponse) else result\n        data['server'] = self.auth.get_headers(data=data, key=self.module.key)\n        data['duration'] = c.time() - float(data['client']['time'])\n        data['schema'] = self.module.schema.get(data['fn'], {})\n        cid = self.hash(data)\n        client_key = data['client']['key']\n        path = f'results/{self.module.name}/{data[\"client\"][\"key\"]}/{cid}.json'\n        self.store.put(path, data)\n        print(f'fn({data[\"fn\"]}) --> {data[\"duration\"]} seconds')\n        print('Saved data to -->', path)\n        return result\n  \n    def results(self, module:str = 'module', paths: Optional[List] = None, df: bool = True, features: List = ['time', 'fn', 'duration', 'client', 'server']) -> Union[pd.DataFrame, List[Dict]]:\n        \"\"\"\n        Get history data for a specific address\n        \n        Args:\n            address: The address to get history for\n            paths: Optional list of paths to load from\n            as_df: Whether to return as pandas DataFrame\n            features: Features to include\n            \n        Returns:\n            DataFrame or list of history records\n        \"\"\"\n        paths = paths or self.store.paths('results/'+module)\n\n        address2key = c.address2key()\n        history = [self.store.get(p) for p in paths]\n        if df and len(history) > 0:\n            history = pd.DataFrame(history)\n            if len(history) == 0:\n                return history\n            history = history[features]\n            def _shorten(x):\n                if x in address2key: \n                    return address2key.get(x) + ' (' + shortkey(x) + ')'\n                else:\n                    return shortkey(x)\n                return x\n            history['server'] = history['server'].apply(lambda x: _shorten(x['key']))\n\n            history['client'] = history['client'].apply(lambda x: _shorten(x['key']))\n            history['age'] = history['time'].apply(lambda x:c.time() - float(x))\n            del history['time']\n\n        return history\n\n    def hash(self, data:dict) -> str:\n        return  hashlib.sha256(json.dumps(data).encode()).hexdigest()\n\n    def get_path(self, path):\n        if not path.startswith(self.path):\n            path = os.path.join(self.path, path)\n        return abspath(path)\n        \n    def set_module(self, module:str, functions: List[str], name: str , key:Union[str, 'Key'], params:dict, port:int):\n        module = module or 'module'\n        if isinstance(module, str):\n            if '::' in str(module):\n                name = module\n                tag = name.split('::')[-1]\n                module = '::'.join(name.split('::')[:-1])\n        self.module = c.module(module)(**(params or {}))\n        self.module.name = name = name or module \n        self.module.key = c.get_key(key or self.module.name)\n        self.set_functions(functions) \n        self.set_port(port)\n        self.module.info = {   \n            \"name\": self.module.name,\n            \"url\": self.module.url,\n            \"key\": self.module.key.ss58_address,\n            \"time\": c.time(),\n            \"schema\": self.module.schema,\n        }\n        self.module.info['signature'] = c.sign(self.module.info, key=self.module.key, mode='str')\n        self.verify_info(self.module.info) # verify the info\n        return {'success':True, 'message':f'Set module to {self.module.name}'}\n\n    def verify_info(self, info:dict) -> dict:\n        \"\"\"\n        verifies the info of the server\n        params:\n            info : dict\n                the info of the server\n        \"\"\"\n        assert isinstance(info, dict), f'Info must be a dict, not {type(info)}'\n        assert all([k in info for k in ['name', 'url', 'key', 'time', 'signature']]), f'Info must have keys name, url, key, time, signature'\n        signature= info['signature']\n        payload = {k: v for k, v in info.items() if k != 'signature'}\n        assert c.verify(payload, signature=signature, address=info['key']), f'InvalidSignature({info})'\n        return info\n    \n    def set_functions(self, functions:Optional[List[str]]):\n        function_attributes =['endpoints', 'functions', 'expose', \"exposed_functions\",'server_functions', 'public_functions', 'pubfns']  \n        functions =  functions or []\n        for fa in function_attributes:\n            if hasattr(self.module, fa) and isinstance(getattr(self.module, fa), list):\n                functions = getattr(self.module, function_attributes[0]) \n                break       \n        # does not start with _ and is not a private function\n        self.module.fns = self.module.functions = [fn for fn in sorted(list(set(functions + self.helper_functions))) if not fn.startswith('_')]\n        self.module.fn2cost = self.module.fn2cost  if hasattr(self.module, 'fn2cost') else {}\n        schema = {}\n        for fn in self.module.fns:\n            if hasattr(self.module, fn):\n                fn_obj = getattr(self.module, fn)\n                setattr(self.module, fn, fn_obj)\n                schema[fn] = c.fnschema(fn_obj)\n            else:\n                print(f'SEVER_FN_NOT_FOUND({fn}) --> REMOVING FUNCTION FROM FNS', color='red')\n                self.module.fns.remove(fn)\n        self.module.schema = schema\n        return {'fns': self.module.fns, 'fn2cost': self.module.fn2cost}\n        \n    def set_port(self, port:Optional[int]=None, port_attributes = ['port', 'server_port']):\n        if port == None:\n            in_port_attribute = any([k for k in port_attributes])\n            if in_port_attribute:\n                for k in port_attributes:\n                    if hasattr(self.module, k):\n                        port = getattr(self.module, k)\n                        break\n            else:\n                namespace = self.namespace()\n                if self.module.name in namespace:\n                    port = int(namespace.get(self.module.name).split(':')[-1])\n                    self.kill(self.module.name)\n        if port == None:\n            port = c.free_port()\n        while c.port_used(port):\n            c.kill_port(port)\n            c.sleep(1)\n            print(f'Waiting for port {port} to be free')\n        self.module.port = port\n        self.module.url = f'0.0.0.0:{self.module.port}' \n        return {'success':True, 'message':f'Set port to {port}'}\n\n    def serve(self, \n              module: Union[str, 'Module', Any] = None, # the module in either a string\n              params:Optional[dict] = None,  # kwargs for the module\n              port :Optional[int] = None, # name of the server if None, it will be the module name\n              name = None, # name of the server if None, it will be the module name\n              remote:bool = True, # runs the server remotely (pm2, ray)\n              functions = None, # list of functions to serve, if none, it will be the endpoints of the module\n              key = None, # the key for the server\n              cwd = None,\n              **extra_params\n              ):\n\n        module = module or 'module'\n        name = name or module\n        params = {**(params or {}), **extra_params}\n        if remote and isinstance(module, str):\n            params = {k : v for k, v  in c.locals2kwargs(locals()).items()  if k not in ['extra_params', 'response', 'namespace']}\n            self.pm.run(\"server/serve\", name=name, params=params, cwd=cwd)\n            return self.wait_for_server(name)\n        return Server(module=module, name=name, functions=functions, params=params, port=port,  key=key, run_api=1)\n\n    def get_port(self, name:str,  tail:int=100, **kwargs):\n        \"\"\"\n        get port from the logs\n        \"\"\"\n        logs = self.logs(name, tail=tail, stream=False, **kwargs)\n        port = None\n        tag = 'Uvicorn running on '\n        for i, line in enumerate(logs.split('\\n')[::-1]):\n            if tag in line:\n                return int(line.split(tag)[-1].split(' ')[0].split(':')[-1])\n        return port\n\n    def namespace(self,  search=None, **kwargs) -> dict:\n        servers =  self.servers(search=search, **kwargs)\n        urls = [self.get_url(s) for s in servers]\n        namespace = {s: urls[i] for i, s in enumerate(servers)}\n        if search != None:\n            namespace = {k:v for k, v in namespace.items() if search in k}\n\n        return namespace\n\n    def get_url(self, name:str,  tail:int=100, **kwargs):\n        return f'0.0.0.0:{self.get_port(name, tail=tail, **kwargs)}'\n\n    def servers(self, search=None,  **kwargs) -> List[str]:\n        return [ p[len(self.pm.process_prefix):] for p in self.pm.procs(search=search, **kwargs) if p.startswith(self.pm.process_prefix)]\n\n    def urls(self, search=None,  **kwargs) -> List[str]:\n        return list(self.namespace(search=search, **kwargs).values())   \n\n    def params(self,*args,  **kwargs):\n        return { 'network': self.network, 'tempo' : self.tempo}\n\n    def modules(self, \n                search=None, \n                max_age=60, \n                update=False, \n                features=['name', 'url', 'key'], \n                timeout=8, \n                **kwargs):\n\n        modules_path = self.get_path(f'modules')\n\n        modules = c.get(modules_path, max_age=max_age, update=update)\n        if modules == None:\n            futures  = [c.submit(c.call, [s + '/info'], timeout=timeout) for s in self.urls()]\n            modules = c.wait(futures, timeout=timeout)\n            c.put(modules_path, modules)\n        if search != None:\n            modules = [m for m in modules if search in m['name']]\n        return [m for m in modules if not c.is_error(m)]\n    \n    def server_exists(self, name:str, **kwargs) -> bool:\n        return bool(name in self.servers(**kwargs))\n\n    def rate(self, key:str, # the key to rate\n             network:str = 'chain', # the network to gate on\n             max_age:int = 60, # the maximum age of the rate\n             update:bool = False, # whether to update the rate\n             module = None, # the module to rate on\n             ) -> float:\n        if module == None:\n            if '/' in key:\n                module, key = key.split('/')\n            else:\n                module = self.module.name\n        return len( self.store.paths(f'results/{module}/{key}')) \n\n    def rate_limit(self, data:dict, # fn, params and client/headers\n                network:str = 'chain', # the network to gate on\n                role2rate:dict = {'admin': 100000000, 'owner': 10000000, 'local': 1000000}, # the rate limits for each role\n                stake_per_call:int = 1000, # the amount of stake required per call\n            ) -> dict:\n        fn = data['fn']\n        params = data['params']\n        client = data['client'] if 'client' in data else data['headers'] # also known as the headers\n        self.address2key = c.address2key()\n        if not hasattr(self, 'state'):\n            self.state = None\n        address = client['key']\n        if c.is_admin( client['key']):\n            role =  'admin'\n        elif address == self.module.key.key_address:\n            role =  'owner'\n        elif address in self.address2key:\n            role =  'local'\n        else:\n            role = 'guest'\n        if role != 'admin':\n            assert fn in self.module.fns , f\"Function {fn} not in endpoints={self.module.fns}\"\n        if role in role2rate:\n            rate_limit = role2rate[role]\n        else:\n            path = self.get_path(f'rate_limiter/{network}_state')\n            self.state = c.get(path, max_age=self.tempo)\n            if self.state == None:\n                self.state = c.module(network)().state()\n            # the amount of stake the user has as a module only\n            stake = self.state['stake'].get(client['key'], 0) \n            stake_to_me = self.state['stake_from'].get(self.module.key.key_address, {}).get(client['key'], 0) \n            stake = stake + stake_to_me\n            rate_limit = stake / stake_per_call\n        rate_limit = rate_limit / self.module.fn2cost.get(fn, 1)\n        rate = self.rate(self.module.name+'/'+client['key'])\n        assert rate < rate_limit, f'RateExceeded(rate={rate} limit={rate_limit}, caller={shortkey(client[\"key\"])})' \n        return rate_limit\n\n    def wait_for_server(self, name:str, trials:int=10, trial_backoff:int=1, network:str='local', max_age:int=60):\n        # wait for the server to start\n        for trial in range(trials):\n            namespace = self.namespace(network=network, max_age=max_age)\n            if name in namespace:\n                try:\n                    return  c.call(namespace[name]+'/info')\n                except Exception as e:\n                    if trial > 1:\n                        print(f'Error getting info for {name} --> {c.detailed_error(e)}', color='red')\n                    # print(c.logs(name, tail=10))\n            c.sleep(trial_backoff)\n        raise Exception(f'Failed to start {name} after {trials} trials')\n\n    def kill(self, name):\n        return self.pm.kill(name)\n\n    def kill_all(self):\n        return self.pm.kill_all()\n    \n    def logs(self, name, **kwargs):\n        return self.pm.logs(name, **kwargs)",
+        "store.py": "\nimport json\nimport os\nimport time\n\n\n\nclass Store:\n\n    def __init__(self, dirpath='~/.commune/server', mode='json'):\n        self.dirpath = self.abspath(dirpath)\n        self.mode = mode\n\n    def put(self, path, data):\n        path = self.get_path(path)\n        dirpath = '/'.join(path.split('/')[:-1])\n        if not os.path.exists(dirpath):\n            os.makedirs(dirpath, exist_ok=True)\n        with open(path, 'w') as f:\n            json.dump(data, f)\n        return path\n\n    def get(self, path, default=None, max_age=None, update=False):\n        path = self.get_path(path)\n        if not os.path.exists(path):\n            return default\n        with open(path, 'r') as f:\n            data = json.load(f)\n        if update:\n            max_age = 0\n        if max_age != None:\n            if time.time() - os.path.getmtime(path) > max_age:\n                data = default\n        return data\n\n    def get_path(self, path):\n        if not path.startswith(self.dirpath):\n            path = f'{self.dirpath}/{path}'\n        if not path.startswith('/'):\n            path  = f'{self.dirpath}/{path}'\n            if self.mode != None:\n                if not path.endswith(f'.{self.mode}'):\n                    path = f'{path}.{self.mode}'\n        return path\n\n    def rm(self, path):\n        path = self.get_path(path)\n        assert os.path.exists(path), f'Failed to find path {path}'\n        os.remove(path)\n        return path\n\n    def items(self, search=None, df=False, features=None):\n        paths = self.paths(search=search)\n        data = []\n        for p in paths:\n            try:\n                data.append(self.get(p))\n            except Exception as e:\n                print(f'Failed to get {p} error={e}')\n        if df:\n            import pandas as pd\n            data = pd.DataFrame(data)\n        return data\n\n    def paths(self, search=None, avoid=None):\n        import glob\n        paths = glob.glob(f'{self.dirpath}/**/*', recursive=True)\n        paths = [self.abspath(p) for p in paths if os.path.isfile(p)]\n        if search != None:\n            paths = [p for p in paths if search in p]\n        if avoid != None:\n            paths = [p for p in paths if avoid not in p]\n        return paths\n        \n\n    def exists(self, path):\n        path = self.get_path(path)\n        return os.path.exists(path)\n        \n\n    def item2age(self):\n        \"\"\"\n        returns the age of the item in seconds\n        \"\"\"\n        paths = self.paths()\n        ages = {}\n        for p in paths:\n            ages[p] = time.time() - os.path.getmtime(p)\n        return ages\n        \n    def n(self):\n        paths = self.items()\n        return len(paths)\n\n    def _rm_all(self):\n        \"\"\"\n        removes all items in the storage\n        \"\"\"\n        paths = self.paths()\n        for p in paths:\n            os.remove(p)\n        return paths\n\n    def test(self, path='test.json', data={'test': 'test', 'fam': {'test': 'test'}}):\n        t0 = time.time()\n        n0 = self.n()\n        if self.exists(path):\n            self.rm(path)\n        assert not self.exists(path), f'Failed to delete'\n        self.put('test.json', {'test': 'test'})\n        n1 = self.n()\n        assert n1 == n0 + 1, f'Failed to add item n0={n0} n1={n1}'\n        assert self.exists(path), f'Failed to find {path}'\n        data = self.get(path)\n        self.rm(path)\n        n2 = self.n()\n        assert n2 == n0, f'Failed to delete item n0={n0} n2={n2}'\n        assert not self.exists(path), f'Failed to delete {path}'\n        assert data == {'test': 'test'}, f'Failed test data={data}'\n        t1 = time.time()\n        print(f'Passed all tests in {t1 - t0} seconds')\n        return {'success': True, 'msg': 'Passed all tests'}\n\n    def abspath(self, path):\n        return os.path.abspath(os.path.expanduser(path))\n\n    def path2age(self):\n        \"\"\"\n        returns the age of the item in seconds\n        \"\"\"\n        paths = self.paths()\n        ages = {}\n        for p in paths:\n            ages[p] = time.time() - os.path.getmtime(p)\n        return ages\n\n    def cid(self, path, ignore_names=['__pycache__', '.DS_Store','.git', '.gitignore']):\n        \"\"\"\n        Get the CID of the strat module\n        \"\"\"\n        path = self.abspath(path)\n        if os.path.isdir(path):\n            files = os.listdir(path)\n            content = []\n            for f in files:\n                if any([ignore in f for ignore in ignore_names]):\n                    continue\n                f = path + '/' + f\n                content.append(self.cid(f))\n            content = ''.join(content)\n        elif os.path.isfile(path):\n            content =  self.get_text(path)\n        else: \n            raise Exception(f'Failed to find path {path}')\n        cid =  self.sha256(content)\n        print(f'cid={cid} path={path}')\n        return cid\n\n\n    def get_age(self, path):\n        \"\"\"\n        Get the age of the file in seconds\n        \"\"\"\n        path = self.abspath(path)\n        if os.path.exists(path):\n            return time.time() - os.path.getmtime(path)\n        else:\n            raise Exception(f'Failed to find path {path}')\n    def get_text(self, path) -> str:\n        with open(path, 'r') as f:\n            result =  f.read()\n        return result\n    \n\n    def sha256(self, content: str) -> str:\n        import hashlib\n        sha256_hash = hashlib.sha256()\n        sha256_hash.update(content.encode('utf-8'))\n        return sha256_hash.hexdigest()",
+        "test.py": "\n\nimport commune as c\nimport os\nimport torch, time\nclass Test:\n    def test_serializer(self):\n        return c.module('serializer')().test()  \n    def test_server(self, name = 'module::test_serving', deployer='module::deployer'):\n        module = c.serve(name, key=deployer)\n        module = c.connect(name)\n        r = module.info()\n        r2 = c.call(name+'/info')\n        print(r, r2)\n        assert c.hash(r) == c.hash(r2)\n        deployer_key = c.get_key(deployer)\n        assert r['key'] == deployer_key.ss58_address\n        print(r)\n        assert 'name' in r, f\"get failed {r}\"\n        c.kill(name)\n        assert name not in c.servers()\n        return {'success': True, 'msg': 'server test passed'}\n    def test_executor(self):\n        return c.module('executor')().test()\n\n    def test_auth(self, auths=['jwt', 'base']):\n        auths = c.get_modules(search='server.auth.')\n        for auth in auths:\n            c.module(auth)().test()\n        return {'success': True, 'msg': 'server test passed', 'auths': auths}\n\n",
+        "txcollector.py": "\nimport os\nimport json\nimport time\nimport asyncio\nimport commune as c\nfrom typing import Dict, List, Optional, Any, Union\n\nclass TxCollector:\n    \"\"\"\n    Transaction Collector for tracking API requests and responses.\n    This separates transaction tracking from the Store module to maintain separation of concerns.\n    \"\"\"\n    \n    def __init__(self, \n                 dirpath: str = '~/.commune/server/transactions',\n                 retention_days: int = 30,\n                 batch_size: int = 100):\n        \"\"\"\n        Initialize the transaction collector\n        \n        Args:\n            dirpath: Directory to store transaction logs\n            retention_days: How many days to keep transaction logs\n            batch_size: How many transactions to batch before writing to disk\n        \"\"\"\n        self.dirpath = os.path.abspath(os.path.expanduser(dirpath))\n        self.retention_days = retention_days\n        self.batch_size = batch_size\n        self.pending_transactions = []\n        self.lock = asyncio.Lock()\n        \n        # Create directory if it doesn't exist\n        if not os.path.exists(self.dirpath):\n            os.makedirs(self.dirpath, exist_ok=True)\n            \n        # Start background tasks\n        asyncio.create_task(self.periodic_flush())\n        asyncio.create_task(self.cleanup_old_transactions())\n    \n    async def record_transaction(self, transaction_data: Dict) -> str:\n        \"\"\"\n        Record a transaction asynchronously\n        \n        Args:\n            transaction_data: Dictionary containing transaction information\n            \n        Returns:\n            Transaction ID\n        \"\"\"\n        # Generate transaction ID\n        tx_id = self.generate_tx_id(transaction_data)\n        \n        # Add metadata\n        transaction_data['tx_id'] = tx_id\n        transaction_data['timestamp'] = transaction_data.get('timestamp', time.time())\n        \n        # Add to pending transactions\n        async with self.lock:\n            self.pending_transactions.append(transaction_data)\n            \n            # If we've reached batch size, flush to disk\n            if len(self.pending_transactions) >= self.batch_size:\n                await self.flush_transactions()\n                \n        return tx_id\n    \n    def generate_tx_id(self, data: Dict) -> str:\n        \"\"\"Generate a unique transaction ID based on the data\"\"\"\n        # Create a string representation of the data\n        data_str = json.dumps(data, sort_keys=True)\n        # Hash it with a timestamp to ensure uniqueness\n        tx_hash = c.hash(f\"{data_str}_{time.time()}\")\n        return tx_hash\n    \n    async def flush_transactions(self) -> None:\n        \"\"\"Flush pending transactions to disk\"\"\"\n        async with self.lock:\n            if not self.pending_transactions:\n                return\n                \n            # Group transactions by date for easier querying\n            date_str = time.strftime(\"%Y-%m-%d\", time.localtime())\n            hour_str = time.strftime(\"%H\", time.localtime())\n            \n            # Create directory structure\n            date_dir = os.path.join(self.dirpath, date_str)\n            os.makedirs(date_dir, exist_ok=True)\n            \n            # Create filename with timestamp to avoid collisions\n            filename = f\"{hour_str}_{int(time.time())}.json\"\n            filepath = os.path.join(date_dir, filename)\n            \n            # Write transactions to file\n            with open(filepath, 'w') as f:\n                json.dump(self.pending_transactions, f)\n                \n            # Clear pending transactions\n            self.pending_transactions = []\n    \n    async def periodic_flush(self) -> None:\n        \"\"\"Periodically flush transactions to disk\"\"\"\n        while True:\n            await asyncio.sleep(60)  # Flush every minute\n            await self.flush_transactions()\n    \n    async def cleanup_old_transactions(self) -> None:\n        \"\"\"Clean up old transaction logs\"\"\"\n        while True:\n            await asyncio.sleep(86400)  # Run once a day\n            \n            # Get current time\n            current_time = time.time()\n            \n            # Walk through directory and remove old files\n            for root, dirs, files in os.walk(self.dirpath):\n                for dir_name in dirs:\n                    try:\n                        # Parse directory name as date\n                        dir_path = os.path.join(root, dir_name)\n                        dir_time = time.mktime(time.strptime(dir_name, \"%Y-%m-%d\"))\n                        \n                        # If directory is older than retention period, remove it\n                        if current_time - dir_time > self.retention_days * 86400:\n                            import shutil\n                            shutil.rmtree(dir_path)\n                    except ValueError:\n                        # Skip directories that don't match our date format\n                        pass\n    \n    def query_transactions(self, \n                          start_time: Optional[float] = None,\n                          end_time: Optional[float] = None,\n                          client_key: Optional[str] = None,\n                          path: Optional[str] = None,\n                          limit: int = 100) -> List[Dict]:\n        \"\"\"\n        Query transactions based on various filters\n        \n        Args:\n            start_time: Start timestamp for query range\n            end_time: End timestamp for query range\n            client_key: Filter by client key\n            path: Filter by request path\n            limit: Maximum number of results to return\n            \n        Returns:\n            List of matching transactions\n        \"\"\"\n        results = []\n        \n        # Default time range if not specified\n        if not end_time:\n            end_time = time.time()\n        if not start_time:\n            start_time = end_time - 86400  # Default to last 24 hours\n            \n        # Convert timestamps to dates for directory traversal\n        start_date = time.strftime(\"%Y-%m-%d\", time.localtime(start_time))\n        end_date = time.strftime(\"%Y-%m-%d\", time.localtime(end_time))\n        \n        # Walk through date directories\n        for root, dirs, files in os.walk(self.dirpath):\n            dir_name = os.path.basename(root)\n            \n            # Skip if directory is outside our date range\n            if dir_name < start_date or dir_name > end_date:\n                continue\n                \n            # Process files in this directory\n            for filename in files:\n                if not filename.endswith('.json'):\n                    continue\n                    \n                filepath = os.path.join(root, filename)\n                \n                try:\n                    with open(filepath, 'r') as f:\n                        transactions = json.load(f)\n                        \n                    # Filter transactions\n                    for tx in transactions:\n                        # Skip if outside time range\n                        tx_time = tx.get('timestamp', 0)\n                        if tx_time < start_time or tx_time > end_time:\n                            continue\n                            \n                        # Skip if client key doesn't match\n                        if client_key and tx.get('client', {}).get('key') != client_key:\n                            continue\n                            \n                        # Skip if path doesn't match\n                        if path and tx.get('path') != path:\n                            continue\n                            \n                        # Add to results\n                        results.append(tx)\n                        \n                        # Check if we've reached the limit\n                        if len(results) >= limit:\n                            return results\n                except Exception as e:\n                    print(f\"Error processing file {filepath}: {e}\")\n                    \n        return results\n    \n    def get_transaction(self, tx_id: str) -> Optional[Dict]:\n        \"\"\"\n        Retrieve a specific transaction by ID\n        \n        Args:\n            tx_id: Transaction ID to retrieve\n            \n        Returns:\n            Transaction data or None if not found\n        \"\"\"\n        # Walk through all transaction files\n        for root, dirs, files in os.walk(self.dirpath):\n            for filename in files:\n                if not filename.endswith('.json'):\n                    continue\n                    \n                filepath = os.path.join(root, filename)\n                \n                try:\n                    with open(filepath, 'r') as f:\n                        transactions = json.load(f)\n                        \n                    # Look for matching transaction\n                    for tx in transactions:\n                        if tx.get('tx_id') == tx_id:\n                            return tx\n                except Exception as e:\n                    print(f\"Error processing file {filepath}: {e}\")\n                    \n        return None\n    \n    def get_stats(self, days: int = 7) -> Dict:\n        \"\"\"\n        Get transaction statistics\n        \n        Args:\n            days: Number of days to include in statistics\n            \n        Returns:\n            Dictionary with statistics\n        \"\"\"\n        stats = {\n            'total_transactions': 0,\n            'transactions_by_day': {},\n            'transactions_by_path': {},\n            'transactions_by_client': {},\n            'average_response_time': 0\n        }\n        \n        # Calculate start time\n        start_time = time.time() - (days * 86400)\n        \n        # Query transactions\n        transactions = self.query_transactions(\n            start_time=start_time,\n            limit=10000  # Set a high limit for stats\n        )\n        \n        # Calculate statistics\n        total_response_time = 0\n        for tx in transactions:\n            # Increment total\n            stats['total_transactions'] += 1\n            \n            # Group by day\n            day = time.strftime(\"%Y-%m-%d\", time.localtime(tx.get('timestamp', 0)))\n            stats['transactions_by_day'][day] = stats['transactions_by_day'].get(day, 0) + 1\n            \n            # Group by path\n            path = tx.get('path', 'unknown')\n            stats['transactions_by_path'][path] = stats['transactions_by_path'].get(path, 0) + 1\n            \n            # Group by client\n            client = tx.get('client', {}).get('key', 'unknown')\n            stats['transactions_by_client'][client] = stats['transactions_by_client'].get(client, 0) + 1\n            \n            # Add response time if available\n            if 'duration' in tx:\n                total_response_time += tx['duration']\n                \n        # Calculate average response time\n        if stats['total_transactions'] > 0:\n            stats['average_response_time'] = total_response_time / stats['total_transactions']\n            \n        return stats\n    \n    async def test(self) -> Dict:\n        \"\"\"Run tests on the transaction collector\"\"\"\n        # Generate test transaction\n        test_tx = {\n            'client': {'key': 'test_key'},\n            'path': '/test',\n            'method': 'GET',\n            'ip': '127.0.0.1'\n        }\n        \n        # Record transaction\n        tx_id = await self.record_transaction(test_tx)\n        \n        # Force flush\n        await self.flush_transactions()\n        \n        # Query transaction\n        result = self.get_transaction(tx_id)\n        \n        # Verify result\n        success = result is not None and result['tx_id'] == tx_id\n        \n        return {\n            'success': success,\n            'tx_id': tx_id,\n            'result': result\n        }\n",
+        "utils.py": "\nimport os\n\ndef shortkey(x: str, n=6) -> str:\n    return x[:n] + '..' \n\ndef abspath(path: str) -> str:\n    \"\"\"Get the absolute path of a file or directory\"\"\"\n    return os.path.abspath(os.path.expanduser(path))"
+    },
+    "schema": {
+        "fleet": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "n": {
+                    "value": 2,
+                    "type": "int"
+                },
+                "timeout": {
+                    "value": 10,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "fleet",
+            "source": {
+                "start": 79,
+                "length": 5,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:9fa11e8de4e267549f4182db965238fbd8c74bc4459e621862af215554fad0dd",
+                "end": 84
+            }
+        },
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "fn": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "request": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        gets and verifies the request\n        params:\n            fn : str\n                the function to call\n            request : dict\n                the request object\n        result:\n            data : dict\n                fn : str\n                params : dict\n                client : dict (headers)\n        ",
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 97,
+                "length": 42,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:25f6bf9f808c06aa9fc0ff841c7b23c11ea8da7914c756724a64677d1212e644",
+                "end": 139
+            }
+        },
+        "get_params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "request": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_params",
+            "source": {
+                "start": 85,
+                "length": 11,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:ad4b4412ec8a6e30458f73ba4570d206dac93a778d7a5c12b6a791f0cf572b3b",
+                "end": 96
+            }
+        },
+        "get_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_path",
+            "source": {
+                "start": 179,
+                "length": 4,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:6f4a9ca5c6966df6fe32e5ac8aebb64c3c026dd53ee1e1fb8bcdf9be0467e6e5",
+                "end": 183
+            }
+        },
+        "get_port": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "tail": {
+                    "value": 100,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        get port from the logs\n        ",
+            "cost": 1,
+            "name": "get_port",
+            "source": {
+                "start": 287,
+                "length": 11,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:a7d29ea48b06427e24ae33c28f040f907b105b3c2fc5331b677c42534228616f",
+                "end": 298
+            }
+        },
+        "get_url": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "tail": {
+                    "value": 100,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_url",
+            "source": {
+                "start": 308,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:bb0c7e2ab0ee8d4abf65a21d1ee38c3b86adb8d183d060c032e5686ed26b2f79",
+                "end": 310
+            }
+        },
+        "hash": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "hash",
+            "source": {
+                "start": 176,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:edf5d095e43fe6d37c3bcb79d0e775ee2ca3c60611fe041ba1f530a843c3925e",
+                "end": 178
+            }
+        },
+        "kill": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "kill",
+            "source": {
+                "start": 408,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:a803636bebf95ba202fcaa2bf51a670abc0c3680765648db21a7d0b1313b80c9",
+                "end": 410
+            }
+        },
+        "kill_all": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "kill_all",
+            "source": {
+                "start": 411,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:2b5905d58968ba70864e7cbb4357e4cda2b274bece5dd2af242f814a66a8d721",
+                "end": 413
+            }
+        },
+        "logs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "logs",
+            "source": {
+                "start": 414,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:38d60fcfd347c5277f2295be842da2f73096b2d3974e6ba410572b4176ac4556",
+                "end": 416
+            }
+        },
+        "modules": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "max_age": {
+                    "value": 60,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "features": {
+                    "value": [
+                        "name",
+                        "url",
+                        "key"
+                    ],
+                    "type": "list"
+                },
+                "timeout": {
+                    "value": 8,
+                    "type": "int"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "modules",
+            "source": {
+                "start": 320,
+                "length": 18,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:38b98b97bbf9e171d6b97b039d7daa3a85a0bf201a3640ac4a792b5065312c5e",
+                "end": 338
+            }
+        },
+        "namespace": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'dict'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "namespace",
+            "source": {
+                "start": 299,
+                "length": 8,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:bf9d364e3ac47258fd9ce26c2af86e8876d56a1ab76841ac81073d8e73f54f50",
+                "end": 307
+            }
+        },
+        "params": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "args": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "params",
+            "source": {
+                "start": 317,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:e4f222037a95f491fc838d7ce5d8939cb2ce88569688cc67dcefdd582d6fe989",
+                "end": 319
+            }
+        },
+        "rate": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "network": {
+                    "value": "chain",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 60,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "module": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'float'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "rate",
+            "source": {
+                "start": 342,
+                "length": 12,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:4f2e4906062caa4e79c43e5bf90ed29eb4bd0fa36a1059011d981b969d3634a2",
+                "end": 354
+            }
+        },
+        "rate_limit": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "network": {
+                    "value": "chain",
+                    "type": "str"
+                },
+                "role2rate": {
+                    "value": {
+                        "admin": 100000000,
+                        "owner": 10000000,
+                        "local": 1000000
+                    },
+                    "type": "dict"
+                },
+                "stake_per_call": {
+                    "value": 1000,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'dict'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "rate_limit",
+            "source": {
+                "start": 355,
+                "length": 38,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:03dd4a9fb44e93fb8cc48fcc969efb942d744a63170b934beff3f8b464142380",
+                "end": 393
+            }
+        },
+        "results": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "module",
+                    "type": "str"
+                },
+                "paths": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "df": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "features": {
+                    "value": [
+                        "time",
+                        "fn",
+                        "duration",
+                        "client",
+                        "server"
+                    ],
+                    "type": "list"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.Union[pandas.core.frame.DataFrame, typing.List[typing.Dict]]"
+            },
+            "docs": "\n        Get history data for a specific address\n        \n        Args:\n            address: The address to get history for\n            paths: Optional list of paths to load from\n            as_df: Whether to return as pandas DataFrame\n            features: Features to include\n            \n        Returns:\n            DataFrame or list of history records\n        ",
+            "cost": 1,
+            "name": "results",
+            "source": {
+                "start": 140,
+                "length": 35,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:60c447786a81574668cad0439cd422d246b65621414cf83ddaa04e44a2cfd3b1",
+                "end": 175
+            }
+        },
+        "serve": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "params": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "port": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "name": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "remote": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "functions": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "key": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "cwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "extra_params": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "serve",
+            "source": {
+                "start": 266,
+                "length": 20,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:9a857f7ef483211008221e6bf773e5941bd9185396d362636009db19e3991b87",
+                "end": 286
+            }
+        },
+        "server_exists": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bool'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "server_exists",
+            "source": {
+                "start": 339,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:2b51b708c36d329dca7bf400ff2901cafaa66776379d4e5ecfabe07841fa0022",
+                "end": 341
+            }
+        },
+        "servers": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "servers",
+            "source": {
+                "start": 311,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:95a39e8e2e2e2a4eb96ecc72b4c36efecb5d8f6ba5e45258d9093ddc3a4d456f",
+                "end": 313
+            }
+        },
+        "set_functions": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "functions": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "set_functions",
+            "source": {
+                "start": 221,
+                "length": 21,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:7f06865b340e7c52f13575a6df7f8c02e4e83eeb43c0028eb58578ab56906d05",
+                "end": 242
+            }
+        },
+        "set_module": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "functions": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "key": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "params": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "port": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "set_module",
+            "source": {
+                "start": 184,
+                "length": 22,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:f08cfaea0842177d2728e1a27cbc869fd00bc359503b6fd5c8179b08017b59b3",
+                "end": 206
+            }
+        },
+        "set_port": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "port": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "port_attributes": {
+                    "value": [
+                        "port",
+                        "server_port"
+                    ],
+                    "type": "list"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "set_port",
+            "source": {
+                "start": 243,
+                "length": 22,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:d903efef269b913a02c7fa36d571b05a759bfa29c253c4119af5e197087851a8",
+                "end": 265
+            }
+        },
+        "urls": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "urls",
+            "source": {
+                "start": 314,
+                "length": 2,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:3b4fadf47ff259ba6b2c8d7ae4575e8e6a72c5c6199a7139cb786e3d78f3fdb0",
+                "end": 316
+            }
+        },
+        "verify_info": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "info": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'dict'>"
+            },
+            "docs": "\n        verifies the info of the server\n        params:\n            info : dict\n                the info of the server\n        ",
+            "cost": 1,
+            "name": "verify_info",
+            "source": {
+                "start": 207,
+                "length": 13,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:9ce6d632406247aff4a31d06205e4eb134282fcf7334b747831a434eea1a985e",
+                "end": 220
+            }
+        },
+        "wait_for_server": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "trials": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "trial_backoff": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "network": {
+                    "value": "local",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 60,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "wait_for_server",
+            "source": {
+                "start": 394,
+                "length": 13,
+                "path": "~/commune/commune/core/server/server.py",
+                "code": null,
+                "hash": "sha256:9fd809508cc5b64c5278245de0412e2045f42c3258f98fcb845170ea582769e3",
+                "end": 407
+            }
+        }
+    },
+    "name": "server",
+    "key": "5HNdT1wS37bpgosyKYVqaZinycFaiH7cWfCMTQEHrcHdqGuU",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:8d939d61429cefc86d9065e3c627fbe65613ac141d6838aeba1218528a79da96",
+    "time": 1746536238.675443,
+    "signature": "0x8aef43cefc8cd31aa75f490cd9f3432fef2753ebf989309040c15dee1d229b5450bdcd4e56dad6b5cdcfdba398b6640fd790a7fedbae711f31c74f05f9c45f8c"
+}

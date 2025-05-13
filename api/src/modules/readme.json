@@ -1,0 +1,48 @@
+{
+    "code": {
+        "readme.py": "import commune as c\n\nclass Readme:\n    def forward(self, module='vali', max_age=1, update=False):\n        code = c.code(module)\n        path = c.dirpath(module) + '/README.md'\n        readme = c.get('readme',None, max_age=max_age, update=update)\n        if readme:\n            c.print(f\"README file already exists for module {module}\", color='yellow')\n            return readme\n\n\n\n        prompt = f'''\n        Generate a README file for a Python module.\n        CODE: {code}\n        CONTEXT: {c.core_context()}\n        OUTPUT_FORMAT: \n        <START_OUTPUT>\n        text\n        <END_OUTPUT>\n        08\n        '''\n        response =  c.ask(prompt, process_input=False)\n        output = ''\n        for ch in response:\n            print(ch, end='')\n            output += str(ch)\n\n        output = output.split('<START_OUTPUT>')[1].split('<END_OUTPUT>')[0]\n        \n        \n        c.put_text(path, output)\n\n        return response\n\n\n\n    "
+    },
+    "schema": {
+        "forward": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "vali",
+                    "type": "str"
+                },
+                "max_age": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "forward",
+            "source": {
+                "start": 4,
+                "length": 32,
+                "path": "~/commune/commune/modules/readme/readme.py",
+                "code": null,
+                "hash": "sha256:edb4e37490b650fa2a2fa96eb1b8040617fe001420858345020088c57a578e2f",
+                "end": 36
+            }
+        }
+    },
+    "name": "readme",
+    "key": "5ECGWn1pF89foRnmoraw9UuaRtyzeo1bLZYtjaQoBwydHz7L",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:e278570499f310b4673328085b309d4722ccd342659ece68fc719dcf68d01c37",
+    "time": 1746536229.734848,
+    "signature": "0x76e0faa9fb669fb4f5c99af9efa251407a97e44737234a72d4ef14871c5f723879d5f4cc76eea26aefbbe04d1e3d0b97f6ec43cf9c4cda2223a53fd781c6cb8d"
+}

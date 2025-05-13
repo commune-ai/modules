@@ -1,0 +1,252 @@
+{
+    "code": {
+        "ops.py": "import pytest\nimport numpy as np\nimport random\nimport time\n\nclass Ops:\n    \"\"\"Test suite for ComputationVerifier\"\"\"\n    \n    @pytest.fixture\n    def verifier(self):\n        \"\"\"Create a ComputationVerifier instance for testing\"\"\"\n        return ComputationVerifier(\n            embedding_model=\"sentence-transformers/all-MiniLM-L6-v2\",\n            similarity_threshold=0.9,\n            default_verification_runs=3\n        )\n    \n    def test_initialization(self, verifier):\n        \"\"\"Test that the verifier initializes correctly\"\"\"\n        assert verifier.similarity_threshold == 0.9\n        assert verifier.default_verification_runs == 3\n        assert len(verifier.verification_history) == 0\n    \n    def test_compute_embedding(self, verifier):\n        \"\"\"Test computing embeddings\"\"\"\n        embedding = verifier.compute_embedding(\"Test string\")\n        assert isinstance(embedding, np.ndarray)\n        assert embedding.shape[0] > 0\n    \n    def test_compare_embeddings(self, verifier):\n        \"\"\"Test comparing embeddings\"\"\"\n        embedding1 = verifier.compute_embedding(\"Hello world\")\n        embedding2 = verifier.compute_embedding(\"Hello world\")\n        embedding3 = verifier.compute_embedding(\"Completely different text\")\n        \n        # Same text should have high similarity\n        similarity_same = verifier.compare_embeddings(embedding1, embedding2)\n        assert similarity_same > 0.9\n        \n        # Different text should have lower similarity\n        similarity_diff = verifier.compare_embeddings(embedding1, embedding3)\n        assert similarity_diff < similarity_same\n    \n    def test_verify_consistent_function(self, verifier):\n        \"\"\"Test verifying a consistent function\"\"\"\n        def consistent_function(x, y):\n            return x + y\n        \n        verification = verifier.verify(\n            function=consistent_function,\n            args=[5, 10],\n            verification_runs=3\n        )\n        \n        assert verification[\"is_valid\"] == True\n        assert verification[\"confidence\"] > 0.9\n        assert verification[\"function\"] == \"consistent_function\"\n        assert verification[\"original_result\"] == 15\n    \n    def test_verify_inconsistent_function(self, verifier):\n        \"\"\"Test verifying a function with inconsistent results\"\"\"\n        def inconsistent_function(x, y):\n            return x + y + random.randint(1, 100)\n        \n        # First run to get original result\n        original_result = inconsistent_function(5, 10)\n        \n        verification = verifier.verify(\n            function=inconsistent_function,\n            args=[5, 10],\n            result=original_result,\n            verification_runs=3\n        )\n        \n        # Results should be inconsistent due to random component\n        assert verification[\"average_similarity\"] < 1.0\n    \n    def test_verification_timeout(self, verifier):\n        \"\"\"Test that verification respects timeout\"\"\"\n        def slow_function(x):\n            time.sleep(1)\n            return x * 2\n        \n        start_time = time.time()\n        verification = verifier.verify(\n            function=slow_function,\n            args=[5],\n            verification_runs=10,\n            timeout=2\n        )\n        \n        duration = time.time() - start_time\n        # Should timeout after about 2 seconds\n        assert duration < 3.5\n        # Should complete fewer than the requested 10 runs\n        assert verification[\"verification_runs\"] < 10\n    \n    def test_verification_history(self, verifier):\n        \"\"\"Test that verification history is maintained\"\"\"\n        def test_function(x):\n            return x * 2\n        \n        # Run a few verifications\n        for i in range(3):\n            verifier.verify(function=test_function, args=[i])\n        \n        # Check history\n        history = verifier.get_verification_history()\n        assert len(history) == 3\n        \n        # Check stats\n        stats = verifier.get_verification_stats()\n        assert stats[\"total_verifications\"] == 3\n        assert \"average_confidence\" in stats\n        \n        # Test clearing history\n        verifier.clear_verification_history()\n        assert len(verifier.get_verification_history()) == 0\n    \n    def test_convert_to_string(self, verifier):\n        \"\"\"Test converting different data types to strings\"\"\"\n        # Test simple types\n        assert verifier._convert_to_string(123) == \"123\"\n        assert verifier._convert_to_string(None) == \"None\"\n        \n        # Test complex types\n        list_str = verifier._convert_to_string([1, 2, 3])\n        assert \"[\" in list_str and \"]\" in list_str\n        \n        dict_str = verifier._convert_to_string({\"a\": 1, \"b\": 2})\n        assert \"{\" in dict_str and \"}\" in dict_str"
+    },
+    "schema": {
+        "test_compare_embeddings": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test comparing embeddings",
+            "cost": 1,
+            "name": "test_compare_embeddings",
+            "source": {
+                "start": 30,
+                "length": 13,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:2dd1fa7993b770aa0bc3fa26f1c501952e9f238b511702e0be0d246399f59a1b",
+                "end": 43
+            }
+        },
+        "test_compute_embedding": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test computing embeddings",
+            "cost": 1,
+            "name": "test_compute_embedding",
+            "source": {
+                "start": 24,
+                "length": 5,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:9020da296d4be54136f66b1c80714c6af00339871c7979f2822d09cdd62e5606",
+                "end": 29
+            }
+        },
+        "test_convert_to_string": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test converting different data types to strings",
+            "cost": 1,
+            "name": "test_convert_to_string",
+            "source": {
+                "start": 120,
+                "length": 12,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:49acb3f8c757d17350b483f88c398eb5cb9dad1d7c89d03f9cc1dfc071cda99b",
+                "end": 132
+            }
+        },
+        "test_initialization": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test that the verifier initializes correctly",
+            "cost": 1,
+            "name": "test_initialization",
+            "source": {
+                "start": 18,
+                "length": 5,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:6984ca58be2faa2c885911d007f54fe714f8a1c5a8213a5982046898c15b7a26",
+                "end": 23
+            }
+        },
+        "test_verification_history": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test that verification history is maintained",
+            "cost": 1,
+            "name": "test_verification_history",
+            "source": {
+                "start": 98,
+                "length": 21,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:2e0503d9d3c043161b710d26b428155801fdadd97e3ddc1fbc1ae8125ee526bd",
+                "end": 119
+            }
+        },
+        "test_verification_timeout": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test that verification respects timeout",
+            "cost": 1,
+            "name": "test_verification_timeout",
+            "source": {
+                "start": 78,
+                "length": 19,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:a267d44fd03269cd3117dd16c0d1953db0025a0ee0a0b270a8d6904775ada67a",
+                "end": 97
+            }
+        },
+        "test_verify_consistent_function": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test verifying a consistent function",
+            "cost": 1,
+            "name": "test_verify_consistent_function",
+            "source": {
+                "start": 44,
+                "length": 15,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:5db55cfb3d254d0a94d9464965672afbcb06b1f4c7338094e821244bc1cab2b3",
+                "end": 59
+            }
+        },
+        "test_verify_inconsistent_function": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verifier": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Test verifying a function with inconsistent results",
+            "cost": 1,
+            "name": "test_verify_inconsistent_function",
+            "source": {
+                "start": 60,
+                "length": 17,
+                "path": "~/commune/commune/modules/ops/ops.py",
+                "code": null,
+                "hash": "sha256:a5a6858626703e82e49be2d96d0f24bb4b95ce74528cc0978c3cf79987cddeef",
+                "end": 77
+            }
+        },
+        "verifier": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "Create a ComputationVerifier instance for testing",
+            "cost": 1,
+            "name": "verifier",
+            "source": {
+                "start": 9,
+                "length": 8,
+                "path": "~/Library/Python/3.9/lib/python/site-packages/_pytest/fixtures.py",
+                "code": null,
+                "hash": "sha256:f3df174db0be39dddf2960ef5875c53a8010eb7d98406200234a2f38a342f1bc",
+                "end": 17
+            }
+        }
+    },
+    "name": "ops",
+    "key": "5DZjFtRFQa3oQXjWQh1N8MnWScyiKXrJMHW5Jsqu1TBZdnkW",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:e5d9a2d91dcfac99e851cc9abcfefa1dd83925d2a47cd90f37c2bc4f9d8c542a",
+    "time": 1746536228.619958,
+    "signature": "0x18fa0ddf747e6e11317c13867181aedc7708a1aefe35456106386f75381bcf29071188ae3f242385a2304901d83e5b62507568187df61ffd6db4699987051884"
+}

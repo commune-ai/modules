@@ -1,0 +1,44 @@
+{
+    "code": {
+        "scan.py": "import commune as c \n\nclass Scanner:\n    def ask(self, \n            context=\"./\",\n            batch_size = 4,\n            ):\n        \n        question = \"\"\"\n        is there any vulnerabilities when running this, i dont care about exploits\n        but more concerned about attacks on my system that can be done by running it \n        locally\n        >0.5 if its too dangerous to run locally, ONLY ANSWER IN THE JSON FORMAT\n        json(score:float) [0,1] where threshold\n        DO NOT INCLUDE EXTRA FIELDS, IF YOU THINK ITS TOO DANGEROUS\n        SPECIFY THE LINE AND REASON CONCICELY\n        \"\"\"\n         \n        batch_context = {}\n        batch_response = []\n        for i, (file, text) in enumerate(c.file2text(context).items()):\n            if len(batch_context) == batch_size :\n                files = list(batch_context.keys())\n                print(files)\n                response = ''\n                for ch in c.ask(question, context=batch_context): \n                    print(ch, end=\"\")\n                    response += ch\n                batch_response.append(response)\n                batch_context = {}\n            else:\n                batch_context[file] =  text\n        return batch_response\n        "
+    },
+    "schema": {
+        "ask": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "context": {
+                    "value": "./",
+                    "type": "str"
+                },
+                "batch_size": {
+                    "value": 4,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "ask",
+            "source": {
+                "start": 4,
+                "length": 30,
+                "path": "~/commune/commune/modules/scan/scan.py",
+                "code": null,
+                "hash": "sha256:a02d84d56e509ac40df817778126b7ee60bd2e1248dac2069c958a16f7088487",
+                "end": 34
+            }
+        }
+    },
+    "name": "scan",
+    "key": "5FTPnrNkwbx8hjWrATvySNPLyn5jMvCS952zGJ4mRmcH7DCP",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:69eedc3d1a87d31bd1f0da276862421a5eac9dae7c4d902c2e739b142f553de6",
+    "time": 1746536232.5792599,
+    "signature": "0x86c38e189364b053cba2636ae36e81be32a601cd75b07306a49f64fec810c30a203ea67ee509b7bc4a76f1f2b527ea66c50785d8bc6cc24e66f64c4c808a2587"
+}

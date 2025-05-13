@@ -1,0 +1,375 @@
+{
+    "code": {
+        "pm2.py": "import commune as c \nfrom typing import *\nimport json\nimport os\nclass Pm2:\n\n    def __init__(self, process_prefix='proc/', **kwargs):\n        self.process_prefix = process_prefix\n        self.process_manager_path = c.abspath('~/.pm2')\n        self.sync_env()\n\n    def get_procname(self, name:str, **kwargs) -> str:\n        if  name != None and not name.startswith(self.process_prefix):\n            name = self.process_prefix + name\n        return name\n        \n    def proc_exists(self, name:str, **kwargs) -> bool:\n        name = self.get_procname(name)\n        return name in self.procs(**kwargs)\n\n    def procs(self, search=None,  **kwargs) -> List[str]:\n        output_string = c.cmd('pm2 status')\n        procs = []\n        tag = ' default '\n        for line in output_string.split('\\n'):\n            if  tag in line:\n                name = line.split(tag)[0].strip()\n                name = name.split(' ')[-1]\n                procs += [name]\n        if search != None:\n            search = self.get_procname(search)\n            procs = [m for m in procs if search in m]\n        procs = sorted(list(set(procs)))\n        return procs\n\n    def run(self, \n                  fn: str = 'serve',\n                   name:str = None, \n                   module:str = 'server',  \n                   params: dict = None,\n                   network:str = 'local',\n                   interpreter:str='python3', \n                   verbose: bool = False , \n                   cwd : str = None,\n                    max_age = 10,\n                    trials:int=3,\n                    trial_backoff:int=1,\n                    refresh:bool=True ):\n        \"\"\"\n        run a process with pm2\n\n        Args:\n            fn (str, optional): The function to run. Defaults to 'serve'.\n            name (str, optional): The name of the proc. Defaults to None.\n            module (str, optional): The module to run. Defaults to 'server'.\n            params (dict, optional): The parameters for the function. Defaults to None.\n            interpreter (str, optional): The interpreter to use. Defaults to 'python3'.\n            verbose (bool, optional): Whether to print the output. Defaults to False.\n            wait_for_server (bool, optional): Whether to wait for the server to start. Defaults to True.\n            cwd (str, optional): The current working directory. Defaults to None.\n            refresh (bool, optional): Whether to refresh the environment. Defaults to True.\n        Returns:\n            dict: The result of the command\n         \n        \"\"\"\n        self.sync_env()\n        params['remote'] = False\n        name = name or module\n        if '/' in fn:\n            module, fn = fn.split('/')\n        else:\n            module = 'server'\n            fn = fn\n        params_str = json.dumps({'fn': module +'/' + fn, 'params': params or {}}).replace('\"','\\\\\"')\n        proc_name = self.get_procname(name)\n        if self.proc_exists(proc_name):\n            self.kill(proc_name, rm_server=False)\n        cmd = f\"pm2 start {c.filepath()} --name {proc_name} --interpreter {interpreter} -f --no-autorestart -- --fn run_fn --params \\\"{params_str}\\\"\"\n        c.cmd(cmd, verbose=verbose, cwd=c.lib_path)\n        return {'success':True, 'message':f'Running {proc_name}'}\n\n    def kill(self, name:str, verbose:bool = True, rm_server=True, **kwargs):\n        proc_name = self.get_procname(name)\n        try:\n            c.cmd(f\"pm2 delete {proc_name}\", verbose=False)\n            for m in ['out', 'error']:\n                os.remove(self.get_logs_path(name, m))\n            result =  {'message':f'Killed {proc_name}', 'success':True}\n        except Exception as e:\n            result =  {'message':f'Error killing {proc_name}', 'success':False, 'error':e}\n        return result\n    \n    def kill_all(self, verbose:bool = True, timeout=20):\n        servers = self.procs()\n        futures = [c.submit(self.kill, kwargs={'name':s, 'update': False}) for s in servers]\n        results = c.wait(futures, timeout=timeout)\n        return results\n    \n    def killall(self, **kwargs):\n        return self.kill_all(**kwargs)\n\n    def get_logs_path(self, name:str, mode='out')->str:\n        assert mode in ['out', 'error'], f'Invalid mode {mode}'\n        name = self.get_procname(name)\n        return f'{self.process_manager_path}/logs/{name.replace(\"/\", \"-\")}-{mode}.log'.replace(':', '-').replace('_', '-') \n\n    def logs(self, module:str, top=None, tail: int =None , stream=True, **kwargs):\n        module = self.get_procname(module)\n        if tail or top:\n            stream = False\n        if stream:\n            return c.cmd(f\"pm2 logs {module}\", verbose=True)\n        else:\n            text = ''\n            for m in ['out', 'error']:\n                # I know, this is fucked \n                path = self.get_logs_path(module, m)\n                try:\n                    text +=  c.get_text(path)\n                except Exception as e:\n                    c.print('ERROR GETTING LOGS -->' , e)\n            if top != None:\n                text = '\\n'.join(text.split('\\n')[:top])\n            if tail != None:\n                text = '\\n'.join(text.split('\\n')[-tail:])\n        return text\n\n    def sync_env(self,**kwargs):\n        '''ensure that the environment variables are set for the proc'''\n        is_pm2_installed = bool( '/bin/pm2' in c.cmd('which pm2', verbose=False))\n        if not is_pm2_installed:\n            c.cmd('npm install -g pm2')\n            c.cmd('pm2 update')\n        return {'success':True, 'message':f'Ensured env '}\n  \n   "
+    },
+    "schema": {
+        "get_logs_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "mode": {
+                    "value": "out",
+                    "type": "str"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_logs_path",
+            "source": {
+                "start": 102,
+                "length": 4,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:55c217eb78840a539433e50b0619cf362e89b63f2e802e13fe3ca484a030beda",
+                "end": 106
+            }
+        },
+        "get_procname": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_procname",
+            "source": {
+                "start": 12,
+                "length": 4,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:7d7c8d3c62ce8a05d915c88ae0fccfcc3d89d8f53946308e67b2d6cc4373b6ab",
+                "end": 16
+            }
+        },
+        "kill": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "rm_server": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "kill",
+            "source": {
+                "start": 82,
+                "length": 10,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:f98ef0b462571bf9022d3e4fe2e9fbbd832eff22367ce58784af1bde8daf6bb9",
+                "end": 92
+            }
+        },
+        "kill_all": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "verbose": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "timeout": {
+                    "value": 20,
+                    "type": "int"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "kill_all",
+            "source": {
+                "start": 93,
+                "length": 5,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:791f7fee31b20479cd18c62836ecd3390aa179bae7c71de965a46d85287cd184",
+                "end": 98
+            }
+        },
+        "killall": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "killall",
+            "source": {
+                "start": 99,
+                "length": 2,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:e54b223fc468c1e5add6a237f3a0210ccf3a650bfe04ff2613062e13ec9a9309",
+                "end": 101
+            }
+        },
+        "logs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "module": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "top": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "tail": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "stream": {
+                    "value": true,
+                    "type": "bool"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "logs",
+            "source": {
+                "start": 107,
+                "length": 20,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:b547680ccccae476cb4e531bfdf1864ceaaa891a15dce2ac0f73ffd88a713588",
+                "end": 127
+            }
+        },
+        "proc_exists": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "name": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'bool'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "proc_exists",
+            "source": {
+                "start": 17,
+                "length": 3,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:569122b18077cdf656b4974e7cc982fe5473b33535d0782ed3889cbe73cc30ef",
+                "end": 20
+            }
+        },
+        "procs": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "typing.List[str]"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "procs",
+            "source": {
+                "start": 21,
+                "length": 14,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:fba7d5bc68e4378751fb26f8bbd976d38c48f1f103e39f8519457d58e2cde9d7",
+                "end": 35
+            }
+        },
+        "run": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "fn": {
+                    "value": "serve",
+                    "type": "str"
+                },
+                "name": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "module": {
+                    "value": "server",
+                    "type": "str"
+                },
+                "params": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "network": {
+                    "value": "local",
+                    "type": "str"
+                },
+                "interpreter": {
+                    "value": "python3",
+                    "type": "str"
+                },
+                "verbose": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "cwd": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "max_age": {
+                    "value": 10,
+                    "type": "int"
+                },
+                "trials": {
+                    "value": 3,
+                    "type": "int"
+                },
+                "trial_backoff": {
+                    "value": 1,
+                    "type": "int"
+                },
+                "refresh": {
+                    "value": true,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        run a process with pm2\n\n        Args:\n            fn (str, optional): The function to run. Defaults to 'serve'.\n            name (str, optional): The name of the proc. Defaults to None.\n            module (str, optional): The module to run. Defaults to 'server'.\n            params (dict, optional): The parameters for the function. Defaults to None.\n            interpreter (str, optional): The interpreter to use. Defaults to 'python3'.\n            verbose (bool, optional): Whether to print the output. Defaults to False.\n            wait_for_server (bool, optional): Whether to wait for the server to start. Defaults to True.\n            cwd (str, optional): The current working directory. Defaults to None.\n            refresh (bool, optional): Whether to refresh the environment. Defaults to True.\n        Returns:\n            dict: The result of the command\n         \n        ",
+            "cost": 1,
+            "name": "run",
+            "source": {
+                "start": 36,
+                "length": 45,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:0ca8e1e18511b7622e905572c46e93d171fba574a01d8da5197bcbbd9ab050e2",
+                "end": 81
+            }
+        },
+        "sync_env": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "kwargs": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "ensure that the environment variables are set for the proc",
+            "cost": 1,
+            "name": "sync_env",
+            "source": {
+                "start": 128,
+                "length": 7,
+                "path": "~/commune/commune/modules/pm2/pm2.py",
+                "code": null,
+                "hash": "sha256:c4c8b4fe51a1b88d9952955722cbf8a1b8317f4f4a9913f85dd4ec20f6754a27",
+                "end": 135
+            }
+        }
+    },
+    "name": "pm2",
+    "key": "5D2YcbbD5jed9i3RVSoBGjWZSeMt6SW1ckf9JGkD1MokUFPu",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:2a34b2a8ac39513258718031d48c495178a52787c801b043a4885e093a17103f",
+    "time": 1746536229.226579,
+    "signature": "0xe4fc1d8bebea10a3c63a8578eced254509c2831733ae3f7a3e3e17c78dbd5273c664870f5643697773cbc6bb0bfbdcac9200981210af46fadd55d2fd6cc4ce82"
+}

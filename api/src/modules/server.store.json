@@ -1,0 +1,479 @@
+{
+    "code": {
+        "store.py": "\nimport json\nimport os\nimport time\n\n\n\nclass Store:\n\n    def __init__(self, dirpath='~/.commune/server', mode='json'):\n        self.dirpath = self.abspath(dirpath)\n        self.mode = mode\n\n    def put(self, path, data):\n        path = self.get_path(path)\n        dirpath = '/'.join(path.split('/')[:-1])\n        if not os.path.exists(dirpath):\n            os.makedirs(dirpath, exist_ok=True)\n        with open(path, 'w') as f:\n            json.dump(data, f)\n        return path\n\n    def get(self, path, default=None, max_age=None, update=False):\n        path = self.get_path(path)\n        if not os.path.exists(path):\n            return default\n        with open(path, 'r') as f:\n            data = json.load(f)\n        if update:\n            max_age = 0\n        if max_age != None:\n            if time.time() - os.path.getmtime(path) > max_age:\n                data = default\n        return data\n\n    def get_path(self, path):\n        if not path.startswith(self.dirpath):\n            path = f'{self.dirpath}/{path}'\n        if not path.startswith('/'):\n            path  = f'{self.dirpath}/{path}'\n            if self.mode != None:\n                if not path.endswith(f'.{self.mode}'):\n                    path = f'{path}.{self.mode}'\n        return path\n\n    def rm(self, path):\n        path = self.get_path(path)\n        assert os.path.exists(path), f'Failed to find path {path}'\n        os.remove(path)\n        return path\n\n    def items(self, search=None, df=False, features=None):\n        paths = self.paths(search=search)\n        data = []\n        for p in paths:\n            try:\n                data.append(self.get(p))\n            except Exception as e:\n                print(f'Failed to get {p} error={e}')\n        if df:\n            import pandas as pd\n            data = pd.DataFrame(data)\n        return data\n\n    def paths(self, search=None, avoid=None):\n        import glob\n        paths = glob.glob(f'{self.dirpath}/**/*', recursive=True)\n        paths = [self.abspath(p) for p in paths if os.path.isfile(p)]\n        if search != None:\n            paths = [p for p in paths if search in p]\n        if avoid != None:\n            paths = [p for p in paths if avoid not in p]\n        return paths\n        \n\n    def exists(self, path):\n        path = self.get_path(path)\n        return os.path.exists(path)\n        \n\n    def item2age(self):\n        \"\"\"\n        returns the age of the item in seconds\n        \"\"\"\n        paths = self.paths()\n        ages = {}\n        for p in paths:\n            ages[p] = time.time() - os.path.getmtime(p)\n        return ages\n        \n    def n(self):\n        paths = self.items()\n        return len(paths)\n\n    def _rm_all(self):\n        \"\"\"\n        removes all items in the storage\n        \"\"\"\n        paths = self.paths()\n        for p in paths:\n            os.remove(p)\n        return paths\n\n    def test(self, path='test.json', data={'test': 'test', 'fam': {'test': 'test'}}):\n        t0 = time.time()\n        n0 = self.n()\n        if self.exists(path):\n            self.rm(path)\n        assert not self.exists(path), f'Failed to delete'\n        self.put('test.json', {'test': 'test'})\n        n1 = self.n()\n        assert n1 == n0 + 1, f'Failed to add item n0={n0} n1={n1}'\n        assert self.exists(path), f'Failed to find {path}'\n        data = self.get(path)\n        self.rm(path)\n        n2 = self.n()\n        assert n2 == n0, f'Failed to delete item n0={n0} n2={n2}'\n        assert not self.exists(path), f'Failed to delete {path}'\n        assert data == {'test': 'test'}, f'Failed test data={data}'\n        t1 = time.time()\n        print(f'Passed all tests in {t1 - t0} seconds')\n        return {'success': True, 'msg': 'Passed all tests'}\n\n    def abspath(self, path):\n        return os.path.abspath(os.path.expanduser(path))\n\n    def path2age(self):\n        \"\"\"\n        returns the age of the item in seconds\n        \"\"\"\n        paths = self.paths()\n        ages = {}\n        for p in paths:\n            ages[p] = time.time() - os.path.getmtime(p)\n        return ages\n\n    def cid(self, path, ignore_names=['__pycache__', '.DS_Store','.git', '.gitignore']):\n        \"\"\"\n        Get the CID of the strat module\n        \"\"\"\n        path = self.abspath(path)\n        if os.path.isdir(path):\n            files = os.listdir(path)\n            content = []\n            for f in files:\n                if any([ignore in f for ignore in ignore_names]):\n                    continue\n                f = path + '/' + f\n                content.append(self.cid(f))\n            content = ''.join(content)\n        elif os.path.isfile(path):\n            content =  self.get_text(path)\n        else: \n            raise Exception(f'Failed to find path {path}')\n        cid =  self.sha256(content)\n        print(f'cid={cid} path={path}')\n        return cid\n\n\n    def get_age(self, path):\n        \"\"\"\n        Get the age of the file in seconds\n        \"\"\"\n        path = self.abspath(path)\n        if os.path.exists(path):\n            return time.time() - os.path.getmtime(path)\n        else:\n            raise Exception(f'Failed to find path {path}')\n    def get_text(self, path) -> str:\n        with open(path, 'r') as f:\n            result =  f.read()\n        return result\n    \n\n    def sha256(self, content: str) -> str:\n        import hashlib\n        sha256_hash = hashlib.sha256()\n        sha256_hash.update(content.encode('utf-8'))\n        return sha256_hash.hexdigest()"
+    },
+    "schema": {
+        "abspath": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "abspath",
+            "source": {
+                "start": 124,
+                "length": 2,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:7f69590a7fb316704d6d6403fcf876cd5b8dc8b951ed0e46c8f7f75645ef9acb",
+                "end": 126
+            }
+        },
+        "cid": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "ignore_names": {
+                    "value": [
+                        "__pycache__",
+                        ".DS_Store",
+                        ".git",
+                        ".gitignore"
+                    ],
+                    "type": "list"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Get the CID of the strat module\n        ",
+            "cost": 1,
+            "name": "cid",
+            "source": {
+                "start": 137,
+                "length": 21,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:f6b4179737b5977a0b129ccc992d51da69d9af37f9ace2bb13476bc23cbfa7f9",
+                "end": 158
+            }
+        },
+        "exists": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "exists",
+            "source": {
+                "start": 76,
+                "length": 3,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:eae117c533cfb93550edabf281cc02e11931c51096942ffa22954c177cfe0772",
+                "end": 79
+            }
+        },
+        "get": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "default": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "max_age": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "update": {
+                    "value": false,
+                    "type": "bool"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get",
+            "source": {
+                "start": 23,
+                "length": 12,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:f9211f5b7676720e90afe022a2c94e039ba0829adb89d7a4365df66c8718235e",
+                "end": 35
+            }
+        },
+        "get_age": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        Get the age of the file in seconds\n        ",
+            "cost": 1,
+            "name": "get_age",
+            "source": {
+                "start": 160,
+                "length": 9,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:b52e59e5e69051a0a1f8d870159282b9ab0a437510976ae018d18271d7a2b210",
+                "end": 169
+            }
+        },
+        "get_path": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_path",
+            "source": {
+                "start": 36,
+                "length": 9,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:844bb58608f9fb2260709edb0ec4f778798c93a0315d0321c8a05c98a4125a65",
+                "end": 45
+            }
+        },
+        "get_text": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "get_text",
+            "source": {
+                "start": 169,
+                "length": 4,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:c030d3a765bdd1e6288a8012d9e829ff51884fae248da355b1907336464cba69",
+                "end": 173
+            }
+        },
+        "item2age": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        returns the age of the item in seconds\n        ",
+            "cost": 1,
+            "name": "item2age",
+            "source": {
+                "start": 81,
+                "length": 9,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:8eaad8f5ae7d498c7b3da2afda78fee2b21af5a06d7077fdea89bb2ebac88684",
+                "end": 90
+            }
+        },
+        "items": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "df": {
+                    "value": false,
+                    "type": "bool"
+                },
+                "features": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "items",
+            "source": {
+                "start": 52,
+                "length": 12,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:812c5c0aa1d93a1fa1423003680f852cc3a6c4d1d00ad889c273dfa229341b25",
+                "end": 64
+            }
+        },
+        "n": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "n",
+            "source": {
+                "start": 91,
+                "length": 3,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:3cc90966fd9f97d459a9e3dc57d9317a7540f9e4845bba98f51a58796d5b9c24",
+                "end": 94
+            }
+        },
+        "path2age": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": "\n        returns the age of the item in seconds\n        ",
+            "cost": 1,
+            "name": "path2age",
+            "source": {
+                "start": 127,
+                "length": 9,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:01b85e79e23ab7c0df32d37312306928e8e5cfdbdbaa28a54abd292bdfad5126",
+                "end": 136
+            }
+        },
+        "paths": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "search": {
+                    "value": null,
+                    "type": "NoneType"
+                },
+                "avoid": {
+                    "value": null,
+                    "type": "NoneType"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "paths",
+            "source": {
+                "start": 65,
+                "length": 9,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:ee83943848e1ae9c70802ed28766cb6203692be68a149b36cf5633940a04b264",
+                "end": 74
+            }
+        },
+        "put": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "data": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "put",
+            "source": {
+                "start": 14,
+                "length": 8,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:709ae8ea34d288ec20f8396426892914fed300ef7d56b47751958fe613dadbd0",
+                "end": 22
+            }
+        },
+        "rm": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "rm",
+            "source": {
+                "start": 46,
+                "length": 5,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:e21e93eb4291d654cbd754da96af06902881a1e9f19ebdafe8834726d54a9c0b",
+                "end": 51
+            }
+        },
+        "sha256": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "content": {
+                    "value": "_empty",
+                    "type": "_empty"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "<class 'str'>"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "sha256",
+            "source": {
+                "start": 175,
+                "length": 5,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:57a57a26eaa4eb7263e52c47c20dc99214a269a809a34b81b1e98acc1306e736",
+                "end": 180
+            }
+        },
+        "test": {
+            "input": {
+                "self": {
+                    "value": "_empty",
+                    "type": "_empty"
+                },
+                "path": {
+                    "value": "test.json",
+                    "type": "str"
+                },
+                "data": {
+                    "value": {
+                        "test": "test",
+                        "fam": {
+                            "test": "test"
+                        }
+                    },
+                    "type": "dict"
+                }
+            },
+            "output": {
+                "value": null,
+                "type": "None"
+            },
+            "docs": null,
+            "cost": 1,
+            "name": "test",
+            "source": {
+                "start": 104,
+                "length": 19,
+                "path": "~/commune/commune/core/server/store.py",
+                "code": null,
+                "hash": "sha256:76217ff217d3e3f7477ceca0a4f84ad94bec9e10ec937177355f4a2424991e5e",
+                "end": 123
+            }
+        }
+    },
+    "name": "server.store",
+    "key": "5DHdcQj3MNLXq8jwM36MTojFBhDjPfUWtLU4gE1cubG7sHJL",
+    "founder": "5GKvu9qC8VPjXnofUxZP6zxTmvzTBCY1vpJAkh6gWF8YxPKy",
+    "cid": "sha256:b0125e4dd2725cb743b2aa1129989101632c0c0630bf3b40d8d8d99e336879c9",
+    "time": 1746536237.3016589,
+    "signature": "0xb6f260cf260d0342ca3a57e6db79deb3cf1bfdec25de8cd511b054c90cdeaa69b50e332e712890ee6902418577abdbc3112806dcd8778102b2d152b7dbfee483"
+}
