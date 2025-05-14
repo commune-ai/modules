@@ -25,7 +25,7 @@ class Lighthouse:
             print('File uploaded successfully:', response.json())
         else:
             print('Error uploading file:', response.status_code, response.text)
-        return response
+        return responsep
 
     def list_files(self):
         url = f'https://api.lighthouse.storage/api/user/files_uploaded?lastKey=null'

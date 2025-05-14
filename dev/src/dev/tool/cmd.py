@@ -141,6 +141,8 @@ class Cmd:
                 "command": command,
                 "message": str(e)
             }
+
+        return {}
     
     def pipe(
         self,

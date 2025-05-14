@@ -82,8 +82,7 @@ class Key(Account):
             'vrs': [signed_msg.v, signed_msg.r, signed_msg.s],
             'address': self.address
         }
-
-
+        
     @property
     def public_key(self) -> str:
         return self.private_key_to_public_key(self.private_key)
@@ -161,13 +160,6 @@ class Key(Account):
         return private_key
     
     
-    def hex2str(self, hex_str):
-        return bytes.fromhex(hex_str).decode()
-    
-    
-    def str2hex(self, string):
-        from hexbytes.main import HexBytes
-        return HexBytes(string).hex()
 
     @combomethod
     def from_mnemonic(
@@ -196,11 +188,9 @@ class Key(Account):
         key = self._parsePrivateKey(private_key)
         return Key(key)
 
-
     def __str__(self):
         return f'Key(address={self.address} name={self.name}, crypto_type={self.crypto_type})'
     
-
     def __repr__(self):
         return self.__str__()
     
@@ -402,7 +392,6 @@ class Key(Account):
             if 'address' in data:
                 key2address[key] = data['address']
         return key2address
-
 
     def test(self):
         from .test import TestKey

@@ -19,7 +19,7 @@ class Bittensor:
         Returns:
             List of wallet names
         """
-        return self.subtensor.list_wallets()
+        return dir(bt.wallet())
 
     def neurons(self, netuid: int = 2) -> List[Dict]:
         """List all neurons in a subnet
@@ -70,9 +70,11 @@ class Bittensor:
             Wallet information dictionary
         """
         wallet = bt.wallet(name=name, hotkey=hotkey)
-        return wallet.info()
+        return dir(wallet)
+
     
-    def bal(self, address: str) -> float:
+    
+    def balance(self, address: str) -> float:
         """Get balance for an address
         Args:
             address (str): Wallet address

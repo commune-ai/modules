@@ -76,11 +76,11 @@ class Dev:
         # Generate the response
         output = self.model.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
         # Process the output
-        return self.postprocess(output)
+        return self.postprocess(output, )
 
-    def preprocess(self, text, path='./', target='./modules'):
+    def preprocess(self, text, path=None, target='./modules'):
         query = self.process_text(text)
-        context = {f: get_text(f) for f in self.select_files.forward(path=path, query=query)}
+        context = {f: get_text(f) for f in self.select_files.forward(path=path, query=query)} if path else {}
         prompt =self.prompt.format(
             path=path,
             context=context,
@@ -131,7 +131,7 @@ class Dev:
         path = '~/.dev/test/add'
         return self.forward(text, to=path, verbose=True)
 
-    def postprocess(self, output):
+    def postprocess(self, output, force_save=False):
         """
         Postprocess tool outputs and extract fn calls.
         
@@ -165,7 +165,7 @@ class Dev:
         print("Function calls detected:")
         print(plan)
         # For debugging, you can add:
-        if input('Do you want to see the fn calls? (y/n): ').strip().lower() == 'y':
+        if input('Do you want to see the fn calls? (y/n): ').strip().lower() == 'y' or force_save:
             print("Function calls detected:")
             for call in plan:
                 print(f"Function: {call['fn']}, Parameters: {call['params']}")
