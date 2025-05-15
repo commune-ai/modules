@@ -9,12 +9,9 @@ from pathlib import Path
 from typing import Dict, List, Union, Optional, Any, Tuple
 from .utils import *
 
-print = c.print
 
 class Dev:
 
-    start_anchor = '::<START_JSON_PARAMS/>'
-    end_anchor = '</END_JSON_PARAMS>::'
 
     prompt= """
                 --GOAL--
@@ -29,146 +26,133 @@ class Dev:
                 "YOU CAN RESPOND WITH THE FOLLOWING FORMAT THAT MUST BE WITHIN THE PWD"
 
                 --CONTEXT--
-                PATH (current working directory)={path}
+                SOURCE=(current working directory)={source}
                 CONTEXT={context}
                 QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
                 TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
 
-                --TOOLS--
-                YOU ARE ASSUMING EACH TOOL HAS THEIR OWN FORWARD FUNCTION THAT DEFINES THEIR CABAPILITIES AND SO YOU SELECT THE TOOL
+                --FUNCTIONS--
+                YOU ARE ASSUMING EACH TOOL/FN  IS A CLASS THAT HAS THEIR OWN FORWARD FUNCTION THAT DEFINES THEIR CABAPILITIES AND SO YOU SELECT THE TOOL
                 AND INSERT THE PARAMS TO CALL THE TOOL FORWARD FUNCTION, PLEASE SPECIFY THE TOOLNAME AND THE PARAMS
+                YOU DONT HAVE TO USE TOOLS IF YOU DONT WANT TO
                 {tools}
-                --OUTPUT_TOOL_PLAN_FORMAT--
-                 YOU MUST CREATE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
+
+                --OUTPUT_FORMAT--
+                YOU MUST CREATE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
                 PROVIDE A PLAN OF TOOLS AND THEIR PARAMS 
                 FOR EACH TOOL, PLEASE PROVIDE THE FUNCTION NAME AND THE PARAMS
-                FN::TOOLNAME{start_anchor}(params:dict){end_anchor}TOOLNAME
-                FN::TOOLNAME{start_anchor}(params:dict){end_anchor}TOOLNAME
-
+                IN THIS CASE TOOLNAME IS PARAMETRIC AND 
+                ONLY RESPOND IN THE FOLLOWING FORMAT and make sure you dont effect the style ONLY OUTPUT JSON INSIDE THE PARAMS
+                # <FN(fn_name)><PARAMS>(params:JSONSTR)</PARAMS></FN(fn_name)>
+                --OUTPUT--
                 """
 
     def __init__(self, 
                  model: str = 'dev.model.openrouter', 
-                 cache_dir: str = '~/.commune/dev_cache',
                  **kwargs):
 
         self.model = c.module(model)()
-        self.cache_dir = abspath(cache_dir)
         self.select_files = c.module('dev.tool.select_files')()
         self.tools = c.module('dev.tool')().tool2schema()
-        ensure_directory_exists(self.cache_dir)
+
+
 
     def forward(self, 
                 text: str = '', 
                 *extra_text, 
-                path: str = './', 
+                source: str = './', 
+                target = None,
                 temperature: float = 0.5, 
                 max_tokens: int = 1000000, 
                 model: Optional[str] = 'anthropic/claude-3.7-sonnet',
                 stream: bool = True,
-                target = None,
                 verbose: bool = True,
                 mode: str = 'auto', 
                 max_age= 10000,
                 **kwargs) -> Dict[str, str]:
 
-        prompt = self.preprocess(' '.join(list(map(str, [text] + list(extra_text)))), path=path, target=target)
+        prompt = self.preprocess(' '.join(list(map(str, [text] + list(extra_text)))), source=source, target=target)
         # Generate the response
         output = self.model.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
         # Process the output
-        return self.postprocess(output, )
+        return self.postprocess(output )
 
-    def preprocess(self, text, path=None, target='./modules'):
-        query = self.process_text(text)
-        context = {f: get_text(f) for f in self.select_files.forward(path=path, query=query)} if path else {}
+    def preprocess(self, text, source='./', target='./modules'):
+
+        query = ''
+        is_function_running = False
+        words = text.split(' ')
+        fn_detected = False
+        fns = []
+        for i, word in enumerate(words):
+            query += word + ' '
+            prev_word = words[i-1] if i > 0 else ''
+            # restrictions can currently only handle one fn argument, future support for multiple
+            magic_prefix = f'@'
+            if word.startswith(magic_prefix) and not fn_detected:
+                word = word[len(magic_prefix):]
+                fns += [{'fn': word, 'params': [], 'idx': i + 2}]
+                fn_detected=True
+            else:
+                if fn_detected:
+                    fns[-1]['params'] += [word]
+                    fn_detected = False
+                    query += str(c.fn(fns[-1]['fn'])(*fns[-1]['params']))
         prompt =self.prompt.format(
-            path=path,
-            context=context,
+            source=source,
+            context= self.select_files.forward(path=source, query=query, content=True),
             query=query,
             tools=self.tools,
             target=target,
-            start_anchor=self.start_anchor,
-            end_anchor=self.end_anchor
         )
         return prompt
-
-    def process_text(self, text, threshold=1000):
-            new_text = ''
-            is_function_running = False
-            words = text.split(' ')
-            fn_detected = False
-            fns = []
-            for i, word in enumerate(words):
-                prev_word = words[i-1] if i > 0 else ''
-                # restrictions can currently only handle one fn argument, future support for multiple
-                magic_prefix = f'@'
-                if word.startswith(magic_prefix) and not fn_detected:
-                    word = word[len(magic_prefix):]
-                    fns += [{'fn': word, 'params': [], 'idx': i + 2}]
-                    fn_detected=True
-                else:
-                    if fn_detected:
-                        fns[-1]['params'] += [word]
-                        fn_detected = False
-            for fn in fns:
-                print('Running fn:', fn)
-                result = c.fn(fn['fn'])(*fn['params'])
-                fn['result'] = result
-                print(result)
-                text =' '.join([*words[:fn['idx']],'-->', str(result), *words[fn['idx']:]])
-            return text
-
-    def test(self, text='write a fn that adds two numbers and a test.js file that i can test it all in one class and have me test it in test.js and a script to run it'):
-        """
-        Test the Dev module by generating code based on a prompt.
-        
-        Args:
-            text: The prompt text
-            
-        Returns:
-            Dictionary mapping file paths to generated content
-        """
-        path = '~/.dev/test/add'
-        return self.forward(text, to=path, verbose=True)
-
+    
+    
     def postprocess(self, output, force_save=False):
         """
         Postprocess tool outputs and extract fn calls.
         
         This fn parses the raw output text and identifies fn calls in the format:
-        <FN::function_name>param1</FN::function_name> or 
-        <FN::function_name><param_name>param_value</param_name></FN::function_name>
+        <FN::function_name><PARAMS/>{"param1": "value1"}</PARAMS/><FN_END>
         
         Args:
             output (str): The raw output from the model
+            force_save (bool): Whether to execute the functions without asking
                 
         Returns:
-            str: The processed output with extracted fn calls
+            list: The processed output with extracted fn calls
         """
-        import re
-        
-        # Print the output character by character for streaming effect
         text = ''
-        tool_text = ''
         plan = []
-        for ch in output: 
-            print(ch, end='')
+        text_lines = []
+        for ch in output:
             text += ch
-            tool_text += ch
-            if self.end_anchor in tool_text and self.start_anchor in tool_text:
-                fn_name = tool_text.split(self.start_anchor)[0].split('::')[1].strip()
-                json_text = tool_text.split(self.start_anchor)[1].split(self.end_anchor)[0]
-                tool_json = json.loads(json_text)
-                plan.append({'fn': fn_name, 'params': tool_json})
-                tool_text = ''
-        # You can process the fn calls here or return them for further processing
-        print("Function calls detected:")
-        print(plan)
-        # For debugging, you can add:
-        if input('Do you want to see the fn calls? (y/n): ').strip().lower() == 'y' or force_save:
-            print("Function calls detected:")
-            for call in plan:
-                print(f"Function: {call['fn']}, Parameters: {call['params']}")
-                fn = c.module(call['fn'])()
-                fn.forward(**call['params'])
+            # print per line 
+            print(ch, end='', flush=True)
+            name2cond = {
+                'has_fn':  '<FN(' in text and '</FN(' in text,
+                'has_params': '<PARAMS>' in text and '</PARAMS>' in text,
+            }
+            is_fn = all(name2cond[k] for k in name2cond)
+            if is_fn:
+                fn_name = text.split('<FN(')[1].split(')')[0]
+                params_str = text.split('<PARAMS>')[1].split('</PARAMS>')[0].strip()
+                print("PARAMSSTR", f"{params_str}", 'PARAMSSTR')
+
+                params = json.loads(params_str)
+                text = ''
+                plan.append({'fn': fn_name, 'params': params})
+
+        if len(plan) == 0:
+            print("No fn calls detected in the output.")
+            return text
+
+        else:
+            print(f"Detected {len(plan)} fn calls.")
+            print("Plan:")
+            for fn in plan:
+                print(f"Function: {fn['fn']}" ,fn['params'])
+            if force_save or input("Do you want to execute the functions? (y/n): ").lower() == 'y':
+                for fn in plan:
+                    result = c.module(fn['fn'])().forward(**fn['params'])
         return plan

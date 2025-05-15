@@ -48,7 +48,12 @@ class DeleteFile:
             - message: Description of the operation result
         """
         path = abspath(path)
+
+        assert isinstance(path, str), f"Path should be a string, got {type(path)}"
         
+        assert os.path.exists(path), f"Path does not exist: {path}. Set force=True to ignore this error."
+        assert os.path.isfile(path), f"Path is neither a file nor a directory: {path}"
+
         # Check if path exists
         if not os.path.exists(path):
             if force:

@@ -6,9 +6,8 @@ import os
 
 class Reduce:
     description = "This module is used to find files and modules in the current directory"
-    model='google/gemini-2.0-flash-001'
     agent= c.module('agent')()
-    def forward(self,  text, model=model,  timeout=10, **kwargs):  
+    def forward(self,  text, model='google/gemini-2.0-flash-001',  timeout=10, **kwargs):  
         text = f'''
         GOAL
         summarize the following into tupples and make sure you compress as much as oyu can

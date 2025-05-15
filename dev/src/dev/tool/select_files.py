@@ -35,6 +35,7 @@ class SelectFiles:
               model: str = None,
               context: Optional[str] = None,
               temperature: float = 0.5,
+              content: bool = True,
               allow_selection: bool = False,
               verbose: bool = True) -> List[str]:
         """
@@ -132,10 +133,9 @@ class SelectFiles:
             if verbose:
                 print(f"Found {filtered_options} relevant options", color="green")
             # Allow user to select files by index if requested
-            if allow_selection and filtered_options:
-                selected_options = self.select_by_index(filtered_options, verbose)
-                return [option[1] for option in selected_options]
-            return [os.path.expanduser(option[1]) for option in filtered_options]
+            results =  [os.path.expanduser(option[1]) for option in filtered_options]
+            if content:
+                results = [self.get_text(f) for f in results]
             
         except json.JSONDecodeError as e:
             if verbose:
@@ -145,56 +145,15 @@ class SelectFiles:
                 print(f"Retrying... ({trials} attempts left)", color="yellow")
                 return self.forward(options, query, n, trials - 1, min_score, max_score, threshold, model, context, temperature, allow_selection, verbose)
             raise ValueError(f"Failed to parse LLM response as JSON: {e}")
-    
-    def select_by_index(self, options, verbose=True):
-        """
-        Allow user to select files by index from a list of options.
-        
-        Args:
-            options: List of tuples containing (idx, option)
-            verbose: Whether to print output during selection
-            
-        Returns:
-            List of selected options
-        """
-        if verbose:
-            print("\nSelect files by index (comma-separated, e.g. '0,2,3')", color="yellow")
-            print("Press Enter to accept all files, or Ctrl+C to cancel", color="yellow")
-            
-        # Display options with indices
-        for i, (idx, option) in enumerate(options):
-            print(f"[{i}] {option}", color="cyan")
-        
-        try:
-            # Get user input
-            selection = input("\nEnter indices of files to select: ")
-            
-            # If empty, select all
-            if not selection.strip():
-                if verbose:
-                    print("Selecting all files", color="green")
-                return options
-            
-            # Parse selection
-            selected_indices = [int(idx.strip()) for idx in selection.split(',') if idx.strip().isdigit()]
-            selected_options = [options[idx] for idx in selected_indices if 0 <= idx < len(options)]
-            
-            if verbose:
-                print(f"Selected {len(selected_options)} files", color="green")
-            
-            return selected_options
-            
-        except (KeyboardInterrupt, EOFError):
-            # Handle keyboard interrupt (Ctrl+C) or EOF
-            if verbose:
-                print("\nSelection cancelled, defaulting to all files", color="yellow")
-            return options
-        except Exception as e:
-            # Handle any other errors
-            if verbose:
-                print(f"\nError during selection: {e}", color="red")
-                print("Defaulting to all files", color="yellow")
-            return options
+
+        return results
+
 
     def files(self, path: str) -> List[str]:
         return c.files(path)
+
+    def get_text(self, path: str) -> str:
+        path = os.path.abspath(os.path.expanduser(path))
+        with open(path, 'r') as f:
+            text = f.read()
+        return text

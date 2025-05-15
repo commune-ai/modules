@@ -52,11 +52,9 @@ class Agent:
             for i, word in enumerate(words):
                 prev_word = words[i-1] if i > 0 else ''
                 # restrictions can currently only handle one function argument, future support for multiple
-                magic_prefix = f'@/'
+                magic_prefix = f'@'
                 if word.startswith(magic_prefix) and not fn_detected:
                     word = word[len(magic_prefix):]
-                    if '/' not in word:
-                        word = '/' + word
                     fns += [{'fn': word, 'params': [], 'idx': i + 2}]
                     fn_detected=True
                 else:
@@ -68,6 +66,7 @@ class Agent:
                 print('Running function:', fn)
                 result = c.fn(fn['fn'])(*fn['params'])
                 fn['result'] = result
+                print('Result:', result)
                 text =' '.join([*words[:fn['idx']],'-->', str(result), *words[fn['idx']:]])
             return text
         

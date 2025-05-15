@@ -47,11 +47,8 @@ class CreateFile:
             - message: Description of the operation result
         """
         file_path = abspath(file_path)
-        
         # Check if file already exists
         if os.path.exists(file_path) and not overwrite:
-            if verbose:
-                c.print(f"File already exists: {file_path}", color="yellow")
             return {
                 "success": False,
                 "file_path": file_path,
@@ -61,36 +58,14 @@ class CreateFile:
         # Create parent directories if needed
         parent_dir = os.path.dirname(file_path)
         if create_parent_dirs and parent_dir and not os.path.exists(parent_dir):
-            try:
-                ensure_directory_exists(parent_dir)
-                if verbose:
-                    c.print(f"Created parent directory: {parent_dir}", color="blue")
-            except Exception as e:
-                if verbose:
-                    c.print(f"Failed to create parent directory: {str(e)}", color="red")
-                return {
-                    "success": False,
-                    "file_path": file_path,
-                    "message": f"Failed to create parent directory: {str(e)}"
-                }
-        
-        # Write content to file
-        try:
-            put_text(file_path, content)
+            os.makedirs(parent_dir, exist_ok=True)
             if verbose:
-                c.print(f"Successfully created file: {file_path}", color="green")
-            return {
-                "success": True,
-                "file_path": file_path,
-                "message": "File created successfully"
-            }
-        except Exception as e:
-            if verbose:
-                c.print(f"Failed to create file: {str(e)}", color="red")
-            return {
-                "success": False,
-                "file_path": file_path,
-                "message": f"Failed to create file: {str(e)}"
-            }
-    
+                c.print(f"Created parent directory: {parent_dir}", color="green")
+            
+        put_text(file_path, content)
+        return {
+            "success": True,
+            "file_path": file_path,
+            "message": f"File created successfully at {file_path}"
+        }
     
