@@ -3,45 +3,48 @@ import os
 import json
 
 class Agent:
+
+    prompt = 'The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.'
     def __init__(self, 
-                 model='google/gemini-2.5-pro-exp-03-25:free',
-                 tools = ['put_text',   
-                            'files', 
-                            'file2text', 
-                            'get_text', 
-                            'get_json', 
-                            'put_json', 
-                            'ls', 
-                            'glob'],
-                 max_tokens=420000, 
-                 prompt = 'The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.',
+                 provider='model.openrouter', 
                 **kwargs):
-        
-        self.max_tokens = max_tokens
-        self.prompt = prompt
-        self.model = c.module('model.openrouter')(model=model, **kwargs)
+        self.provider = c.module(provider)(**kwargs)
+
+
+    def models(self, *args, **kwargs):
+        return  self.provider.models(*args, **kwargs)
 
     def forward(self, text = 'whats 2+2?' ,  
                     temperature= 0.5,
                     max_tokens= 1000000, 
                     preprocess=True,
+                    model='anthropic/claude-3.7-sonnet',
                     stream=True,
                     **kwargs):
         if preprocess:
             text = self.preprocess(text)
-        params = {'message': text, 'temperature': temperature, 'max_tokens': max_tokens,  'stream': stream, **kwargs}
-        return self.model.forward(**params)
+        params = {
+                'message': text, 
+                'temperature': temperature, 
+                'max_tokens': max_tokens, 
+                'model': model,
+                'stream': stream,
+            **kwargs}
+        tx = {
+            'params': params,
+            'model': model,
+        }
+        tx_id = c.hash(tx)
+        print('tx_id', tx_id)
+        result =  self.provider.forward(**params)
+
+
+
+        
+        return self.postprocess(result)
 
     def ask(self, *text, **kwargs): 
         return self.forward(' '.join(list(map(str, text))), **kwargs)
-
-    def models(self, *args, **kwargs):
-        return self.model.models(*args,**kwargs)
-
-    def resolve_path(self, path):
-        return os.path.expanduser('~/.commune/agent/' + path)
-
-
 
     def preprocess(self, text, threshold=1000):
             new_text = ''
@@ -70,3 +73,5 @@ class Agent:
                 text =' '.join([*words[:fn['idx']],'-->', str(result), *words[fn['idx']:]])
             return text
         
+    def postprocess(self, result):
+        return result

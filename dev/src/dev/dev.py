@@ -12,7 +12,6 @@ from .utils import *
 
 class Dev:
 
-
     prompt= """
                 --GOAL--
                 YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
@@ -27,16 +26,17 @@ class Dev:
 
                 --CONTEXT--
                 SOURCE=(current working directory)={source}
-                CONTEXT={context}
+                CONTEXT={context} $# THE CONTEXT OF THE REPO YOU ARE TRYING TO MODIFY
                 QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
                 TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
 
-                --FUNCTIONS--
+                --TOOLS--
                 YOU ARE ASSUMING EACH TOOL/FN  IS A CLASS THAT HAS THEIR OWN FORWARD FUNCTION THAT DEFINES THEIR CABAPILITIES AND SO YOU SELECT THE TOOL
                 AND INSERT THE PARAMS TO CALL THE TOOL FORWARD FUNCTION, PLEASE SPECIFY THE TOOLNAME AND THE PARAMS
                 YOU DONT HAVE TO USE TOOLS IF YOU DONT WANT TO
                 {tools}
-
+                --MEMORY--
+                YOU HAVE A MEMORY THAT IS A JSON OBJECT THAT IS THE MEMORY OF THE AGENT,
                 --OUTPUT_FORMAT--
                 YOU MUST CREATE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
                 PROVIDE A PLAN OF TOOLS AND THEIR PARAMS 
@@ -44,6 +44,8 @@ class Dev:
                 IN THIS CASE TOOLNAME IS PARAMETRIC AND 
                 ONLY RESPOND IN THE FOLLOWING FORMAT and make sure you dont effect the style ONLY OUTPUT JSON INSIDE THE PARAMS
                 # <FN(fn_name)><PARAMS>(params:JSONSTR)</PARAMS></FN(fn_name)>
+
+
                 --OUTPUT--
                 """
 
@@ -60,7 +62,7 @@ class Dev:
     def forward(self, 
                 text: str = '', 
                 *extra_text, 
-                source: str = './', 
+                source: str = None, 
                 target = None,
                 temperature: float = 0.5, 
                 max_tokens: int = 1000000, 
@@ -100,7 +102,7 @@ class Dev:
                     query += str(c.fn(fns[-1]['fn'])(*fns[-1]['params']))
         prompt =self.prompt.format(
             source=source,
-            context= self.select_files.forward(path=source, query=query, content=True),
+            context= self.select_files.forward(path=source, query=query, content=True) if source else '',
             query=query,
             tools=self.tools,
             target=target,
