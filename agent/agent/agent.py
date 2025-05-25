@@ -9,10 +9,8 @@ class Agent:
                  provider='model.openrouter', 
                 **kwargs):
         self.provider = c.module(provider)(**kwargs)
-
-
-    def models(self, *args, **kwargs):
-        return  self.provider.models(*args, **kwargs)
+        self.model2info = self.provider.model2info
+        self.models = self.provider.models
 
     def forward(self, text = 'whats 2+2?' ,  
                     temperature= 0.5,
@@ -37,6 +35,7 @@ class Agent:
         tx_id = c.hash(tx)
         print('tx_id', tx_id)
         result =  self.provider.forward(**params)
+        
 
 
 

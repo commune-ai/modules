@@ -37,14 +37,7 @@ class Key(Account):
             message = encode_defunct(text=message)
         assert isinstance(message, SignableMessage)
         return message
-    
-    def is_valid_private_key(self, private_key):
-        try:
-            key = keys.PrivateKey(private_key)
-            return True
-        except:
-            return False
-    
+
     @property
     def private_key_string(self) -> str:
         private_key = self._private_key.hex() 
@@ -150,7 +143,6 @@ class Key(Account):
         extra_key_bytes = text_if_str(to_bytes, extra_entropy)
         key_bytes = keccak(os.urandom(32) + extra_key_bytes)
         return self.from_key(key_bytes)
-
     
     def create_private_key(self, extra_entropy="", return_str=False):
         extra_key_bytes = text_if_str(to_bytes, extra_entropy)
@@ -158,7 +150,6 @@ class Key(Account):
         if return_str:
             return private_key.hex()
         return private_key
-    
     
 
     @combomethod

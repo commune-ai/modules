@@ -33,16 +33,12 @@ class Summarize:
               temperature: float = 0.5,
               task = None,
               verbose: bool = True) -> List[str]:
-        assert os.path.exists(path), f"File not found: {path}"
-        if os.path.isdir(path):
-            result = {}
-            for file in c.files(path):
-                result[file] = self.forward(path=path, query=query, model=model, temperature=temperature, task=task, verbose=verbose)
-            return result   
-                    
+        anchors = self.anchors
         # Format context if provided
+        assert os.path.exists(path), f"File not found: {path}"
         assert os.path.isfile(path), f"Path is not a file: {path}"
         content = c.text(path)
+
         # hash
         cache_path = 'reuslts/' + c.hash(path)
 
@@ -55,7 +51,7 @@ class Summarize:
         CONTENT
         {content} 
         RESULT_FORMAT
-        {self.anchors[0]}(LIST(DICT(obj:str, desc:str))){self.anchors[1]}
+        {anchors[0]}(LIST(DICT(obj:str, desc:str))){anchors[1]}
         '''
         
         # Generate the response

@@ -28,21 +28,6 @@ class Git:
             'cmds': cmds,
         }
 
-    def gitpath(self, path:str = './'):
-        """
-        find the closest git path to the current path
-        
-        """
-        import os
-        paths = []
-        for root, dirs, files in os.walk(path):
-            if '.git' in dirs:
-                paths.append(root)
-                continuec
-
-        return paths
-
-    
     def git_repos(self, path='./'):
             import os
             repos = []
@@ -229,14 +214,37 @@ class Git:
     
     def gitpath(self, path, **kwargs) -> str:
         """
-        find the github url of a module
+        find th
+        e github url of a module
         """
-        while len(path.split('/')) > 1:
-            path = '/'.join(path.split('/')[:-1])
-            git_path = path + '/.git'
-            if os.path.exists(git_path):
-                return git_path
+        path = os.path.abspath(os.path.expanduser(path))
+        git_path = path + '/.git'
+        if os.path.exists(git_path):
+            return git_path
         return None
+
+    def branches(self, path:str = None):
+        """
+        Get a list of branches in the git repository.
+        
+        """
+
+        path = self.get_path(path)
+        # get the branches
+        branches = c.cmd('git branch', cwd=path, verbose=False).split('\n')
+        # remove the * from the current branch
+        branches = [b.replace('*', '').strip() for b in branches]
+        # remove empty lines
+        branches = [b for b in branches if len(b) > 0]
+        return branches
+
+    def init(self, path:str = None, name:str = None):
+        """
+        Initialize a git repository at the given path.
+        
+        Args:
+        """
+        return c.cmd('git init', cwd=path, verbose=False)
 
     def giturl(self, url:str='commune-ai/commune'):
         gitprefix = 'https://github.com/'
@@ -340,3 +348,64 @@ class Git:
         cmd("git commit -m 'Initial commit'", cwd=repo_path, verbose=verbose)
         
         return result
+
+
+    def push_folder_as_new_branch(folder_path, repo_url, branch_name, commit_message="Initial commit"):
+        """
+        Push a folder as a new branch to a Git repository without initializing a new repo.
+        
+        Args:
+            folder_path (str): Path to the folder to push
+            repo_url (str): URL of the Git repository
+            branch_name (str): Name of the new branch to create
+            commit_message (str, optional): Commit message. Defaults to "Initial commit".
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            folder_path = Path(folder_path).resolve()
+            
+            # Create a temporary directory for git operations
+            temp_dir = folder_path.parent / f"temp_git_{branch_name}"
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Initialize git in the temp directory
+            subprocess.run(["git", "init"], cwd=temp_dir, check=True)
+            
+            # Set the remote
+            subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=temp_dir, check=True)
+            
+            # Create and checkout an orphan branch (no history)
+            subprocess.run(["git", "checkout", "--orphan", branch_name], cwd=temp_dir, check=True)
+            
+            # Copy all files from the folder to the temp directory
+            for item in folder_path.glob('**/*'):
+                if item.is_file():
+                    # Create relative path
+                    rel_path = item.relative_to(folder_path)
+                    # Create target directory if it doesn't exist
+                    target_dir = temp_dir / rel_path.parent
+                    os.makedirs(target_dir, exist_ok=True)
+                    # Copy the file
+                    with open(item, 'rb') as src, open(temp_dir / rel_path, 'wb') as dst:
+                        dst.write(src.read())
+            
+            # Add all files
+            subprocess.run(["git", "add", "."], cwd=temp_dir, check=True)
+            
+            # Commit
+            subprocess.run(["git", "commit", "-m", commit_message], cwd=temp_dir, check=True)
+            
+            # Push to remote
+            subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=temp_dir, check=True)
+            
+            # Clean up
+            import shutil
+            shutil.rmtree(temp_dir)
+            
+            return True
+        
+        except Exception as e:
+            print(f"Error: {e}")
+            return False

@@ -1,9 +1,8 @@
 import commune as c 
-class Nextplace:
+class Search:
     """
     A base class that provides fundamental functionality for commune modules.
     """
-    url =  'https://nextplace.ai'
     def __init__(self, **kwargs):
         """
         Initialize the base class with configurable parameters.
@@ -24,4 +23,19 @@ class Nextplace:
         Returns:
             Result of the called method
         """
-        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)
+        
+        return self.model.forward(f'find me what is relevant {c.code(module)}', stream=stream)
+
+    def files(self, module: str='explain', *args, stream=1,  **kwargs):
+        """
+        Dynamically call a method of the class.
+        Args:
+            fn_name (str): Name of the method to call
+            *args: Positional arguments to pass to the method
+            **kwargs: Keyword arguments to pass to the method
+        Returns:
+            Result of the called method
+        """
+        
+        return self.model.files(f'find me what is relevant {c.code(module)}', stream=stream)
+    

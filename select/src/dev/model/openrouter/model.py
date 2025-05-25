@@ -9,7 +9,7 @@ class OpenRouter:
     def __init__(
         self,
         api_key: str = 'OPENROUTER_API_KEY',
-        model: str = 'anthropic/claude-3.7-sonnet',
+        default_model: str = 'anthropic/claude-3.7-sonnet',
         base_url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
         max_retries: int = 10,
@@ -35,7 +35,7 @@ class OpenRouter:
         self.api_key_path = f'{self.storage_path}/api.json' # path to store api keys (relative to storage_path)
         self.base_url = base_url
         self.api_key= self.get_api_key(api_key)
-        self.model = model
+        self.default_model = default_model
         # Use API key from parameters, or from environment variable, or from stored keys
 
         self.client = openai.OpenAI(
@@ -71,7 +71,7 @@ class OpenRouter:
         Returns:
         Generator[str] | str: A generator for streaming responses or the full streamed response.
         """
-        model =  model or self.model
+        model =  model or self.default_model
         message = str(message)
         if len(extra_text) > 0:
             message = message + ' '.join(extra_text)
@@ -101,7 +101,17 @@ class OpenRouter:
             return result.choices[0].message.content
         
     def get_model(self, model=None):
-        model = model or self.model
+        models =  self.models()
+        model = str(model)
+        if str(model) not in models:
+            if ',' in model:
+                models = [m for m in models if any([s in m for s in providers.split(',')])]
+            else:
+                models = [m for m in models if str(model) in m]
+            print(f"Model {model} not found. Using {models} instead.")
+            assert len(models) > 0
+            model = models[0]
+
         return model
 
     def get_json(self, path, default=None , update=False):

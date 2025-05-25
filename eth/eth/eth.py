@@ -13,18 +13,17 @@ class Eth:
                  
         self.dirpath = os.path.dirname(os.path.abspath(__file__))
         self.set_network(network)
-        self.set_key(key)
 
     def compile(self, contract_path):
         # compile smart contracts in compile
         return c.cmd('npx hardhat compile' + contract_path)
     
     @classmethod
-    def key(cls, key:str):
-        return Key.get_key(key)
+    def get_key(cls, key:str):
+        return Key().get_key(key)
     
     def key_exists(self, name:str):
-        return Key.key_exists(name)
+        return Key().key_exists(name)
 
     @classmethod
     def add_key(cls,name, key=None):
@@ -33,17 +32,6 @@ class Eth:
     @classmethod
     def keys(cls):
         return Key.keys()
-
-    def resolve_key(self, key):
-        if isinstance(key, str):
-            from .key import Key
-            key = Key(key)
-        if key == None:
-            key = self.key
-        return key
-
-    def set_key(self, key:str):
-        self.key = Key.get_key(key)
 
     def resolve_network(self, network):
         if network == None:
@@ -110,7 +98,7 @@ class Eth:
         if hasattr(key, 'address'):
             address = key.address
         else:
-            key = self.resolve_key(key)
+            key = self.get_key(key)
             address = key.address
         return address
 
@@ -124,7 +112,7 @@ class Eth:
         return self.client.eth.generate_gas_price() or 0
 
     def tx_metadata(self, key=None) -> Dict[str, Union[int, str, bytes]]:
-        key = self.resolve_key(key)
+        key = self.get_key(key)
         return {
             'from': key.address,
             'nonce': self.get_transaction_count(key),
@@ -132,14 +120,14 @@ class Eth:
             }
     
     def send_tx(self, tx, key = None) -> Dict:
-        key = self.resolve_key(key)
+        key = self.get_key(key)
         rawTransaction = self.sign_tx(tx=tx)    
         tx_hash = self.client.eth.send_raw_transaction(rawTransaction)
         tx_receipt = self.client.eth.wait_for_transaction_receipt(tx_hash)
         return tx_receipt.__dict__
 
     def sign_tx( self, tx: Dict, key=None ) -> 'HexBytes':
-        key = self.resolve_key(key)
+        key = self.get_key(key)
         tx['nonce'] = self.get_transaction_count(key)
         tx["gasPrice"] = self.gas_price()
         signed_tx = self.client.eth.sign_transaction(tx, key.private_key)
