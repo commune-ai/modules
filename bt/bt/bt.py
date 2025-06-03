@@ -2,8 +2,9 @@ import commune as c
 import bittensor as bt
 from typing import List, Dict, Any, Optional
 from bittensor.utils.balance import Balance
+# import btwallet
 
-class Bittensor:
+class Bt:
     """Interface module for Subtensor network operations and wallet management"""
     
     def __init__(self, network: str = "finney"):
@@ -13,13 +14,6 @@ class Bittensor:
         """
         self.network = network
         self.subtensor = bt.subtensor(network=network)
-        
-    def list_wallets(self) -> List:
-        """List all available wallets
-        Returns:
-            List of wallet names
-        """
-        return dir(bt.wallet())
 
     def neurons(self, netuid: int = 2) -> List[Dict]:
         """List all neurons in a subnet
@@ -48,6 +42,18 @@ class Bittensor:
             Subnet information dictionary
         """
         return self.subtensor.subnet(netuid=netuid, block=block)
+
+
+    def subnets(self, block: Optional = None) -> List[Dict]:
+        """List all subnets
+        Args:
+            block (Optional): Block number
+        Returns:
+            List of subnet information dictionaries
+        """
+        return c.df([s.__dict__ for s in self.subtensor.get_all_subnets_info(block=block)])
+
+
     
     def create_wallet(self, name: str, hotkey: Optional = None) -> Dict:
         """Create a new wallet
@@ -263,3 +269,8 @@ class Bittensor:
         response = requests.post(GRAPHQL_ENDPOINT, json=payload, headers=headers)
         response.raise_for_status()
         return response.json()
+
+
+
+
+    

@@ -23,7 +23,7 @@ class Task:
                 path = None, 
                 **extra_kwargs):
         
-        self.fn = fn # the function to run
+        self.fn = fn if callable(fn) else lambda *args, **kwargs: fn
         self.set_params(params)
         self.start_time = time.time() # the time the task was created
         self.end_time = 0

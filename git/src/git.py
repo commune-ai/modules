@@ -5,6 +5,10 @@ import base64
 import re
 import pandas as pd
 import os
+import hashlib
+import os
+import json
+from pathlib import Path
 
 class Git:
 
@@ -409,3 +413,24 @@ class Git:
         except Exception as e:
             print(f"Error: {e}")
             return False
+
+
+    def image_id(self, dockerfile_path='~/commune/Dockerfile', context_path=None):
+        """
+        Create a unique image ID based on Dockerfile content and build context.
+        
+        Args:
+            dockerfile_path: Path to the Dockerfile
+            context_path: Path to the build context directory (optional)
+        
+        Returns:
+            str: A unique image ID (SHA256 hash)
+        """
+        dockerfile_path = os.path.expanduser(dockerfile_path)
+        hasher = hashlib.sha256()
+        
+        # Hash the Dockerfile content
+        with open(dockerfile_path, 'rb') as f:
+            hasher.update(f.read())
+        # Generate the image ID
+        return f"sha256:{hasher.hexdigest()}"

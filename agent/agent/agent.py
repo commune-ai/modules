@@ -7,8 +7,10 @@ class Agent:
     prompt = 'The following is a conversation with an AI assistant. The assistant is helpful, creative, clever, and very friendly.'
     def __init__(self, 
                  provider='model.openrouter', 
+                 model = 'anthropic/claude-opus-4',
                 **kwargs):
         self.provider = c.module(provider)(**kwargs)
+        self.model = model
         self.model2info = self.provider.model2info
         self.models = self.provider.models
 
@@ -16,7 +18,7 @@ class Agent:
                     temperature= 0.5,
                     max_tokens= 1000000, 
                     preprocess=True,
-                    model='anthropic/claude-3.7-sonnet',
+                    model='anthropic/claude-opus-4', 
                     stream=True,
                     **kwargs):
         if preprocess:
@@ -30,7 +32,7 @@ class Agent:
             **kwargs}
         tx = {
             'params': params,
-            'model': model,
+            'model': model or self.model,
         }
         tx_id = c.hash(tx)
         print('tx_id', tx_id)

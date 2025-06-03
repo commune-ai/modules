@@ -28,7 +28,7 @@ IPFS_REGEX = re.compile(r"^Qm[1-9A-HJ-NP-Za-km-z]{44}$")
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
 
-class Chain(c.Module):
+class Subspace(c.Module):
 
     name2storage_exceptions = {'key': 'Keys'}
     storage2name_exceptions = {v:k for k,v in name2storage_exceptions.items()}
