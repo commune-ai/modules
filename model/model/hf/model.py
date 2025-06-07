@@ -10,7 +10,7 @@ from transformers import  AutoModelForCausalLM, AutoTokenizer
 Examples 
 
 """
-class Transformer( nn.Module:
+class Transformer( nn.Module):
     models =  [
         "1bitLLM/bitnet_b1_58-3B"
     ]

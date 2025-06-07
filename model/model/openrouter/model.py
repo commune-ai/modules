@@ -4,7 +4,7 @@ import json
 import openai
 import time
 import os
-from .storage import Storage
+from .store import Store
 import commune as c
 import random
 
@@ -31,7 +31,7 @@ class OpenRouter:
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
         """
-        self.storage = Storage(storage_path)
+        self.storage = Store(storage_path)
         self.url = url
         self.client = openai.OpenAI(
             base_url=self.url,

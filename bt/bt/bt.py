@@ -7,13 +7,28 @@ from bittensor.utils.balance import Balance
 class Bt:
     """Interface module for Subtensor network operations and wallet management"""
     
-    def __init__(self, network: str = "finney"):
+    def __init__(self, network: str = "finney", archive=False):
         """Initialize the Subtensor module
         Args:
             network (str): Network to connect to (e.g. finney, test)
         """
         self.network = network
         self.subtensor = bt.subtensor(network=network)
+        if archive:
+            self.subtensor = bt.subtensor(network=network, archive=True)
+
+    def mod2json(self, mod: Any) -> Dict:
+        """Convert a neuron object to JSON dictionary
+        Args:
+            neuron (Any): Neuron object
+        Returns:
+            Dictionary representation of the neuron
+        """
+        mod =  mod.__dict__
+        mod['axon_info'] = mod['axon_info'].__dict__ 
+        mod['prometheus_info'] = mod['prometheus_info'].__dict__ 
+        mod['url'] = mod['axon_info']['ip'] + ':' + str(mod['axon_info']['port'])
+        return mod
 
     def neurons(self, netuid: int = 2) -> List[Dict]:
         """List all neurons in a subnet
@@ -22,7 +37,9 @@ class Bt:
         Returns:
             List of neuron information
         """
-        return self.subtensor.neurons(netuid=netuid)
+        return [self.mod2json(n) for n in self.subtensor.neurons(netuid=netuid)]
+
+    mods = neurons
     
     def n(self, netuid: int = 1) -> int:
         """Get number of neurons in a subnet
@@ -32,6 +49,7 @@ class Bt:
             Number of neurons
         """
         return len(self.neurons(netuid=netuid))
+
     
     def subnet(self, netuid: int = 2, block: Optional = None) -> Dict:
         """Get subnet information
@@ -41,19 +59,49 @@ class Bt:
         Returns:
             Subnet information dictionary
         """
+
+        
+
+
         return self.subtensor.subnet(netuid=netuid, block=block)
 
 
-    def subnets(self, block: Optional = None) -> List[Dict]:
+
+
+
+    def get_all_subnets_info(self, block: Optional = None, df=False) -> List[Dict]:
         """List all subnets
         Args:
             block (Optional): Block number
         Returns:
             List of subnet information dictionaries
         """
-        return c.df([s.__dict__ for s in self.subtensor.get_all_subnets_info(block=block)])
+        return self.subtensor.get_all_subnets_info(block=block)
 
-
+    def subnets(self, block: Optional = None, neurons=False, max_age=6000, update=False) -> List[Dict]:
+        """List all subnets
+        Args:
+            block (Optional): Block number
+        Returns:
+            List of subnet information dictionaries
+        """
+        path = '~/.bt/subnets.json'
+        subnets = c.get(path,  None, update=update, max_age=max_age)
+        if subnets is not None:
+            return subnets
+        subnets_info =  self.get_all_subnets_info(block=block)
+        subnets = []
+        for subnet_info in subnets_info:
+            netuid = subnet_info.netuid
+            subnet = self.subnet(netuid=netuid, block=block).__dict__
+            subnet['subnet_identity'] = subnet['subnet_identity'].__dict__ if subnet.get('subnet_identity', None) != None else None
+            if neurons:
+                neurons = self.neurons(netuid=netuid)
+                subnet['neurons'] = neurons
+            subnets.append(subnet)
+        
+            
+        return subnets
     
     def create_wallet(self, name: str, hotkey: Optional = None) -> Dict:
         """Create a new wallet

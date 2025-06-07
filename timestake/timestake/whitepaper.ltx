@@ -1,0 +1,103 @@
+\documentclass[11pt]{article}
+% -------------------- Preamble --------------------
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=cyan}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+
+% --------------------------------------------------
+\title{Modular Token Minting via Time--Lock Staking\\ \large A Parametric Framework with DAO‐Enforced Slashing and Epochal Vesting}
+\author{Open Source Draft v0.2 -- June 2025}
+\date{}
+\maketitle
+
+\begin{abstract}
+Stakers mint synthetic governance tokens by locking a base asset for a chosen period \(t\) (maximum four years). A multiplier curve \(M(t)\) translates lock length into mint amount. All curve parameters are stored on‑chain and may be tuned by governance without redeploying code.  Rewards emitted every epoch enter a vesting escrow and may be cut—partially or fully—by a multisig or on‑chain DAO if arbitration proves validator misconduct within a configurable look‑back window.  This paper provides the mathematical foundations, pallet interface, economic rationale and security proofs, presented in continuous prose rather than bullet lists for heightened readability.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ==================================================
+\section{Core Symbols and Governance Parameters}
+Table~\ref{tab:params} summarises all symbols exposed to governance.  The multiplier’s upper bound \(k\) is four in the canonical deployment, while the exponent \(p\) defaults to one.  The epoch length \(\epsilon\) is expressed in blocks; rewards vest linearly across \(\nu\) epochs, and a look‑back period \(\lambda\) allows retroactive slashing.
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning \\ \midrule
+\(A\) & Tokens locked by a staker (base denomination) \\ 
+\(t\) & Lock duration, measured in blocks or seconds \((0<t\le t_{\max})\) \\ 
+\(t_{\max}\) & Maximum lock duration, fixed initially at four years \\ 
+\(M(t)\) & Multiplier converting base tokens to synthetic supply \\ 
+\(S\) & Synthetic tokens minted for a position; see Eq.~\eqref{eq:mint} \\ 
+\(k\) & Maximum possible multiplier (governance‑controlled) \\ 
+\(p\) & Curve exponent controlling convexity (governance‑controlled) \\ 
+\(\epsilon\) & Epoch length in blocks (constant across runtime) \\ 
+\(\nu\) & Vesting span in epochs for newly emitted rewards \\ 
+\(\lambda\) & Arbitration look‑back window in epochs \\ \bottomrule
+\end{tabular}
+\caption{Configurable parameters manipulated by DAO or multisig.}
+\label{tab:params}
+\end{table}
+
+% ==================================================
+\section{Multiplier Curve}
+The system employs a continuously differentiable curve
+\begin{equation}
+M(t)=1+(k-1)\Bigl(\tfrac{t}{t_{\max}}\Bigr)^{p},\qquad 0<t\le t_{\max},
+\label{eq:curve}
+\end{equation}
+where \(k>1\) provides the ceiling and \(p>0\) shapes concavity.  Setting \(p=1\) yields a linear schedule, whereas values above unity strongly favour longer commitments; values below unity privilege short‑term locks.  Governance may modify \(k\), \(p\) or even swap the functional form entirely by a runtime call \code{dao::set\_curve}.  Convexity conditions and monotonicity proofs are relegated to Appendix~\ref{app:proofs}.  Figure~\ref{fig:curve} visualises representative shapes.
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.65\textwidth]{curve_shapes.pdf}
+\caption{Example multiplier curves for \(p=0.6,1,1.8\) under \(k=4\).}
+\label{fig:curve}
+\end{figure}
+
+% ==================================================
+\section{Minting and Lock Lifecycle}
+Upon calling \code{create\_lock}, a participant transfers \(A\) tokens to an escrow vault.  The runtime immediately computes \(S\) according to
+\begin{equation}
+S = A\,M(t),
+\label{eq:mint}
+\end{equation}
+and credits the account with \(S\) synthetic governance tokens.  These synthetic units remain outstanding until unlock, at which point they are burned atomically with the return of the base deposit.
+
+% ==================================================
+\section{Epochal Emission and Vesting}
+At block heights divisible by the epoch length \(\epsilon\) the chain mints a pool of new reward tokens, distributing them pro‑rata to synthetic balances \(S\).  The payout does not settle immediately: instead each beneficiary receives a vesting stream spanning \(\nu\) consecutive epochs.  Thus only one‑\(\nu\)‑th of the reward can be withdrawn after the first epoch, two‑\(\nu\)‑ths after the second, and so forth until the amount is fully liquid.  Maintaining a vesting buffer ensures that if arbitration later proves misconduct, yet‑to‑vest slices can be confiscated.
+
+% ==================================================
+\section{Arbitration and Slashing Mechanics}
+Validators supply attestations about off‑chain activity performed by agents or application modules.  Either a multisig of trusted arbiters or a token‑weighted DAO can file an on‑chain 
+\code{slash\_motion} referencing a specific validator, the contested epoch index, and cryptographic evidence.  Provided the motion is passed within the look‑back window \(\lambda\), the runtime automatically removes any unvested rewards associated with the disputed period and redirects them to a community treasury.  Optionally the motion may impose an additional penalty on the validator’s principal lock.  Because vesting rewards are numerically linked to epoch identifiers, partial removal is a pure bookkeeping operation requiring no traversal of historical state.
+
+% ==================================================
+\section{Governance Flow without Bullet Points}
+The chain begins with a genesis configuration of \(k=4\), \(p=1\), \(\epsilon=43{,}200\) blocks (approximately one week), \(\nu=24\) and \(\lambda=12\).  Token holders may later submit proposals to change any of these values.  If the proposal passes the prescribed quorum and threshold, the runtime executes an automated call that updates the parameter storage items; existing locks preserve their original multiplier, whereas new locks observe the revised curve.  Emergency suspension of new locks is possible through a governance‑controlled switch that disables the public extrinsic while leaving unlocks unaffected.
+
+% ==================================================
+\section{Security Considerations in Continuous Prose}
+Synthetic supply grants voting influence; therefore overly generous multipliers can threaten governance neutrality.  The vest‑then‑slash construction mitigates short‑term bribery attacks by ensuring that ill‑gotten rewards remain claw‑back‑able for \(\lambda\) epochs.  Fixed‑point arithmetic employs 64‑bit precision with saturation checks, preventing numeric overflow.  To discourage griefing locks that bloat state, an exit before the agreed term burns not only the synthetic balance but also a configurable share of the underlying principal.
+
+% ==================================================
+\section{Conclusion}
+Time‑lock staking combined with a parametrised multiplier curve aligns long‑term commitment with token issuance.  By draping every emission in a vesting veil that the DAO can slash retrospectively, the design reconciles capital efficiency with accountability.  All numerical levers live in storage and may be tuned through standard governance motions, ensuring that economic policy evolves without disruptive code changes.
+
+% ==================================================
+\appendix
+\section{Mathematical Proofs}
+\label{app:proofs}
+Proposition~1 establishes that \(M(t)\) from Eq.~\eqref{eq:curve} is strictly increasing for any \(k>1, p>0\).  Differentiating yields \(M'(t)=\frac{(k-1)p}{t_{\max}}(t/t_{\max})^{p-1}\), which is positive for \(t>0\).  Convexity follows by a second derivative argument: \(M''(t)\ge0\) precisely when \(p\ge1\).  A bound on aggregate synthetic supply similarly derives from \(M(t)\le k\), ensuring that \(\sum S_i\le k\,A_{\text{lock}}\).
+
+\vspace{1em}
+\textit{Further proofs, including a formal model of the vest‑slash game under rational adversaries, are under preparation and will accompany the audit report.}
+
+\end{document}

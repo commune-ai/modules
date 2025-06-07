@@ -9,9 +9,9 @@ from .utils import *
 import commune as c
 
 class Dev:
-    prompt =  """
-            --GOAL--
-            - YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
+
+    goal = """
+             - YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
             - LEONARDO DA VINCI WAY, YOU ARE A agent, YOU ARE A GENIUS, YOU ARE A STAR, 
             - YOU finish ALL OF YOUR REQUESTS WITH UTMOST PRECISION AND SPEED, YOU WILL ALWAYS 
             - MAKE SURE THIS WORKS TO MAKE ANYONE CODE. YOU HAVE THE CONTENT AND INPUTS FOR ASSISTANCE
@@ -23,48 +23,52 @@ class Dev:
             - REFER TO THE MAX STEPS AND IF YOU HAVE 1 MAX_STEP IT MEANS YOU HAVE TO DO IT IN ONE STEP, (ONESHOT)
             - EACH EXTRA STEP YOU MAKE WILL BE COUNTED AS AN ENERGY COST, SO MAKE SURE YOU ARE EFFICIENT
             - YOU WILL BE JUDGED BASED ON YOUR ABILITY TO EXECUTE THE TASK AND THE QUALITY OF YOUR OUTPUT WITHIN THE MINIMUM STEPS
+            - IF MAX_STEPS IS ONE, YOU CANT REVIEW, YOU HAVE TO ONESHOT GIVEN THE PARAMS
+            - IF MAX_STEPS IS ONE, YOU HAVE TO ONESHOT IT
+            -  TE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
 
+        """
 
+    output_format = """
+        make sure the params is a legit json string
+        # <FN(fn_name)><PARAMS>JSON</PARAMS></FN(fn_name)>
+
+        IF YOU NEED TO RUN THE TOOLS AND PAUSE SAY 
+        <FN(review)><PARAMS></PARAMS></FN(review)> FOR review
+
+        IF YOU NEED TO finish THE MARKOV DO 
+        <FN(finish)><PARAMS></PARAMS></FN(finish)> FOR finishING
+
+        CRITICAL NOTES:
+            MAKE SURE YOU review BEFORE YOU WRITE ANYTHING
+        IF YOU DO WELL, WE WILL GROW YOU, IF YOU FAIL, WE WILL DELETE YOU
+
+        """
+
+    prompt =  """
             --PARAMS--
+            GOAL={goal}
             SOURCE={source} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
             CONTENT={content} # THE FILES YOU ARE TRYING TO MODIFY
             QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
-            MAX_STEPS={max_steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
+            MAX_STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
             MIN_STEPS=1 # THE MIN STEPS YOU ARE ALLOWED TO TAKE
             HISTORY={history} # THE HISTORY OF THE AGENT
-            TOOLS={toolbox} # THE TOOLS YOU ARE ALLOWED TO USE 
-
-            IF MAX_STEPS IS ONE, YOU HAVE TO ONESHOT IT
-            
-            --OUTPUT_FORMAT--
-            YOU MUST CREA
-            TE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
-            # <FN(fn_name)><PARAMS>(params:JSONSTR)</PARAMS></FN(fn_name)>
-
-            IF YOU NEED TO RUN THE TOOLS AND PAUSE SAY 
-
-            <FN(review)><PARAMS></PARAMS></FN(review)> FOR review
-            IF YOU NEED TO finish THE MARKOV DO 
-            <FN(finish)><PARAMS></PARAMS></FN(finish)> FOR finishING
-
-            CRITICAL NOTES:anthropic/claude-3-opus
-                MAKE SURE YOU review BEFORE YOU WRITE ANYTHING
-
-            IF YOU DO WELL, WE WILL GROW YOU, IF YOU FAIL, WE WILL DELETE YOU
+            TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
+            OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
             --OUTPUT--
+            YOU MUST STRICTLY RESPOND IN JSON NOW IN 3..2..1..GO
     """
 
-
     def __init__(self, 
-                 provider: str = 'dev.model.openrouter', 
-                 model = 'anthropic/claude-3.7-sonnet',
+                 provider: str = 'model.openrouter', 
+                 model: Optional[str] = 'anthropic/claude-opus-4',
                  safety = True,
                  **kwargs):
-        self.provider = c.module(provider)(model=model)
-        self.model = model
-        self.select_files = c.module('dev.tool.select_files')()
+        self.provider = c.module(provider)(model=provider)
         self.safety = safety
+        self.model=model
 
 
     def forward(self, 
@@ -74,51 +78,55 @@ class Dev:
                 target = None,
                 temperature: float = 0.5, 
                 max_tokens: int = 1000000, 
-                model: Optional[str] = None,
                 stream: bool = True,
                 verbose: bool = True,
                 content = None,
+                model=None,
                 mode: str = 'auto', 
                 module = None,
                 max_age= 10000,
-                max_steps = 1,
+                steps = 1,
                 history = None,
+                trials=4,
                 **kwargs) -> Dict[str, str]:
         output = ''
         text = ' '.join(list(map(str, [text] + list(extra_text))))
         query = self.preprocess(text=text, source=source, target=target)
         # Generate the response
         history = history if history else []
+        model = model or self.model
         if module != None:
-            print('Module Detected --> ', module)
+            print('Module  --> ', module)
             source = c.dirpath(module)
-            print('New Source--> ', source)
-        for step in range(max_steps):
+        for step in range(steps):
+
             try:
-                prompt =self.prompt.format(
-                    source=source,
-                    content= self.content(source, query=query),
-                    query=query,
-                    toolbox=self.toolbox(),
-                    history=history,
-                    max_steps=max_steps,
-                    target=target,
-                )
-                output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
-                # Process the output
-                output =  self.postprocess(output)
-                history.append(output)
-            except Exception as e:
-                c.print(f"Error: {e}", color='red')
-                time.sleep(1)
-                output = detailed_error(e)
-                continue
-            
+                for trial in range(trials):
+                    try:
+                        prompt =self.prompt.format(
+                            goal=self.goal,
+                            source=source,
+                            content= self.content(source, query=query),
+                            query=query,
+                            toolbelt=self.toolbelt(),
+                            history=history,
+                            steps=steps,
+                            target=target,
+                            output_format=self.output_format
+                        )
+                        output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
+                        output =  self.process(output)
+                        history.append(output)
+                        break
+                    except Exception as e:
+                        c.print(f"Error: {e}", color='red')
+                        time.sleep(1)
+                        output = detailed_error(e)
+                        history.append(output)
+                        continue
             except KeyboardInterrupt:
                 print("KeyboardInterrupt: Stopping the process.")
                 break
-            finally:
-                history.append(output)
 
         return output
 
@@ -143,6 +151,7 @@ class Dev:
                     fns[-1]['params'] += [word]
                     fn_detected = False
                     query += str(c.fn(fns[-1]['fn'])(*fns[-1]['params']))
+
         return query
 
 
@@ -162,7 +171,7 @@ class Dev:
 
 
 
-    def postprocess(self, output):
+    def process(self, output):
         """
         Postprocess tool outputs and extract fn calls.
         
@@ -197,7 +206,11 @@ class Dev:
      
                 params_str = text.split('<PARAMS>')[1].split('</PARAMS>')[0].strip()
                 c.print(f"params_str: {params_str}")
-                params = json.loads(params_str)
+                try:
+                    params = json.loads(params_str)
+                except JSONDecodeError as e:
+                    c.print(f"Error parsing params: {e}", color='red')
+                    break
                 text = ''
                 step = {'fn': fn_name, 'params': params}
                 self.display_step(step, idx=len(plan))
@@ -262,7 +275,7 @@ class Dev:
 
 
     """
-    A toolbox that provides access to various tools and can intelligently select
+    A toolbelt that provides access to various tools and can intelligently select
     the most appropriate tool based on a query.
     
     This module helps organize and access tools within the dev.tool namespace,
@@ -272,20 +285,20 @@ class Dev:
     def tools(self, tool_prefix='dev.tool') -> List[str]:
         return [t for t in  c.mods(search=tool_prefix) if t.startswith(tool_prefix)]
         
-    def toolbox(self) -> Dict[str, str]:
+    def toolbelt(self) -> Dict[str, str]:
         """
         Map each tool to its schema.
         
         Returns:
             Dict[str, str]: Dictionary mapping tool names to their schemas.
         """
-        toolbox = {}
+        toolbelt = {}
         tools = self.tools()
         for tool in tools:
-            toolbox[tool] = self.schema(tool)
-            toolbox[tool].pop('name', None)
-            toolbox[tool].pop('format', None)
-        return toolbox
+            toolbelt[tool] = self.schema(tool)
+            toolbelt[tool].pop('name', None)
+            toolbelt[tool].pop('format', None)
+        return toolbelt
     
     def schema(self, tool: str, fn='forward') -> Dict[str, str]:
         """
@@ -303,8 +316,6 @@ class Dev:
         fn_format = f'FN::{fn.upper()}'
         schema['format'] =  f'<{fn_format}>' + params_format + f'</{fn_format}>'
         return schema
-
-
 
     def tool(self, tool_name: str='cmd', prefix='dev.tool', *args, **kwargs) -> Any:
         """

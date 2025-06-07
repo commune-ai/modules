@@ -2,7 +2,7 @@ import commune as c
 import streamlit as st
 
 
-class App(c.Module):
+class App:
 
     def __init__(self, 
                  max_tokens=420000, 
@@ -13,6 +13,7 @@ class App(c.Module):
                  history_path='history',
                 **kwargs):
 
+        self.key = c.key()
         self.max_tokens = max_tokens
         self.text = text
         self.set_module(model, 
@@ -31,7 +32,7 @@ class App(c.Module):
         self.admin_key = c.pwd2key(password) if password else self.key
         self.model = c.module('agent')(model=model)
         self.models = self.model.models()
-        self.history_path = self.resolve_path(history_path)
+        self.history_path = c.get_path(history_path)
         return {'success':True, 'msg':'set_module passed'}
     
     def add_files(self, files):
@@ -54,6 +55,9 @@ class App(c.Module):
         data = c.locals2kwargs(locals())
         signature = self.key.ticket(c.hash(data))
         return signature
+
+    def get_path(self, path):
+        return '~/.commune/agent/app/' + path
     
     def sidebar(self, user='user', password='password', seperator='::'):
         with st.sidebar:
@@ -64,10 +68,10 @@ class App(c.Module):
                 user_name = cols[0].text_input('User', user)
                 pwd = cols[1].text_input('Password', password, type='password')
                 seed = c.hash(user_name + seperator + pwd)
-                self.key = c.pwd2key(seed)
+                self.key = c.str2key(seed)
                 self.data = c.dict2munch({  
                                 'user': user_name, 
-                                'path': self.resolve_path('history', self.key.ss58_address ),
+                                'path': self.get_path('history/'+ self.key.ss58_address ),
                                 'history': self.history(self.key.ss58_address)
                                 })
     
@@ -119,7 +123,7 @@ class App(c.Module):
         send_button = cols[0].button('Send', key='send', use_container_width=True) 
         stop_button = cols[1].button('Stop', key='stop', use_container_width=True)
         if send_button and not stop_button:
-            r = self.model.generate(params['input'], 
+            r = self.model.forward(params['input'], 
                                     max_tokens=params['max_tokens'], 
                                     temperature=params['temperature'], 
                                     model=params['model'],
