@@ -205,16 +205,12 @@ class Dev:
                 plan += [{'fn': 'review', 'params': {}}]
                 break
             is_fn = all(name2cond[k] for k in name2cond)
+
             if is_fn:
                 fn_name = text.split('<FN(')[1].split(')')[0]
      
                 params_str = text.split('<PARAMS>')[1].split('</PARAMS>')[0].strip()
-                c.print(f"params_str: {params_str}")
-                try:
-                    params = json.loads(params_str)
-                except JSONDecodeError as e:
-                    c.print(f"Error parsing params: {e}", color='red')
-                    break
+                params = json.loads(params_str)
                 text = ''
                 step = {'fn': fn_name, 'params': params}
                 self.display_step(step, idx=len(plan))
