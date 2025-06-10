@@ -25,6 +25,31 @@ def makedirs(path):
         os.makedirs(path, exist_ok=True)
     return path
 
+
+def detailed_error(e):
+    """
+    Extract detailed error information from an exception.
+    
+    Args:
+        e: Exception object
+        
+    Returns:
+        Dictionary with error details
+    """
+    import traceback
+    tb = traceback.extract_tb(e.__traceback__)
+    file_name = tb[-1].filename
+    line_no = tb[-1].lineno
+    line_text = tb[-1].line
+    response = {
+        'success': False,
+        'error': str(e),
+        'file_name': file_name.replace(os.path.expanduser('~'), '~'),
+        'line_no': line_no,
+        'line_text': line_text
+    }   
+    return response
+
 def put_text(path, text):
     """
     Write text to a file.
@@ -125,7 +150,6 @@ def list_files(directory,
             ) and (max_size is None or os.path.getsize(f) <= max_size)
         ]
 
-def detailed_error(e) -> dict:
     import traceback
     tb = traceback.extract_tb(e.__traceback__)
     file_name = tb[-1].filename

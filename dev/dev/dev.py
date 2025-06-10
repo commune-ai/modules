@@ -8,6 +8,8 @@ from typing import Dict, List, Union, Optional, Any, Tuple
 from .utils import *
 import commune as c
 
+print = c.print
+
 class Dev:
 
     goal = """
@@ -70,17 +72,16 @@ class Dev:
         self.safety = safety
         self.model=model
 
-
     def forward(self, 
                 text: str = 'where am i', 
                 *extra_text, 
-                source: str = './', 
+                source: str = None, 
                 target = None,
                 temperature: float = 0.5, 
                 max_tokens: int = 1000000, 
                 stream: bool = True,
                 verbose: bool = True,
-                content = None,
+                content = './',
                 model=None,
                 mode: str = 'auto', 
                 module = None,
@@ -98,15 +99,18 @@ class Dev:
         if module != None:
             print('Module  --> ', module)
             source = c.dirpath(module)
-        for step in range(steps):
+        context =  '' if source == None else self.content(source, query=query)
 
+        for step in range(steps):
+            print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
             try:
                 for trial in range(trials):
+                    print(f"Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
                     try:
                         prompt =self.prompt.format(
                             goal=self.goal,
                             source=source,
-                            content= self.content(source, query=query),
+                            content= context,
                             query=query,
                             toolbelt=self.toolbelt(),
                             history=history,
@@ -220,7 +224,6 @@ class Dev:
         results = []
         if self.safety:
             # Check if the plan is safe to execute
-            
             input_text = input("Do you want to execute the plan? (y/n): ")
             if input_text.startswith('y'):
                 for fn in plan:
@@ -233,10 +236,6 @@ class Dev:
                     results.append({"EXTRA NOTE YOUR COMMANDER": extra_message})
         return results
 
-
-
-
-
     def content(self, path: str = './', query=None, max_size=100000) -> List[str]:
         """
         Find files in a directory matching a specific pattern.
@@ -248,7 +247,7 @@ class Dev:
         Returns:
             List[str]: A list of file paths matching the pattern.
         """
-        result = self.tool('select_files')(path=path, query=query)
+        result = self.tool('select.files')(path=path, query=query)
         content = str(result)
         size = len(content)
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
@@ -271,8 +270,6 @@ class Dev:
             result = content
         c.print(f"Content found: {len(result)} items", color='green')
         return result
-
-
 
     """
     A toolbelt that provides access to various tools and can intelligently select

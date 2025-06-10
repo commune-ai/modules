@@ -13,7 +13,7 @@ import commune as c # import commune
 
 class Key(Account):
     crypto_type = 'eth'
-    key_storage_path = os.path.expanduser('~/.eth/key')
+    key_storage_path = os.path.expanduser('/private/eth2/key')
 
     def __init__(self, private_key: str = None, name=None) -> None:
         self.set_private_key(private_key)
@@ -229,7 +229,6 @@ class Key(Account):
             'address': self.address,
             'private_key': self.private_key_string
         }
-    
     
     
     def from_key(self, private_key:str):

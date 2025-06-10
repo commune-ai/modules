@@ -1,8 +1,7 @@
 import commune as c
 class Help:
     def forward(self, *args, module=None):
-        text = self.args2text(args)
-        code_map = c.code_map(module)
+        code_map = c.context(module)
 
         prompt = f'''
         and the code map: {code_map}
