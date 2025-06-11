@@ -255,7 +255,7 @@ class Dev:
             for k, v in result.items():
                 future = c.submit(summarize, {'content': v, "query": query})
                 f2k[future] = k
-            for future in c.as_completed(f2k):
+            for future in c.as_completed(f2k, timeout=10):
                 k = f2k[future]
                 print(f"Processing {k}")
                 v = future.result()

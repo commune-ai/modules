@@ -124,6 +124,8 @@ class SelectFiles:
             raise ValueError(f"Failed to parse LLM response as JSON: {e}")
         # Filter and convert to final output format
         filtered_options = []
+        if isinstance(result, list):
+            result = {"data": result}
         for item in result["data"]:
             if isinstance(item, dict) and "idx" in item and "score" in item:
                 idx, score = item["idx"], item["score"]
