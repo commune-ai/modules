@@ -75,6 +75,9 @@ class Executor:
         if params != None:
             if isinstance(params, dict):
                 kwargs = params
+                if 'args' in kwargs and 'kwargs' in kwargs:
+                    args = kwargs.pop('args')
+                    kwargs = kwargs.pop('kwargs')
             elif isinstance(params, list):
                 args = params
             else:
