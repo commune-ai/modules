@@ -71,9 +71,10 @@ class SelectFiles:
             - Only include options with scores >= THRESHOLD
             - Be conservative with scoring to prioritize quality over quantity
             - Respond ONLY with the JSON format specified below
+            - IT NEEDS TO BE JSON
         """
         anchors = ["<START_JSON>", "</END_JSON>"]
-        output_format = f"{anchors[0]}(data:(idx:INT, score:INT)]){anchors[1]}"
+        output_format = f"{anchors[0]}(data:LIST(DICT(idx:INT, score:INT)))){anchors[1]}"
 
         prompt = f"""
             --PARAMS--

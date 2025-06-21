@@ -174,8 +174,12 @@ class Dev:
         return step
 
 
+    def process(self, output:str) -> list:
+        plan = self.get_plan(output)
+        return self.execute_plan(plan)
 
-    def process(self, output):
+
+    def get_plan(self, output):
         """
         Postprocess tool outputs and extract fn calls.
         
@@ -210,29 +214,32 @@ class Dev:
                 fn_name = text.split('<FN(')[1].split(')')[0]
      
                 params_str = text.split('<PARAMS>')[1].split('</PARAMS>')[0].strip()
-                params = json.loads(params_str)
+                try:
+                    params = json.loads(params_str)
+                except json.JSONDecodeError:
+                    return plan
                 text = ''
                 step = {'fn': fn_name, 'params': params}
                 self.display_step(step, idx=len(plan))
                 plan.append(step)
 
         c.print("Plan:", plan, color='yellow')
+        return plan
+
+    def execute_plan(self, plan):
         results = []
         if self.safety:
-            # Check if the plan is safe to execute
             input_text = input("Do you want to execute the plan? (y/n): ")
             if input_text.startswith('y'):
                 for fn in plan:
                     c.print(f"Function: {fn['fn']}" ,fn['params'])
-                    if not fn['fn'] in ['finish', 'review']:
-                        results.append(c.module(fn['fn'])().forward(**fn['params']))
-                if len(input_text) > 1 :
-                    extra_message = input_text[1:]
-                    print(f"Extra message: {extra_message}")
-                    results.append({"EXTRA NOTE YOUR COMMANDER": extra_message})
+                    if fn['fn'] in ['finish', 'review']:
+                        break
+                    else:
+                        result = c.module(fn['fn'])().forward(**fn['params'])
         return results
 
-    def content(self, path: str = './', query=None, max_size=100000) -> List[str]:
+    def content(self, path: str = './', query=None, max_size=100000, timeout=20) -> List[str]:
         """
         Find files in a directory matching a specific pattern.
         
@@ -243,7 +250,7 @@ class Dev:
         Returns:
             List[str]: A list of file paths matching the pattern.
         """
-        result = self.tool('select.files')(path=path, query=query)
+        result = self.tool('select.files')(path=path, query=query, trials=4)
         content = str(result)
         size = len(content)
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
@@ -251,16 +258,10 @@ class Dev:
         if size > max_size:
             summarize = self.tool('summarize_file')
             new_results = {}
-            f2k = {}
             for k, v in result.items():
-                future = c.submit(summarize, {'content': v, "query": query})
-                f2k[future] = k
-            for future in c.as_completed(f2k, timeout=10):
-                k = f2k[future]
-                print(f"Processing {k}")
-                v = future.result()
-                new_results[k] = v
-
+                future = c.submit(summarize, {'content': v, "query": query}, timeout=timeout)
+                futures.append(future)
+            results = c.wait(futures, timeout=timeout)
             return new_results
         else:
             result = content
