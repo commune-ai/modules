@@ -5,16 +5,11 @@ import os
 import json
 import paramiko
     
-class Remote(c.Module):
+class Remote:
     def __init__(self, path = 'hosts'):
-        self.set_host_path(path)
-
-    def set_host_path(self, path=None):
         path = path or 'hosts.yaml'
-        path = Remote.resolve_path(path)
         self.host_data_path = path
         return {'status': 'success', 'msg': f'Host data path set to {path}'}
-
 
     def ssh_cmd(self, *cmd_args, 
                 cmd : str = None,
