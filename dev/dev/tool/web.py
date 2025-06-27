@@ -122,7 +122,7 @@ class WebScraper:
                 self.driver = None
     
     def forward(self,
-                query: str,
+                query: str = 'what is the weather today',
                 num_results: int = 5,
                 include_snippets: bool = True,
                 include_links: bool = True,
