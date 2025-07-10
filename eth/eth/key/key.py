@@ -342,7 +342,7 @@ class Key(Account):
         c.put_json(path, data)
         return {'status': 'success', 'message': f'Key {name} encrypted'}
     
-    def decrypt_key(self, name, password=None, save=True):
+    def decrypt_key(self, name, password=None, save=False):
         path = self.get_key_path(name)
         import json
         data = json.loads(c.get_text(path))
@@ -353,7 +353,7 @@ class Key(Account):
         data['encrypted'] = False
         if save:
             c.put_json(path, data)
-        return {'status': 'success', 'message': f'Key {name} decrypted'}
+        return data
                 
     def key2data(self, password=None):
         key2data = {}

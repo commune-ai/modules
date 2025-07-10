@@ -47,6 +47,7 @@ export default function ModulesClient({ module_name, code, api }: { module_name 
       try {
         const foundModule = await client.call('get_module', {
           module: module_name,
+          code: true,
         })
         if (foundModule) {
           setModule(foundModule)
