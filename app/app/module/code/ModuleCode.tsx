@@ -1,5 +1,4 @@
 'use client'
-'use client'
 
 import { ModuleFileViewer } from './ModuleFileViewer'
 import { CompressedCodeViewer } from './CompressedCodeViewer'
@@ -22,15 +21,15 @@ export const ModuleCode = ({ code, path, language, files, useCompressedView = fa
       }, {} as Record<string, string>)
     : { [path]: code };
 
-  // Use CompressedCodeViewer for multiple files or when explicitly requested
-  if (useCompressedView || (files && files.length > 1)) {
-  // Use UnifiedCompressedViewer for ultimate compression
+  // Use UnifiedCompressedViewer for ultimate compression with file tree
   if (useCompressedView && files && files.length > 1) {
     return (
       <UnifiedCompressedViewer 
         files={filesRecord}
         title="Module Source Code"
         defaultExpanded={true}
+        showFileTree={true}
+        defaultExpandedFolders={true}
       />
     )
   }
@@ -41,9 +40,10 @@ export const ModuleCode = ({ code, path, language, files, useCompressedView = fa
       <CompressedCodeViewer 
         files={filesRecord}
         title="Code Files"
-        showSearch={files && files.length > 3}
-        showFileTree={files && files.length > 5}
-        compactMode={files && files.length <= 2}
+        showSearch={true}
+        showFileTree={true}
+        compactMode={false}
+        defaultExpandedFolders={true}
       />
     )
   }
@@ -69,4 +69,3 @@ export const ModuleCode = ({ code, path, language, files, useCompressedView = fa
     </div>
   )
 }
-} 

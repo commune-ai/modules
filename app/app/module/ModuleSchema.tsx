@@ -19,7 +19,9 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
   const [params, setParams] = useState<Record<string, any>>({})
   const [response, setResponse] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const  [error, setError] = useState<string>('')
+  const [error, setError] = useState<string>('')
+  const [showDescription, setShowDescription] = useState<boolean>(false)
+  
   console.log('ModuleSchema props:', mod)
   let schema: SchemaType = mod.schema || {}
 
@@ -27,6 +29,7 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
   const handleParamChange = (paramName: string, value: string) => {
     setParams({ ...params, [paramName]: value })
   } 
+  
   // Execute the selected function
   const executeFunction = async () => {
     setLoading(true)
@@ -41,83 +44,154 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
       setLoading(false)
     }
   }
-  console.log('ModuleSchema rendered with schema:', schema)
+
+  // Get function description (mock - you can enhance this)
+  const getFunctionDescription = (fnName: string) => {
+    const descriptions: Record<string, string> = {
+      'default': 'Select a function to see its description and parameters.',
+      // Add more function descriptions here
+    }
+    return descriptions[fnName] || `Execute ${fnName} with the specified parameters.`
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Function Selector */}
-      <div className="flex flex-col space-y-2">
-        <label className="text-gray-400">Select Function</label>
-        <select
-          value={selectedFunction}
-          onChange={(e) => {
-            setSelectedFunction(e.target.value)
-            setParams({})
-            setResponse(null)
-          }}
-          className="w-full px-4 py-2 bg-black/90 text-green-400 
-                   border border-green-500/30 rounded-lg
-                   focus:outline-none focus:border-green-400"
-        >
-          <option value="">Select a function</option>
+    <div className="flex gap-6 h-full">
+      {/* Left Panel - Parameters Input */}
+      <div className="flex-1 space-y-6 p-6 bg-black/50 border border-green-500/20 rounded-lg">
+        <h2 className="text-xl font-bold text-green-400 border-b border-green-500/20 pb-2">
+          Parameters
+        </h2>
+        
+        {selectedFunction && schema[selectedFunction] ? (
+          <div className="space-y-4">
+            {Object.entries(schema[selectedFunction].input).map(([param, details]) => (
+              <div key={param} className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  {param}
+                  <span className="text-green-500/70 ml-2">({details.type})</span>
+                </label>
+                {details.value !== '_empty' && (
+                  <p className="text-xs text-gray-500">Default: {String(details.value)}</p>
+                )}
+                <input
+                  type="text"
+                  value={params[param] || ''}
+                  onChange={(e) => handleParamChange(param, e.target.value)}
+                  placeholder={`Enter ${param}`}
+                  className="w-full px-4 py-2 bg-black/70 text-green-400 
+                           border border-green-500/30 rounded-lg
+                           focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400/50
+                           placeholder-gray-600"
+                />
+              </div>
+            ))}
 
-          {Object.keys(schema).map(fn => (
-            <option key={fn} value={fn}>{fn}</option>
-          ))}
-        </select>
+            <button
+              onClick={executeFunction}
+              disabled={loading}
+              className="w-full mt-6 px-4 py-3 bg-green-900/20 text-green-400 
+                       border border-green-500/30 rounded-lg font-medium
+                       hover:bg-green-900/30 hover:border-green-400 transition-all
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Executing...' : 'Execute Function'}
+            </button>
+          </div>
+        ) : (
+          <div className="text-gray-500 text-center py-8">
+            Select a function from the right panel to configure parameters
+          </div>
+        )}
+
+        {/* Response Display */}
+        {(response || error) && (
+          <div className="mt-6 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-green-400 font-medium">Response</h3>
+              <CopyButton code={JSON.stringify(response || error, null, 2)} />
+            </div>
+            <pre className="p-4 bg-black/70 border border-green-500/30 rounded-lg overflow-x-auto max-h-64">
+              <code className={`text-sm ${error ? 'text-red-400' : 'text-green-300'}`}>
+                {JSON.stringify(response || error, null, 2)}
+              </code>
+            </pre>
+          </div>
+        )}
       </div>
 
-      {/* Parameters Input */}
-      {selectedFunction && schema && (
-        <div className="space-y-4">
-          <h3 className="text-green-400">Parameters</h3>
-          {Object.entries(schema[selectedFunction].input).map(([param, details]) => (
-            <div key={param} className="space-y-1">
-              <label className="text-sm text-gray-400">
-                {param} ({details.type})
-                {details.value !== '_empty' && (
-                  <span className="text-gray-500"> - default: {String(details.value)}</span>
+      {/* Right Panel - Function Selection */}
+      <div className="w-96 space-y-6 p-6 bg-black/50 border border-green-500/20 rounded-lg">
+        <h2 className="text-xl font-bold text-green-400 border-b border-green-500/20 pb-2">
+          Functions
+        </h2>
+        
+        <div className="space-y-3">
+          {Object.keys(schema).length > 0 ? (
+            Object.keys(schema).map(fn => (
+              <div
+                key={fn}
+                onClick={() => {
+                  setSelectedFunction(fn)
+                  setParams({})
+                  setResponse(null)
+                  setError('')
+                  setShowDescription(true)
+                }}
+                className={`p-4 bg-black/70 border rounded-lg cursor-pointer transition-all
+                         hover:bg-green-900/20 hover:border-green-400
+                         ${selectedFunction === fn 
+                           ? 'border-green-400 bg-green-900/20' 
+                           : 'border-green-500/30'}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-green-400 font-medium">{fn}</span>
+                  <svg 
+                    className={`w-4 h-4 text-green-500 transition-transform
+                              ${selectedFunction === fn ? 'rotate-90' : ''}`}
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                
+                {/* Function Description */}
+                {selectedFunction === fn && showDescription && (
+                  <div className="mt-3 pt-3 border-t border-green-500/20">
+                    <p className="text-sm text-gray-400">
+                      {getFunctionDescription(fn)}
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-gray-500">
+                        Parameters: {Object.keys(schema[fn].input).length}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Output type: {schema[fn].output.type}
+                      </p>
+                    </div>
+                  </div>
                 )}
-              </label>
-              <input
-                type="text"
-                value={params[param] || ''}
-                onChange={(e) => handleParamChange(param, e.target.value)}
-                placeholder={`Enter ${param}`}
-                className="w-full px-4 py-2 bg-black/90 text-green-400 
-                         border border-green-500/30 rounded-lg
-                         focus:outline-none focus:border-green-400"
-              />
+              </div>
+            ))
+          ) : (
+            <div className="text-gray-500 text-center py-8">
+              No functions available in schema
             </div>
-          ))}
-
-          <button
-            onClick={executeFunction}
-            disabled={loading}
-            className="w-full px-4 py-2 bg-black/90 text-green-400 
-                     border border-green-500/30 rounded-lg
-                     hover:bg-green-900/20 transition-colors
-                     disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Executing...' : 'Execute Function'}
-          </button>
+          )}
         </div>
-      )}
-
-      {/* Response Display */}
-      {(response || error) && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-green-400">Response</h3>
-            <CopyButton code={JSON.stringify(response || error, null, 2)} />
+        
+        {/* Module Info */}
+        {mod.name && (
+          <div className="mt-6 pt-6 border-t border-green-500/20">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Module Info</h3>
+            <p className="text-green-400">{mod.name}</p>
+            {mod.description && (
+              <p className="text-xs text-gray-500 mt-1">{mod.description}</p>
+            )}
           </div>
-          <pre className="p-4 bg-black/90 border border-green-500/30 rounded-lg overflow-x-auto">
-            <code className={`text-sm ${error ? 'text-red-400' : 'text-green-400'}`}>
-              {JSON.stringify(response || error, null, 2)}
-            </code>
-          </pre>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

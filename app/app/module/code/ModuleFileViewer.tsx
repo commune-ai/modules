@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { CopyButton } from '@/app/components/CopyButton'
-import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, FolderIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, FolderIcon, XMarkIcon, CodeBracketIcon, DocumentTextIcon, PhotoIcon, FilmIcon, MusicalNoteIcon, ArchiveBoxIcon, DocumentChartBarIcon, ClipboardDocumentIcon, FolderOpenIcon } from '@heroicons/react/24/outline'
 import crypto from 'crypto'
 
 interface FileNode {
@@ -13,6 +13,7 @@ interface FileNode {
   content?: string;
   language?: string;
   hash?: string;
+  size?: string;
 }
 
 interface ModuleFileViewerProps {
@@ -28,6 +29,37 @@ interface Tab {
   content: string;
   language: string;
   hash: string;
+  size: string;
+}
+
+const getFileIcon = (filename: string) => {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  const iconMap: Record<string, any> = {
+    ts: CodeBracketIcon,
+    tsx: CodeBracketIcon,
+    js: CodeBracketIcon,
+    jsx: CodeBracketIcon,
+    py: CodeBracketIcon,
+    json: DocumentChartBarIcon,
+    css: DocumentTextIcon,
+    html: DocumentTextIcon,
+    md: DocumentTextIcon,
+    txt: DocumentTextIcon,
+    jpg: PhotoIcon,
+    jpeg: PhotoIcon,
+    png: PhotoIcon,
+    gif: PhotoIcon,
+    svg: PhotoIcon,
+    mp4: FilmIcon,
+    avi: FilmIcon,
+    mov: FilmIcon,
+    mp3: MusicalNoteIcon,
+    wav: MusicalNoteIcon,
+    zip: ArchiveBoxIcon,
+    tar: ArchiveBoxIcon,
+    gz: ArchiveBoxIcon,
+  }
+  return iconMap[ext] || DocumentIcon
 }
 
 const getLanguageFromPath = (path: string): string => {
@@ -55,6 +87,12 @@ const languageColors: Record<string, string> = {
   html: 'text-red-400',
   markdown: 'text-gray-400',
   text: 'text-gray-300',
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return bytes + ' B'
+  else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  else return (bytes / 1048576).toFixed(1) + ' MB'
 }
 
 const calculateHash = (content: string): string => {
@@ -87,6 +125,7 @@ const buildFileTree = (files: Record<string, string>): FileNode[] => {
           content: isFile ? content : undefined,
           language: isFile ? getLanguageFromPath(part) : undefined,
           hash: isFile ? calculateHash(content) : undefined,
+          size: isFile ? formatFileSize(content.length) : undefined,
         }
         current.children!.push(child)
       }
@@ -107,7 +146,8 @@ function FileTreeItem({
   expandedFolders,
   toggleFolder,
   selectedPath,
-  showHashes
+  showHashes,
+  onCopy,
 }: {
   node: FileNode;
   level: number;
@@ -116,9 +156,11 @@ function FileTreeItem({
   toggleFolder: (path: string) => void;
   selectedPath?: string;
   showHashes?: boolean;
+  onCopy: (node: FileNode) => void;
 }) {
   const isExpanded = expandedFolders.has(node.path)
   const isSelected = selectedPath === node.path
+  const FileIcon = node.type === 'file' ? getFileIcon(node.name) : (isExpanded ? FolderOpenIcon : FolderIcon)
 
   const handleClick = () => {
     if (node.type === 'folder') {
@@ -131,30 +173,43 @@ function FileTreeItem({
   return (
     <div>
       <div
-        className={`flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-gray-800/50 rounded transition-colors ${
+        className={`group flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-gray-800/50 rounded-md transition-all duration-150 ${
           isSelected ? 'bg-gray-800/50 border-l-2 border-green-400' : ''
         }`}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleClick}
       >
         <div className="flex items-center flex-1 min-w-0">
-          {node.type === 'folder' ? (
-            <>
-              {isExpanded ? (
-                <ChevronDownIcon className="h-4 w-4 mr-1" />
-              ) : (
-                <ChevronRightIcon className="h-4 w-4 mr-1" />
-              )}
-              <FolderIcon className="h-4 w-4 mr-2 text-yellow-500" />
-            </>
-          ) : (
-            <DocumentIcon className="h-4 w-4 mr-2 ml-5 text-gray-400" />
+          {node.type === 'folder' && (
+            isExpanded ? (
+              <ChevronDownIcon className="h-4 w-4 mr-1" />
+            ) : (
+              <ChevronRightIcon className="h-4 w-4 mr-1" />
+            )
           )}
+          <FileIcon className={`h-4 w-4 mr-2 flex-shrink-0 ${
+            node.type === 'folder' ? 'text-yellow-500' : 'text-gray-400'
+          }`} />
           <span className="text-sm font-mono text-gray-300 truncate">{node.name}</span>
         </div>
-        {node.type === 'file' && showHashes && node.hash && (
-          <span className="text-xs font-mono text-green-400 ml-2">{node.hash}</span>
-        )}
+        <div className="flex items-center gap-2">
+          {node.type === 'file' && node.size && (
+            <span className="text-xs text-gray-500">{node.size}</span>
+          )}
+          {node.type === 'file' && showHashes && node.hash && (
+            <span className="text-xs font-mono text-green-400">{node.hash}</span>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onCopy(node)
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+            title={node.type === 'file' ? 'Copy file content' : 'Copy folder contents'}
+          >
+            <ClipboardDocumentIcon className="h-3 w-3 text-green-400 hover:text-green-300" />
+          </button>
+        </div>
       </div>
       {node.type === 'folder' && isExpanded && node.children && (
         <div>
@@ -168,6 +223,7 @@ function FileTreeItem({
               toggleFolder={toggleFolder}
               selectedPath={selectedPath}
               showHashes={showHashes}
+              onCopy={onCopy}
             />
           ))}
         </div>
@@ -203,6 +259,7 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
         content: files[defaultPath],
         language: getLanguageFromPath(defaultPath),
         hash: calculateHash(files[defaultPath]),
+        size: formatFileSize(files[defaultPath].length),
       }
       setTabs([tab])
     }
@@ -257,6 +314,7 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
             content: node.content,
             language: node.language || 'text',
             hash: node.hash || calculateHash(node.content),
+            size: node.size || formatFileSize(node.content.length),
           }
           setTabs([...tabs, newTab])
           setActiveTabIndex(tabs.length)
@@ -269,10 +327,28 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
           content: node.content,
           language: node.language || 'text',
           hash: node.hash || calculateHash(node.content),
+          size: node.size || formatFileSize(node.content.length),
         }
         setTabs([tab])
         setActiveTabIndex(0)
       }
+    }
+  }
+
+  const copyNodeContent = (node: FileNode) => {
+    if (node.type === 'file' && node.content) {
+      navigator.clipboard.writeText(node.content)
+    } else if (node.type === 'folder') {
+      const folderContent: string[] = []
+      const collectContent = (n: FileNode) => {
+        if (n.type === 'file' && n.content) {
+          folderContent.push(`// ${n.path}\n${n.content}`)
+        } else if (n.children) {
+          n.children.forEach(collectContent)
+        }
+      }
+      collectContent(node)
+      navigator.clipboard.writeText(folderContent.join('\n\n'))
     }
   }
 
@@ -314,13 +390,13 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
   const activeTab = tabs[activeTabIndex]
   
   return (
-    <div ref={containerRef} className="flex h-[600px] rounded-lg border border-gray-700 bg-gray-900/50 overflow-hidden relative">
+    <div ref={containerRef} className="flex h-[600px] rounded-lg bg-gray-900/50 overflow-hidden relative">
       {/* File Explorer Sidebar */}
       <div 
-        className="border-r border-gray-700 bg-gray-900/30 overflow-y-auto"
+        className="bg-gray-900/30 overflow-y-auto"
         style={{ width: `${dividerPosition}%` }}
       >
-        <div className="p-3 border-b border-gray-700">
+        <div className="p-3">
           <h3 className="text-sm font-medium text-gray-300">Files</h3>
         </div>
         <div className="py-2">
@@ -334,6 +410,7 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
               toggleFolder={toggleFolder}
               selectedPath={activeTab?.path}
               showHashes={showHashes}
+              onCopy={copyNodeContent}
             />
           ))}
         </div>
@@ -358,45 +435,49 @@ export const ModuleFileViewer: React.FC<ModuleFileViewerProps> = ({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Tabs */}
         {showTabs && tabs.length > 0 && (
-          <div className="flex items-center border-b border-gray-700 bg-gray-900/40 overflow-x-auto">
-            {tabs.map((tab, index) => (
-              <div
-                key={tab.path}
-                className={`flex items-center gap-2 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors ${
-                  index === activeTabIndex
-                    ? 'bg-gray-800/50 text-gray-200'
-                    : 'text-gray-400 hover:bg-gray-800/30'
-                }`}
-                onClick={() => setActiveTabIndex(index)}
-              >
-                <DocumentIcon className="h-3 w-3" />
-                <span className="text-xs font-mono">{tab.name}</span>
-                {showHashes && (
-                  <span className="text-xs font-mono text-green-400">#{tab.hash}</span>
-                )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    closeTab(index)
-                  }}
-                  className="ml-1 hover:text-gray-200"
+          <div className="flex items-center bg-gray-900/40 overflow-x-auto">
+            {tabs.map((tab, index) => {
+              const TabIcon = getFileIcon(tab.name)
+              return (
+                <div
+                  key={tab.path}
+                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                    index === activeTabIndex
+                      ? 'bg-gray-800/50 text-gray-200'
+                      : 'text-gray-400 hover:bg-gray-800/30'
+                  }`}
+                  onClick={() => setActiveTabIndex(index)}
                 >
-                  <XMarkIcon className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+                  <TabIcon className="h-3 w-3" />
+                  <span className="text-xs font-mono">{tab.name}</span>
+                  {showHashes && (
+                    <span className="text-xs font-mono text-green-400">#{tab.hash}</span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeTab(index)
+                    }}
+                    className="ml-1 hover:text-gray-200"
+                  >
+                    <XMarkIcon className="h-3 w-3" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
         
         {activeTab ? (
           <>
             {/* File Header */}
-            <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gray-900/40">
+            <div className="flex items-center justify-between p-3 bg-gray-900/40">
               <div className="flex items-center space-x-3">
                 <span className="text-sm font-mono text-gray-300">{activeTab.name}</span>
                 <span className={`text-xs font-medium ${languageColors[activeTab.language]}`}>
                   {activeTab.language.toUpperCase()}
                 </span>
+                <span className="text-xs text-gray-500">{activeTab.size}</span>
                 {showHashes && (
                   <span className="text-xs font-mono text-green-400">#{activeTab.hash}</span>
                 )}

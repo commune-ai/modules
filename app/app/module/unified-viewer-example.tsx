@@ -1,6 +1,6 @@
 'use client'
 
-import { UnifiedCompressedViewer } from './UnifiedCompressedViewer'
+import { UnifiedCompressedViewer } from './code/UnifiedCompressedViewer'
 import { useState } from 'react'
 
 export default function UnifiedViewerExample() {
