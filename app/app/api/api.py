@@ -12,38 +12,20 @@ class Api:
     tempo = 600
     app_name =  __file__.split('/')[-3] + '_app' 
     model='anthropic/claude-3.5-sonnet'
-    endpoints = ['modules', 'add_module', 'remove',  'update', 'test',  'module', 'info', 'functions']
+    endpoints = ['modules', 'add_module', 'remove',  'update', 'test',  'module', 'info', 'functions', 'n']
     modules_path = os.path.expanduser('~/.commune/api/modules')
 
     def __init__(self, background:bool = False, path='~/.commune/api', **kwargs):
         self.store = c.mod('store')(path)
-        if background:
-            print(c.serve('api:background'))
-
-    def __delete__(self):
-        c.kill('api:background')
-        return {"message": "Background process killed"}
-
-    def background_loop(self, sleep_initial=10, max_age=100, threads=2):
-        print('Starting background loop')
-        step = 0
-        while True:
-            step += 1
-            c.sleep(max_age/2)
-
-            print('Background loop step:', step)
-            
-            self.modules(max_age=max_age, threads=threads)
-            print('Background loop step:', step, 'completed')
 
     def paths(self):
         return self.ls(self.modules_path)
 
-    def n(self):
-        return len(c.mods())
+    def n(self, search=None):
+        return len(self.names(search=search))
 
-    def names(self, search=None):
-        return  c.mods(search=search)
+    def names(self, search=None, **kwargs):
+        return  c.mods(search=search, **kwargs)
 
     def executor(self,  max_workers=8, mode='thread'):
         if mode == 'process':
@@ -60,96 +42,60 @@ class Api:
         return executor
 
     def modules(self, 
-                    modules:Optional[list]=None,
-                    update=False, 
                     search=None,
                     page=1, 
+                    update=False, 
+                    modules:Optional[list]=None,
                      page_size=10, 
                     timeout=200, 
-                    code=True,
+                    code=False,
                     df = False,
+                    names = False,
                     threads=1,
                     features = ['name', 'schema', 'key'],
                     max_age=None, 
                     mode = 'process',
                     verbose=False, **kwargs):
 
-        if update:
-            mode= 'process'
-        else:
-            mode = 'thread'
-
-        if modules == None:
-            modules = self.names()
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
-            modules = modules[start_idx:end_idx]
-
-        if search != None:
-            modules = [m for m in modules if search in m]
+        modules = self.names(search=search, update=update)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        modules = modules[start_idx:end_idx]
         
-        if len(modules) == 0:
-            print('No modules found')
-            return []
+        progress_bar = c.tqdm(modules, desc=f"Loading modules thread={page}", total=len(modules))
+        results = []
+        for module in modules:
+            result = self.module(module, max_age=max_age, update=update, code=code)
+            if self.check_module_data(result):
+                results.append(result)
+            else: 
+                c.print(result, color='red', verbose=verbose)
+            progress_bar.update(1)
 
-        if threads > 1:
-            params = locals()
-            rm_features = ['self', 'modules', 'verbose', 'start_idx', 'end_idx']
-            for f in rm_features:
-                params.pop(f, None)
-            params['threads'] = 1
-            results = []
-            futures = []
-            batch_size = len(modules) // threads
-            if batch_size == 0:
-                batch_size = 1
-            print(f"Loading {len(modules)} modules in batches of {batch_size} with {threads} threads")
-            modules_chunks = [ modules[i:i + batch_size] for i in range(0, len(modules), batch_size) ]
-
-            # from concurrent.futures import ThreadPoolExecutor
-            futures = []
-            executor = self.executor(max_workers=threads, mode=mode)
-            for i, modules_chunk in enumerate(modules_chunks):
-                params['modules'] = modules_chunk
-                futures.append(executor.submit(self.modules, **params))
-            for future in c.as_completed(futures, timeout=timeout):
-                try:
-                    results.extend(future.result())
-                except Exception as e:
-                    if verbose:
-                        c.print(f"Error in future: {e}", color='red')
-            executor.shutdown(wait=True)
-        else:
-            # if update and max_age == None:
-            #     max_age = 600
-            #     update = False
-            progress_bar = c.tqdm(modules, desc=f"Loading modules thread={page}", total=len(modules))
-            results = []
-            for module in modules:
-                result = self.module(module, max_age=max_age, update=update)
-                if self.check_module_data(result):
-                    results.append(result)
-                else: 
-                    c.print(result, color='red', verbose=verbose)
-                progress_bar.update(1)
+    
         if df:
             results = c.df(results)
+
+        if names:
+            results = [m['name'] for m in results]
         return results
 
     def module(self, module:str, max_age=None, update=False, code=True):
 
-        path = self.store.get_path(f'modules/{module}.json')
-        result = c.get(path, None,  max_age=max_age, update=update)
-        if result == None:
-            try:
-                result = c.info(module, max_age=max_age, update=update ,code=code)
-            except Exception as e:
-                result = c.detailed_error(e)
-            c.put(path, result)
-        module_path = self.module_path(module)
-        if not code:
-            result.pop('code', None)
-        info = load_json(module_path)["data"]
+        try:
+            path = self.store.get_path(f'modules/{module}_code={code}.json')
+            info = c.get(path, None,  max_age=max_age, update=update)
+            if info == None:
+                info = c.info(module, max_age=max_age, update=update ,code=code)
+                c.put(path, info)
+                module_path = self.module_path(module)
+                info = load_json(module_path)["data"]
+                if code:
+                    info['code'] = c.code_map(info['name'])
+                c.put(path, info)
+            
+        except Exception as e:
+            return {"error": str(e), "module": module}
         return info
 
     def check_module_data(self, module) -> bool:

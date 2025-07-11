@@ -1,14 +1,17 @@
 import commune as c
 import os
 
-
 class App:
-    def forward(self, ports = {'api': 8000, 'app': 3000}):
-        c.cmd(f'c serve api port={ports["api"]}')
+
+    def forward(self):
+        self.api()
+        self.app()
+        
+    def app(self, port=3000):
+        self.api()
         cwd = c.dp('app')
-        cmd_cwd = f'cd {cwd}'
-        cmd_api = f'c serve api port={ports["api"]} free_mode=1'
-        cmd_app = f'docker compose up -d'
-        cmd = f'{cmd_cwd} && {cmd_api} && {cmd_app}'
-        return os.system(cmd)
+        return os.system( f'cd {cwd} && docker compose up -d')
+
+    def api(self, port=8000, free_mode=True):   
+        return c.serve('api', port=port, free_mode=free_mode)
         

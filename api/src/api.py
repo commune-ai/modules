@@ -12,35 +12,17 @@ class Api:
     tempo = 600
     app_name =  __file__.split('/')[-3] + '_app' 
     model='anthropic/claude-3.5-sonnet'
-    endpoints = ['modules', 'add_module', 'remove',  'update', 'test',  'module', 'info', 'functions']
+    endpoints = ['modules', 'add_module', 'remove',  'update', 'test',  'module', 'info', 'functions', 'n']
     modules_path = os.path.expanduser('~/.commune/api/modules')
 
     def __init__(self, background:bool = False, path='~/.commune/api', **kwargs):
         self.store = c.mod('store')(path)
-        if background:
-            print(c.serve('api:background'))
-
-    def __delete__(self):
-        c.kill('api:background')
-        return {"message": "Background process killed"}
-
-    def background_loop(self, sleep_initial=10, max_age=100, threads=2):
-        print('Starting background loop')
-        step = 0
-        while True:
-            step += 1
-            c.sleep(max_age/2)
-
-            print('Background loop step:', step)
-            
-            self.modules(max_age=max_age, threads=threads)
-            print('Background loop step:', step, 'completed')
 
     def paths(self):
         return self.ls(self.modules_path)
 
-    def n(self):
-        return len(c.mods())
+    def n(self, search=None):
+        return len(self.names(search=search))
 
     def names(self, search=None):
         return  c.mods(search=search)

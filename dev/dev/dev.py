@@ -55,7 +55,7 @@ class Dev:
             QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
             MAX_STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
-            MIN_STEPS=1 # THE MIN STEPS YOU ARE ALLOWED TO TAKE
+            MIN_STEPS=1 # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS)
             HISTORY={history} # THE HISTORY OF THE AGENT
             TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
@@ -99,7 +99,14 @@ class Dev:
         if module != None:
             print('Module  --> ', module)
             source = c.dirpath(module)
-        context =  '' if source == None else self.content(source, query=query)
+        if source is None and target is not None:
+            source = target
+        if source != None:
+            print(f"Source: {source}", color='cyan')
+            context = self.content(source, query=query)
+        else:
+            context = ''
+            print("No source provided, using empty context.", color='yellow')
 
         for step in range(steps):
             print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
@@ -237,6 +244,7 @@ class Dev:
                         break
                     else:
                         result = c.module(fn['fn'])().forward(**fn['params'])
+                        results.append(result)
         return results
 
     def content(self, path: str = './', query=None, max_size=100000, timeout=20) -> List[str]:

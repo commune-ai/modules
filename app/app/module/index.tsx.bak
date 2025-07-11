@@ -1,4 +1,5 @@
 import ModuleSchema from "./ModuleSchema";
+import ModuleSchema from "./ModuleSchema";
 import ModuleCard from "./ModuleCard";
 import { CreateModule } from "./CreateModule";
 import Modules from "./Modules";
@@ -8,3 +9,4 @@ import { CompressedCodeViewer } from "./CompressedCodeViewer";
 import { UnifiedCompressedViewer } from "./UnifiedCompressedViewer";
 
 export { ModuleSchema, ModuleCard, CreateModule, Modules, ModuleCode, ModuleFileViewer, CompressedCodeViewer };
+export { ModuleSchema, ModuleCard, CreateModule, Modules, ModuleCode, ModuleFileViewer };

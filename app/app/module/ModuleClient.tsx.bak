@@ -1,4 +1,5 @@
 'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { Client } from '@/app/client/client'
@@ -18,6 +19,7 @@ import { CopyButton } from '@/app/components/CopyButton'
 import { CompressedCodeViewer } from './CompressedCodeViewer'
 import ModuleSchema from './ModuleSchema'
 import Link from 'next/link'
+import Link from 'next/link'
 
 type TabType = 'code' | 'api'
 
@@ -31,14 +33,15 @@ function time2str(time: number) {
   return d.toLocaleString()
 }
 
-export default function ModuleClient({ module_name, code, api }: { module_name: string; code: boolean; api: boolean }) {
+
+export default function ModuleClient({ module_name, code, api }: { module_name : string; code : boolean, api : boolean }) {
   const client = new Client()
-  const [searchTerm, setSearchTerm] = useState<string>('')
-  const [module, setModule] = useState<ModuleType | undefined>()
-  const [error, setError] = useState<string>('')
-  const [loading, setLoading] = useState<boolean>(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [module, setModule] = useState<ModuleType>()
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({})
-  const initialTab: TabType = code ? 'code' : api ? 'api' : 'code'
+  const initialTab = code ? 'code' : api ? 'api' : 'code'
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
             setCodeMap(foundModule.code as Record<string, string>)
           }
         } else {
-          setError(`Module ${module_name} not found`)
+          setError(`Module ${module} not found`)
         }
       } catch (err) {
         setError('Failed to fetch module')
@@ -63,7 +66,7 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
       }
     }
     fetchModule()
-  }, [module_name])
+  }, [])
 
   const filteredFiles = Object.entries(codeMap).filter(
     ([path, content]) =>
@@ -80,15 +83,17 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
     )
 
   const tabs = [
-    { id: 'code', label: 'CODE', icon: CodeBracketIcon },
-    { id: 'api', label: 'SCHEMA', icon: ServerIcon },
-  ]
+      { id: 'code', label: 'CODE', icon: CodeBracketIcon },
+      { id: 'api', label: 'SCHEMA', icon: ServerIcon },
+    ]
 
+  
   return (
     <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-6 font-mono text-green-400'>
       <div className='mx-auto max-w-7xl space-y-6'>
-        {/* Header */}
+        {/* Header Card */}
         <div className='overflow-hidden rounded-2xl border border-green-500/30 bg-black/90 shadow-xl backdrop-blur-sm'>
+          {/* Module Title Section */}
           <div className='space-y-6 border-b border-green-500/30 p-8'>
             <div className='flex items-center justify-between'>
               <div className='flex items-center space-x-4'>
@@ -103,26 +108,34 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
                 </div>
               </div>
               <div className='group flex space-x-4'>
-                <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-6 md:py-3'>
+                <button
+                  title='deploy'
+                  className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 transition-all hover:bg-green-900/40 md:px-6 md:py-3'
+                >
                   <GlobeAltIcon className='h-5 w-5' />
                   <span className='hidden md:inline'>Deploy</span>
                 </button>
-                <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-6 md:py-3'>
+                <button
+                  title='Share'
+                  className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 transition-all hover:bg-green-900/40 md:px-6 md:py-3'
+                >
                   <ShareIcon className='h-5 w-5' />
                   <span className='hidden md:inline'>Share</span>
                 </button>
               </div>
             </div>
 
+            {/* Module Description */}
             <p className='max-w-3xl text-gray-400'>
               {module.desc || 'No description available'}
             </p>
 
-            {module.tags?.length > 0 && (
+            {/* Tags */}
+            {module.tags && module.tags.length > 0 && (
               <div className='flex flex-wrap gap-2'>
-                {module.tags.map((tag, i) => (
+                {module.tags.map((tag, index) => (
                   <span
-                    key={i}
+                    key={index}
                     className='rounded-full border border-green-500/30 bg-green-900/20 px-3 py-1 text-sm text-green-400'
                   >
                     #{tag}
@@ -131,14 +144,15 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
               </div>
             )}
 
+            {/* Info Grid */}
             <div className='mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4'>
               {[
                 { label: 'key', value: module.key || 'N/A' },
                 { label: 'cid', value: module.cid || 'N/A' },
-                { label: 'created', value: time2str(module.time) },
-              ].map((item, i) => (
+                { label: 'created ', value: time2str(module.time) },
+              ].map((item, index) => (
                 <div
-                  key={i}
+                  key={index}
                   className='rounded-xl border border-green-500/30 bg-black/60 p-4 backdrop-blur-sm'
                 >
                   <div className='mb-2 flex items-center justify-between'>
@@ -153,17 +167,18 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs Navigation */}
           <div className='flex border-b border-green-500/30'>
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as TabType)}
-                className={`flex items-center space-x-2 px-8 py-4 transition-all ${
-                  activeTab === id
-                    ? 'border-b-2 border-green-400 bg-green-900/20 text-green-400'
-                    : 'text-gray-400 hover:bg-green-900/10 hover:text-green-400'
-                }`}
+                className={`flex items-center space-x-2 px-8 py-4 transition-all
+                  ${
+                    activeTab === id
+                      ? 'border-b-2 border-green-400 bg-green-900/20 text-green-400'
+                      : 'text-gray-400 hover:bg-green-900/10 hover:text-green-400'
+                  }`}
               >
                 <Icon className='h-5 w-5' />
                 <span>{label}</span>
@@ -171,36 +186,57 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
             ))}
           </div>
 
-          {/* Content */}
+          {/* Content Area */}
           <div className='p-8'>
             {activeTab === 'code' && (
-              <CompressedCodeViewer
-                files={codeMap}
-                title='Code'
-                showSearch={true}
-                showFileTree={Object.keys(codeMap).length > 3}
-                compactMode={false}
-              />
+              <div className='space-y-6'>
+                <div className='relative'>
+                  <input
+                    type='text'
+                    placeholder='Search in files...'
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className='w-full rounded-xl border border-green-500/30 bg-black/90 
+                             px-6 py-4 text-green-400
+                             placeholder-gray-500 transition-all
+                             focus:border-green-400 focus:outline-none'
+                  />
+                </div>
+                {filteredFiles.map(([path, content]) => (
+                  <ModuleCode key={path} code={content} path={path} />
+                ))}
+              </div>
             )}
-            {activeTab === 'api' && <ModuleSchema mod={module} />}
+
+            {activeTab === 'api' && (
+              <ModuleSchema mod={module} />
+            )}
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer Actions */}
         <div className='flex flex-wrap items-center justify-between gap-2 sm:gap-4'>
           <Link
-            href="/"
-            className='flex w-full items-center justify-center space-x-2 rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
+            href={"/"}
+            className='flex w-full items-center justify-center space-x-2 rounded-xl border 
+               border-green-500/30 bg-black/90 px-6 py-3 text-center
+               text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
           >
             <ArrowLeftIcon className='h-5 w-5' />
             <span>Back to Modules</span>
           </Link>
 
           <div className='flex w-full flex-wrap justify-center gap-2 sm:w-auto sm:justify-end sm:gap-4'>
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'>
+            <button
+              className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 
+                        py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
+            >
               Documentation
             </button>
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'>
+            <button
+              className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 
+                        py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
+            >
               Report Issue
             </button>
           </div>
