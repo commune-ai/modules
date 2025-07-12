@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { Footer } from '@/app/components'
 import { Client } from '@/app/client/client'
 import { Loading } from '@/app/components/Loading'
-import ModuleCard from '@/app/module/ModuleCard'
-import { CreateModule } from '@/app/module/CreateModule'
+import ModuleCard from '@/app/module/explorer/ModuleCard'
+import { CreateModule } from '@/app/module/explorer/ModuleCreate'
 import { ModuleType, DefaultModule } from '@/app/types/module'
 
 export default function Modules() {

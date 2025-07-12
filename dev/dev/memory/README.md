@@ -45,15 +45,15 @@ relevant_memories = memory.search_long_term("project features")
 summary = memory.summarize_memories(query="user preferences")
 ```
 
-## Integration with Dev Module
+## Integration with Agent Module
 
-The Memory tool is designed to work seamlessly with the Dev module:
+The Memory tool is designed to work seamlessly with the Agent module:
 
 ```python
 dev = c.module('dev')()
 dev.set_memory(c.module('dev.tool.memory')())
 
-# Now Dev will use the memory tool to maintain context
+# Now Agent will use the memory tool to maintain context
 ```
 
 ## Advanced Features

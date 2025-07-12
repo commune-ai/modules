@@ -51,7 +51,7 @@ class Api:
                     code=False,
                     df = False,
                     names = False,
-                    threads=1,
+                    threads=8,
                     features = ['name', 'schema', 'key'],
                     max_age=None, 
                     mode = 'process',
@@ -61,41 +61,54 @@ class Api:
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         modules = modules[start_idx:end_idx]
-        
         progress_bar = c.tqdm(modules, desc=f"Loading modules thread={page}", total=len(modules))
-        results = []
-        for module in modules:
-            result = self.module(module, max_age=max_age, update=update, code=code)
-            if self.check_module_data(result):
-                results.append(result)
-            else: 
-                c.print(result, color='red', verbose=verbose)
-            progress_bar.update(1)
 
-    
+        results = []
+        if threads > 1:
+            executor = self.executor(max_workers=threads, mode=mode)
+            futures = []
+            for module in modules:
+                future = executor.submit(self.module, module, max_age=max_age, update=update)
+                futures.append(future)
+            for future in c.as_completed(futures):
+                result = future.result()
+                if self.check_module_data(result):
+                    results.append(result)
+                else:
+                    c.print(result, color='red', verbose=verbose)
+                progress_bar.update(1)
+            executor.shutdown(wait=True)
+        else:
+
+            for module in modules:
+                result = self.module(module, max_age=max_age, update=update)
+                if self.check_module_data(result):
+                    results.append(result)
+                else: 
+                    c.print(result, color='red', verbose=verbose)
+                progress_bar.update(1)
         if df:
             results = c.df(results)
-
         if names:
             results = [m['name'] for m in results]
         return results
 
-    def module(self, module:str, max_age=None, update=False, code=True):
+    def module(self, module:str, max_age=None, update=False, **kwargs):
 
         try:
-            path = self.store.get_path(f'modules/{module}_code={code}.json')
+            path = self.store.get_path(f'modules/{module}.json')
             info = c.get(path, None,  max_age=max_age, update=update)
             if info == None:
-                info = c.info(module, max_age=max_age, update=update ,code=code)
+                info = c.info(module, max_age=max_age, update=update)
                 c.put(path, info)
                 module_path = self.module_path(module)
                 info = load_json(module_path)["data"]
-                if code:
-                    info['code'] = c.code_map(info['name'])
+                info['code'] = c.code_map(info['name'])
                 c.put(path, info)
             
         except Exception as e:
-            return {"error": str(e), "module": module}
+
+            print(f"Error loading module {module}: {e}")
         return info
 
     def check_module_data(self, module) -> bool:

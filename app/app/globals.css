@@ -28,3 +28,37 @@ body {
 .rotate-y-180 {
   transform: rotateY(180deg);
 }
+
+
+
+/* User Profile Panel Animations */
+.slide-panel {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure proper stacking context */
+.user-profile-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+/* Custom scrollbar for user profile */
+.user-profile-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.user-profile-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.user-profile-panel::-webkit-scrollbar-thumb {
+  background: rgba(34, 197, 94, 0.5);
+  border-radius: 3px;
+}
+
+.user-profile-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 197, 94, 0.7);
+}
+/* END OF FILE */

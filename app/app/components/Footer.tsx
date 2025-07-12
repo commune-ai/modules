@@ -8,22 +8,22 @@ const navigation = {
   social: [
       {
         name: 'GitHub',
-        href: config.links.github,
+        href: config.github,
         icon: '/github.svg',
       },
       {
         name: 'Discord',
-        href: config.links.discord,
+        href: config.discord,
         icon: '/discord.svg',
       },
       {
         name: 'X',
-        href: config.links.x,
+        href: config.x,
         icon: '/x.svg',
       },
       {
         name: 'Telegram',
-        href: config.links.telegram,
+        href: config.telegram,
         icon: '/telegram.svg',
       },
   ],

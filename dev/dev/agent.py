@@ -10,7 +10,7 @@ import commune as c
 
 print = c.print
 
-class Dev:
+class Agent:
 
     goal = """
              - YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
@@ -55,7 +55,7 @@ class Dev:
             QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
             MAX_STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
-            MIN_STEPS=1 # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS)
+            MIN_STEPS={min_steps} # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS)
             HISTORY={history} # THE HISTORY OF THE AGENT
             TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
@@ -75,7 +75,9 @@ class Dev:
     def forward(self, 
                 text: str = 'where am i', 
                 *extra_text, 
-                source: str = None, 
+
+                source = None,
+                src: str = None, 
                 target = None,
                 temperature: float = 0.5, 
                 max_tokens: int = 1000000, 
@@ -83,6 +85,7 @@ class Dev:
                 verbose: bool = True,
                 content = './',
                 model=None,
+                min_steps = 1,
                 mode: str = 'auto', 
                 module = None,
                 max_age= 10000,
@@ -99,8 +102,8 @@ class Dev:
         if module != None:
             print('Module  --> ', module)
             source = c.dirpath(module)
-        if source is None and target is not None:
-            source = target
+        source = source or src or target 
+
         if source != None:
             print(f"Source: {source}", color='cyan')
             context = self.content(source, query=query)
@@ -110,34 +113,34 @@ class Dev:
 
         for step in range(steps):
             print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
-            try:
-                for trial in range(trials):
-                    print(f"Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
-                    try:
-                        prompt =self.prompt.format(
-                            goal=self.goal,
-                            source=source,
-                            content= context,
-                            query=query,
-                            toolbelt=self.toolbelt(),
-                            history=history,
-                            steps=steps,
-                            target=target,
-                            output_format=self.output_format
-                        )
-                        output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
-                        output =  self.process(output)
-                        history.append(output)
-                        break
-                    except Exception as e:
-                        c.print(f"Error: {e}", color='red')
-                        time.sleep(1)
-                        output = detailed_error(e)
-                        history.append(output)
-                        continue
-            except KeyboardInterrupt:
-                print("KeyboardInterrupt: Stopping the process.")
-                break
+
+            for trial in range(trials):
+                print(f"Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
+                try:
+                    prompt =self.prompt.format(
+                        goal=self.goal,
+                        source=source,
+                        content= context,
+                        query=query,
+                        min_steps=min_steps,
+                        toolbelt=self.toolbelt(),
+                        history=history,
+                        steps=steps,
+                        target=target,
+                        output_format=self.output_format
+                    )
+                    output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
+                    output =  self.process(output)
+                    history.append(output)
+                    break
+                except Exception as e:
+                    c.print(f"Error: {e}", color='red')
+                    time.sleep(1)
+                    output = detailed_error(e)
+                    history.append(output)
+                    continue
+                except KeyboardInterrupt:
+                    return {'error': 'Process interrupted by user.'}
 
         return output
 
@@ -224,7 +227,7 @@ class Dev:
                 try:
                     params = json.loads(params_str)
                 except json.JSONDecodeError:
-                    return plan
+                    continue
                 text = ''
                 step = {'fn': fn_name, 'params': params}
                 self.display_step(step, idx=len(plan))
@@ -243,8 +246,12 @@ class Dev:
                     if fn['fn'] in ['finish', 'review']:
                         break
                     else:
-                        result = c.module(fn['fn'])().forward(**fn['params'])
-                        results.append(result)
+                        try:
+                            result = c.module(fn['fn'])().forward(**fn['params'])
+                            results.append(result)
+                        except Exception as e:
+                            result = {'error': str(e), 'fn': fn['fn'], 'params': fn['params']}
+                            c.print(f"Error executing {fn['fn']}: {e}", color='red')
         return results
 
     def content(self, path: str = './', query=None, max_size=100000, timeout=20) -> List[str]:

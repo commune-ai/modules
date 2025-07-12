@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import { Client } from '@/app/client/client'
 import { Loading } from '@/app/components/Loading'
-import ModuleCard from '@/app/module/ModuleCard'
-import { CreateModule } from '@/app/module/CreateModule'
 import { ModuleType } from '@/app/types/module'
 import {
   CodeBracketIcon,
@@ -15,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ShareIcon } from '@heroicons/react/20/solid'
 import { CopyButton } from '@/app/components/CopyButton'
-import { CompressedCodeViewer } from './code/CompressedCodeViewer'
+import { ModuleCode } from './page/ModuleCode'
 import ModuleSchema from './ModuleSchema'
 import Link from 'next/link'
 
@@ -33,21 +31,22 @@ function time2str(time: number) {
 
 export default function ModuleClient({ module_name, code, api }: { module_name: string; code: boolean; api: boolean }) {
   const client = new Client()
-  const [searchTerm, setSearchTerm] = useState<string>('')
   const [module, setModule] = useState<ModuleType | undefined>()
   const [error, setError] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(true)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({})
   const initialTab: TabType = code ? 'code' : api ? 'api' : 'code'
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
+  const [updateModule, setUpdateModule] = useState<boolean>(false)
 
   useEffect(() => {
     const fetchModule = async () => {
       try {
-        const foundModule = await client.call('module', {
-          module: module_name,
-          code: true,
-        })
+        const params = { module: module_name, update: updateModule }
+        const foundModule = await client.call('module', params)
+        if (updateModule) {
+          setUpdateModule(false)
+        }
         if (foundModule) {
           setModule(foundModule)
           if (foundModule.code && typeof foundModule.code === 'object') {
@@ -63,13 +62,7 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
       }
     }
     fetchModule()
-  }, [module_name])
-
-  const filteredFiles = Object.entries(codeMap).filter(
-    ([path, content]) =>
-      path.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      content.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  }, [module_name, updateModule, client])
 
   if (loading) return <Loading />
   if (error || !module)
@@ -103,14 +96,13 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
                 </div>
               </div>
               <div className='group flex space-x-4'>
-                <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-6 md:py-3'>
-                  <GlobeAltIcon className='h-5 w-5' />
-                  <span className='hidden md:inline'>Deploy</span>
+                <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-6 md:py-3'
+                  onClick={() => setUpdateModule(true)}>
+                  <GlobeAltIcon className='h-5 w-5'  />
+                  <span className='hidden md:inline'>sync</span>
+
                 </button>
-                <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-6 md:py-3'>
-                  <ShareIcon className='h-5 w-5' />
-                  <span className='hidden md:inline'>Share</span>
-                </button>
+
               </div>
             </div>
 
@@ -174,9 +166,9 @@ export default function ModuleClient({ module_name, code, api }: { module_name: 
           {/* Content */}
           <div className='p-8'>
             {activeTab === 'code' && (
-              <CompressedCodeViewer
+              <ModuleCode
                 files={codeMap}
-                title='Code'
+                title=''
                 showSearch={true}
                 showFileTree={Object.keys(codeMap).length > 3}
                 compactMode={false}

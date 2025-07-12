@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { CopyButton } from '@/app/components/CopyButton'
 import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, FolderIcon, FolderOpenIcon, MagnifyingGlassIcon, CodeBracketIcon, DocumentTextIcon, PhotoIcon, FilmIcon, MusicalNoteIcon, ArchiveBoxIcon, DocumentChartBarIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import crypto from 'crypto'
 
-interface CompressedCodeViewerProps {
+interface ModuleCodeProps {
   files: Record<string, string>;
   title?: string;
   showSearch?: boolean;
@@ -144,6 +144,26 @@ const buildFileTree = (files: Record<string, string>): FileNode[] => {
   return root.children || []
 }
 
+// Highlight search term in text
+const highlightSearchTerm = (text: string, searchTerm: string) => {
+  if (!searchTerm) return text
+  
+  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const parts = text.split(regex)
+  
+  return (
+    <>
+      {parts.map((part, index) => 
+        regex.test(part) ? (
+          <span key={index} className="bg-yellow-400/30 text-yellow-300 font-bold">{part}</span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function FileTreeItem({
   node,
   level,
@@ -152,6 +172,7 @@ function FileTreeItem({
   toggleFolder,
   selectedPath,
   onCopy,
+  searchTerm,
 }: {
   node: FileNode;
   level: number;
@@ -160,10 +181,17 @@ function FileTreeItem({
   toggleFolder: (path: string) => void;
   selectedPath?: string;
   onCopy: (node: FileNode) => void;
+  searchTerm?: string;
 }) {
   const isExpanded = expandedFolders.has(node.path)
   const isSelected = selectedPath === node.path
   const FileIcon = node.type === 'file' ? getFileIcon(node.name) : (isExpanded ? FolderOpenIcon : FolderIcon)
+  
+  // Check if node matches search
+  const matchesSearch = searchTerm ? 
+    node.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    node.path.toLowerCase().includes(searchTerm.toLowerCase())
+    : true
 
   const handleClick = () => {
     if (node.type === 'folder') {
@@ -173,12 +201,14 @@ function FileTreeItem({
     }
   }
 
+  if (!matchesSearch && node.type === 'file') return null
+
   return (
     <div>
       <div
         className={`group flex items-center px-2 py-1.5 cursor-pointer hover:bg-gray-800/50 rounded-md text-xs transition-all duration-150 ${
           isSelected ? 'bg-green-900/30 text-green-300' : 'text-gray-400'
-        }`}
+        } ${matchesSearch && searchTerm ? 'ring-1 ring-yellow-400/30' : ''}`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleClick}
       >
@@ -192,7 +222,9 @@ function FileTreeItem({
         <FileIcon className={`h-4 w-4 mr-2 flex-shrink-0 ${
           node.type === 'folder' ? 'text-yellow-500' : 'text-gray-400'
         }`} />
-        <span className="truncate font-mono flex-1">{node.name}</span>
+        <span className="truncate font-mono flex-1">
+          {searchTerm ? highlightSearchTerm(node.name, searchTerm) : node.name}
+        </span>
         {node.type === 'file' && (
           <>
             <span className="ml-2 text-xs opacity-60">{node.size}</span>
@@ -233,6 +265,7 @@ function FileTreeItem({
               toggleFolder={toggleFolder}
               selectedPath={selectedPath}
               onCopy={onCopy}
+              searchTerm={searchTerm}
             />
           ))}
         </div>
@@ -241,7 +274,7 @@ function FileTreeItem({
   )
 }
 
-export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({ 
+export const ModuleCode: React.FC<ModuleCodeProps> = ({ 
   files, 
   title = 'Compressed Code Viewer',
   showSearch = true,
@@ -250,11 +283,14 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
   defaultExpandedFolders = true
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
+  const [fileSearchTerm, setFileSearchTerm] = useState('')
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set())
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileTree, setFileTree] = useState<FileNode[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  
+  const [searchResults, setSearchResults] = useState<{path: string; lineNumbers: number[]}[]>([])
+  const codeRefs = useRef<Record<string, HTMLDivElement>>({});
+  console.log(files)
   // Build file tree on mount or when files change
   useEffect(() => {
     const tree = buildFileTree(files)
@@ -275,6 +311,60 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
       setExpandedFolders(allFolders)
     }
   }, [files, defaultExpandedFolders])
+  
+  // Auto-expand folders that contain search matches
+  useEffect(() => {
+    if (fileSearchTerm) {
+      const foldersToExpand = new Set<string>()
+      const checkNode = (node: FileNode, parentPath: string = '') => {
+        const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name
+        if (node.name.toLowerCase().includes(fileSearchTerm.toLowerCase()) ||
+            node.path.toLowerCase().includes(fileSearchTerm.toLowerCase())) {
+          // Add all parent folders to expand
+          const parts = currentPath.split('/').filter(Boolean)
+          for (let i = 0; i < parts.length - 1; i++) {
+            foldersToExpand.add(parts.slice(0, i + 1).join('/'))
+          }
+        }
+        if (node.children) {
+          node.children.forEach(child => checkNode(child, currentPath))
+        }
+      }
+      fileTree.forEach(node => checkNode(node))
+      setExpandedFolders(prev => new Set([...prev, ...foldersToExpand]))
+    }
+  }, [fileSearchTerm, fileTree])
+  
+  // Search in code content
+  useEffect(() => {
+    if (searchTerm) {
+      const results: {path: string; lineNumbers: number[]}[] = []
+      
+      Object.entries(files).forEach(([path, content]) => {
+        const lines = content.split('\n')
+        const matchingLines: number[] = []
+        
+        lines.forEach((line, index) => {
+          if (line.toLowerCase().includes(searchTerm.toLowerCase())) {
+            matchingLines.push(index + 1)
+          }
+        })
+        
+        if (matchingLines.length > 0) {
+          results.push({ path, lineNumbers: matchingLines })
+        }
+      })
+      
+      setSearchResults(results)
+      
+      // Auto-expand files with matches
+      if (results.length > 0) {
+        setCollapsedFiles(new Set())
+      }
+    } else {
+      setSearchResults([])
+    }
+  }, [searchTerm, files])
   
   // Process files into sections
   const fileSections = useMemo(() => {
@@ -338,6 +428,11 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
   const handleFileSelect = (node: FileNode) => {
     if (node.type === 'file') {
       setSelectedFile(node.path)
+      // Scroll to the file section
+      const element = codeRefs.current[node.path]
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
     }
   }
   
@@ -358,25 +453,48 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
     }
   }
   
-  const renderLineNumbers = (content: string, startLine: number = 1) => {
+  const renderLineNumbers = (content: string, startLine: number = 1, path: string) => {
     const lines = content.split('\n')
+    const matchingLines = searchResults.find(r => r.path === path)?.lineNumbers || []
+    
     return (
       <div className="text-gray-500 text-xs font-mono pr-2 select-none">
-        {lines.map((_, index) => (
-          <div key={index} className="text-right">
-            {startLine + index}
-          </div>
-        ))}
+        {lines.map((_, index) => {
+          const lineNumber = startLine + index
+          const isMatch = matchingLines.includes(lineNumber)
+          return (
+            <div 
+              key={index} 
+              className={`text-right ${isMatch ? 'bg-yellow-400/20 text-yellow-400' : ''}`}
+            >
+              {lineNumber}
+            </div>
+          )
+        })}
       </div>
     )
   }
   
-  const renderCode = (content: string, language: string) => {
+  const renderCode = (content: string, language: string, path: string) => {
     const langColor = languageColors[language] || 'text-gray-300'
+    const lines = content.split('\n')
+    const matchingLines = searchResults.find(r => r.path === path)?.lineNumbers || []
+    
     return (
       <pre className="overflow-x-auto flex-1">
         <code className={`text-xs ${langColor} font-mono leading-relaxed`}>
-          {content}
+          {lines.map((line, index) => {
+            const lineNumber = index + 1
+            const isMatch = matchingLines.includes(lineNumber)
+            return (
+              <div 
+                key={index}
+                className={isMatch ? 'bg-yellow-400/20' : ''}
+              >
+                {searchTerm ? highlightSearchTerm(line, searchTerm) : line}
+              </div>
+            )
+          })}
         </code>
       </pre>
     )
@@ -401,13 +519,18 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search files or content..."
+              placeholder="Search in code content..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-black/60 border border-green-500/20 rounded-lg 
                        text-green-400 placeholder-gray-500 text-sm
                        focus:outline-none focus:border-green-400"
             />
+            {searchResults.length > 0 && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                {searchResults.length} files, {searchResults.reduce((sum, r) => sum + r.lineNumbers.length, 0)} matches
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -416,9 +539,24 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
       <div className="flex">
         {showFileTree && (
           <div className="w-64 bg-black/40 p-4 max-h-[600px] overflow-y-auto">
-            <h3 className="text-sm font-medium text-green-400 mb-3 flex items-center justify-between">
-              <span>Files</span>
-              <div className="flex gap-1">
+            <div className="mb-3">
+              <h3 className="text-sm font-medium text-green-400 mb-2">File Explorer</h3>
+              
+              {/* File Search */}
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Filter files..."
+                  value={fileSearchTerm}
+                  onChange={(e) => setFileSearchTerm(e.target.value)}
+                  className="w-full pl-7 pr-2 py-1 bg-black/40 border border-gray-700 rounded text-xs
+                           text-gray-300 placeholder-gray-500
+                           focus:outline-none focus:border-green-400"
+                />
+              </div>
+              
+              <div className="flex gap-1 mt-2">
                 <button
                   onClick={() => {
                     const allFolders = new Set<string>()
@@ -446,7 +584,7 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
                   <ChevronRightIcon className="h-3 w-3" />
                 </button>
               </div>
-            </h3>
+            </div>
             <div className="space-y-0">
               {fileTree.map((node) => (
                 <FileTreeItem
@@ -458,6 +596,7 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
                   toggleFolder={toggleFolder}
                   selectedPath={selectedFile}
                   onCopy={copyFileContent}
+                  searchTerm={fileSearchTerm}
                 />
               ))}
             </div>
@@ -470,6 +609,7 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
             const isCollapsed = collapsedFiles.has(section.path)
             const isSelected = selectedFile === section.path
             const FileIcon = getFileIcon(section.name)
+            const hasSearchMatch = searchResults.some(r => r.path === section.path)
             
             // If file tree is shown and a file is selected, only show that file
             if (showFileTree && selectedFile && !isSelected) {
@@ -479,9 +619,10 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
             return (
               <div 
                 key={section.path} 
+                ref={el => { if (el) codeRefs.current[section.path] = el }}
                 className={`${
                   isSelected ? 'bg-green-900/10' : ''
-                }`}
+                } ${hasSearchMatch ? 'ring-1 ring-yellow-400/30' : ''}`}
               >
                 {/* File Header */}
                 <div 
@@ -495,10 +636,19 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
                       <ChevronDownIcon className="h-4 w-4 text-gray-400" />
                     )}
                     <FileIcon className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-mono text-green-400">{section.path}</span>
+                    <span className="text-sm font-mono text-green-400">
+                      {searchTerm && section.path.toLowerCase().includes(searchTerm.toLowerCase()) 
+                        ? highlightSearchTerm(section.path, searchTerm)
+                        : section.path}
+                    </span>
                     <span className={`text-xs ${languageColors[section.language]}`}>
                       {section.language.toUpperCase()}
                     </span>
+                    {hasSearchMatch && (
+                      <span className="text-xs text-yellow-400">
+                        {searchResults.find(r => r.path === section.path)?.lineNumbers.length} matches
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">
@@ -517,9 +667,9 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
                 {/* File Content */}
                 {!isCollapsed && (
                   <div className="flex bg-gray-950/50">
-                    {!compactMode && renderLineNumbers(section.content)}
+                    {!compactMode && renderLineNumbers(section.content, 1, section.path)}
                     <div className="flex-1 p-3 overflow-x-auto">
-                      {renderCode(section.content, section.language)}
+                      {renderCode(section.content, section.language, section.path)}
                     </div>
                   </div>
                 )}
@@ -532,7 +682,12 @@ export const CompressedCodeViewer: React.FC<CompressedCodeViewerProps> = ({
       {/* Footer with quick actions */}
       {!compactMode && (
         <div className="bg-black/60 p-3">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-400">
+              {searchTerm && searchResults.length > 0 && (
+                <span>Found "{searchTerm}" in {searchResults.length} files</span>
+              )}
+            </div>
             <button
               onClick={() => {
                 const allCode = filteredSections.map(s => `// ${s.path}\n${s.content}`).join('\n\n')

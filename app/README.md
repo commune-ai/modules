@@ -65,7 +65,7 @@ The application is built with:
 ├── app/                    # Frontend application
 │   ├── components/        # React components
 │   ├── modules/          # Module-related pages
-│   └── wallet/           # Wallet implementation
+│   └── key/           # Key implementation
 ├── api/                   # Backend API
 │   ├── api.py            # Main API implementation
 │   └── utils.py          # Utility functions
@@ -89,7 +89,7 @@ The application can be configured through environment variables:
 
 - Module discovery and search
 - Module creation and management
-- Wallet integration
+- Key integration
 - Real-time module status
 - Grid and table views for modules
 

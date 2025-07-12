@@ -12,6 +12,8 @@ type SchemaType = {
     value: any
     type: string
   }
+  code?: string
+  hash?: string
 }
 
 export const ModuleSchema = ({mod}: Record<string, any>) => {
@@ -23,12 +25,34 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
   const [showDescription, setShowDescription] = useState<boolean>(false)
   
   console.log('ModuleSchema props:', mod)
-  let schema: SchemaType = mod.schema || {}
+  let schema: Record<string, SchemaType> = mod.schema || {}
+  
+  // Filter out 'self' method
+  const filteredSchema = Object.entries(schema).reduce((acc, [key, value]) => {
+    if (key !== 'self') {
+      acc[key] = value
+    }
+    return acc
+  }, {} as Record<string, SchemaType>)
 
   // Handle parameter input change
   const handleParamChange = (paramName: string, value: string) => {
     setParams({ ...params, [paramName]: value })
-  } 
+  }
+  
+  // Initialize params with defaults when function is selected
+  const initializeParams = (fnName: string) => {
+    const fnSchema = filteredSchema[fnName]
+    if (fnSchema && fnSchema.input) {
+      const defaultParams: Record<string, any> = {}
+      Object.entries(fnSchema.input).forEach(([param, details]) => {
+        if (details.value !== '_empty' && details.value !== undefined) {
+          defaultParams[param] = details.value
+        }
+      })
+      setParams(defaultParams)
+    }
+  }
   
   // Execute the selected function
   const executeFunction = async () => {
@@ -62,22 +86,22 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
           Parameters
         </h2>
         
-        {selectedFunction && schema[selectedFunction] ? (
+        {selectedFunction && filteredSchema[selectedFunction] ? (
           <div className="space-y-4">
-            {Object.entries(schema[selectedFunction].input).map(([param, details]) => (
+            {Object.entries(filteredSchema[selectedFunction].input).map(([param, details]) => (
               <div key={param} className="space-y-2">
                 <label className="block text-sm font-medium text-gray-300">
                   {param}
                   <span className="text-green-500/70 ml-2">({details.type})</span>
                 </label>
-                {details.value !== '_empty' && (
+                {details.value !== '_empty' && details.value !== undefined && (
                   <p className="text-xs text-gray-500">Default: {String(details.value)}</p>
                 )}
                 <input
                   type="text"
-                  value={params[param] || ''}
+                  value={params[param] !== undefined ? params[param] : ''}
                   onChange={(e) => handleParamChange(param, e.target.value)}
-                  placeholder={`Enter ${param}`}
+                  placeholder={details.value !== '_empty' && details.value !== undefined ? `Default: ${details.value}` : `Enter ${param}`}
                   className="w-full px-4 py-2 bg-black/70 text-green-400 
                            border border-green-500/30 rounded-lg
                            focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400/50
@@ -94,7 +118,7 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
                        hover:bg-green-900/30 hover:border-green-400 transition-all
                        disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Executing...' : 'Execute Function'}
+              {loading ? 'Executing..' : 'Execute Function'}
             </button>
           </div>
         ) : (
@@ -126,13 +150,13 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
         </h2>
         
         <div className="space-y-3">
-          {Object.keys(schema).length > 0 ? (
-            Object.keys(schema).map(fn => (
+          {Object.keys(filteredSchema).length > 0 ? (
+            Object.keys(filteredSchema).map(fn => (
               <div
                 key={fn}
                 onClick={() => {
                   setSelectedFunction(fn)
-                  setParams({})
+                  initializeParams(fn)
                   setResponse(null)
                   setError('')
                   setShowDescription(true)
@@ -164,12 +188,33 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
                     </p>
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-gray-500">
-                        Parameters: {Object.keys(schema[fn].input).length}
+                        Parameters: {Object.keys(filteredSchema[fn].input).length}
                       </p>
                       <p className="text-xs text-gray-500">
-                        Output type: {schema[fn].output.type}
+                        Output type: {filteredSchema[fn].output.type}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Code: {filteredSchema[fn].code ? 'Available' : 'NA'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Hash: {filteredSchema[fn].hash ? filteredSchema[fn].hash.substring(0, 8) + '...' : 'NA'}
                       </p>
                     </div>
+                    
+                    {/* Show code snippet if available */}
+                    {filteredSchema[fn].code && (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-400">Code Preview</span>
+                          <CopyButton code={filteredSchema[fn].code} />
+                        </div>
+                        <pre className="p-2 bg-black/70 border border-green-500/20 rounded text-xs overflow-x-auto max-h-32">
+                          <code className="text-green-300">
+                            {filteredSchema[fn].code.substring(0, 200)}...
+                          </code>
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

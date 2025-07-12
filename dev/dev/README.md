@@ -1,7 +1,7 @@
 d
-# Dev Module
+# Agent Module
 
-The Dev module is an advanced code generation and editing toolkit powered by LLMs. It provides a powerful interface for generating, editing, and managing code through natural language prompts.
+The Agent module is an advanced code generation and editing toolkit powered by LLMs. It provides a powerful interface for generating, editing, and managing code through natural language prompts.
 
 ## Features
 
@@ -32,7 +32,7 @@ toolbox.help()
 
 ## Core Components
 
-1. **Dev**: Main module for code generation and editing
+1. **Agent**: Main module for code generation and editing
 2. **Edit**: Specialized module for editing existing code
 3. **Select**: Tool for finding relevant files based on queries
 4. **Toolbox**: Guide and helper for using all dev tools effectively
@@ -76,7 +76,7 @@ dev.forward("Document these functions: @/get_text ./utils/helpers.py")
 
 ## Advanced Configuration
 
-The Dev module can be configured with various parameters:
+The Agent module can be configured with various parameters:
 
 - `model`: Choose which LLM to use (default: "anthropic/claude-3.7-sonnet")
 - `temperature`: Control creativity (0.0-1.0)

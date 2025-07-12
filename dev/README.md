@@ -1,6 +1,6 @@
-# Dev Module
+# Agent Module
 
-The Dev module is an advanced code generation and editing toolkit powered by LLMs. It provides a powerful interface for generating, editing, and managing code through natural language prompts.
+The Agent module is an advanced code generation and editing toolkit powered by LLMs. It provides a powerful interface for generating, editing, and managing code through natural language prompts.
 
 ## Features
 
@@ -32,7 +32,7 @@ toolbox.help()
 
 ## Core Components
 
-1. **Dev**: Main module for code generation and editing
+1. **Agent**: Main module for code generation and editing
 2. **Edit**: Specialized module for editing existing code
 3. **Select**: Tool for finding relevant files based on queries
 4. **Toolbox**: Guide and helper for using all dev tools effectively
@@ -90,14 +90,14 @@ memory.add_long_term("project_requirements", {
     "features": ["code generation", "memory management", "file editing"]
 })
 
-# Integrate memory with Dev module
+# Integrate memory with Agent module
 dev = c.module('dev')()
 dev.set_memory(memory)
 ```
 
 ## Advanced Configuration
 
-The Dev module can be configured with various parameters:
+The Agent module can be configured with various parameters:
 
 - `model`: Choose which LLM to use (default: "anthropic/claude-3.7-sonnet")
 - `temperature`: Control creativity (0.0-1.0)
@@ -106,7 +106,7 @@ The Dev module can be configured with various parameters:
 
 ## Available Tools
 
-The Dev module includes several specialized tools:
+The Agent module includes several specialized tools:
 
 - **cmd**: Execute shell commands
 - **create_file**: Create new files with specified content
@@ -145,7 +145,7 @@ toolbox.function_calling_guide()
 
 ## Integration with Other Modules
 
-The Dev module is designed to work seamlessly with other modules in the ecosystem:
+The Agent module is designed to work seamlessly with other modules in the ecosystem:
 
 ```python
 # Web scraping integration
@@ -160,7 +160,7 @@ dev.set_memory(memory)
 
 ## Contributing
 
-Contributions to the Dev module are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Contributions to the Agent module are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
 ## License
 

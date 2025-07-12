@@ -1,5 +1,6 @@
 
 import config from '@/config.json';
+import Key from '@/key';
 
 export class Client {
   public url: string;
@@ -10,11 +11,12 @@ export class Client {
    * @param url - The base URL for the client (default: value from config).
    * @param mode - The protocol mode ('http' or 'https', default: 'http').
    */
-  constructor(url: string = config.url, mode: string = 'http') {
+  constructor(url: string = config.url, mode: string = 'http', key: string = '') {
     if (!url.startsWith(`${mode}://`)) {
       url = `${mode}://${url}`;
     }
     this.url = url;
+    this.key = key;
   }
 
   /**
@@ -30,11 +32,34 @@ export class Client {
     headers: Record<string, string> = {}
   ): Promise<any> {
     try {
-      return await this.async_forward(fn, params);
+      return await this.async_call(fn, params);
     } catch (error) {
       console.error('Error in call method:', error);
       throw error;
     }
+  }
+
+
+  public sync_call(
+    fn: string = 'info',
+    params: Record<string, any> = {},
+    headers: Record<string, string> = {}
+  ): any {
+    let future = this.async_call(fn, params);
+    let result: any;
+    future.then((res) => {
+      result = res;
+    }
+    ).catch((error) => {
+      console.error('Error in sync_call method:', error);
+      throw error;
+    }
+    );
+    while (result === undefined) {
+      // Wait for the promise to resolve
+      // This is a blocking call, use with caution
+    }
+    return result;
   }
 
   /**
@@ -45,7 +70,7 @@ export class Client {
    * @param headers - Additional headers for the request.
    * @returns A promise resolving to the API response.
    */
-  private async async_forward(
+  private async async_call(
     fn: string = 'info',
     params: Record<string, any> | FormData = {},
   ): Promise<any> {
