@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ShareIcon } from '@heroicons/react/20/solid'
 import { CopyButton } from '@/app/components/CopyButton'
-import { ModuleCode } from './page/ModuleCode'
+import { ModuleCode } from '../page/ModuleCode'
 import ModuleSchema from './ModuleSchema'
 import Link from 'next/link'
 

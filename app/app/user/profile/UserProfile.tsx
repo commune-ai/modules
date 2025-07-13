@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { User } from '@/app/types/user'
-import { Key } from '@/app/key/key'
+import { Key } from '@/app/user/key/key'
 import { CopyButton } from '@/app/components/CopyButton'
 import { X, Shield, Key as KeyIcon, FileSignature, CheckCircle, XCircle, LogOut, ShieldCheck } from 'lucide-react'
 

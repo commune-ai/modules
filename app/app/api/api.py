@@ -127,9 +127,6 @@ class Api:
         path = os.path.abspath(path)
         return c.ls(path)
 
-    def logs(name):
-        return c.logs(name)
-
     def check_module(self, module):
         features = ['name', 'url', 'key']  
         if isinstance(module, str):
@@ -162,11 +159,12 @@ class Api:
 
     def add_module(self, 
                    name  = "module", 
-                   key  = "module_key", 
                    code = None, 
+                   key  = None, 
                    url  = "0.0.0.0:8000", 
                    app = None,
                    **kwargs ):
+        
         
         module = { "name": name, "url": url, "key": key, "code": code,  **kwargs }
         self.save_module(module)
@@ -181,3 +179,4 @@ class Api:
 
     def module_exists(self, module: str):
         return os.path.exists(self.module_path(module))
+

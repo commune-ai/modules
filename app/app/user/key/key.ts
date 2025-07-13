@@ -30,7 +30,7 @@ import {
      * @param password - The password used to generate keys.
      * @param crypto_type - The cryptographic algorithm (default: 'sr25519').
      */
-    constructor(password: string, crypto_type: signature_t = 'sr25519') {
+    constructor(password : string, crypto_type: signature_t = 'sr25519') {
       const { public_key, private_key, address } = this.fromPassword(
         password,
         crypto_type
@@ -72,15 +72,15 @@ import {
           private_key: u8aToHex(keyPair.secretKey),
         }
       } else if (crypto_type === 'ecdsa') {
-        // Generate ECDSA keypair using secp256k1
-        const public_key = secp256k1.getPublicKey(seedHex)
-  
-        key = {
-          address: u8aToHex(public_key),
-          crypto_type: 'ecdsa',
-          public_key : u8aToHex(public_key),
-          private_key: seedHex,
-        }
+          // Generate ECDSA keypair using secp256k1
+          const public_key = secp256k1.getPublicKey(seedHex)
+    
+          key = {
+            address: u8aToHex(public_key),
+            crypto_type: 'ecdsa',
+            public_key : u8aToHex(public_key),
+            private_key: seedHex,
+          }
       } else {
         throw new Error('Unsupported crypto type')
       }
@@ -106,12 +106,12 @@ import {
         })
         return u8aToHex(signature)
       } else if (this.crypto_type === 'ecdsa') {
-        const messageHash = blake2AsHex(message)
-        const signature = secp256k1.sign(
-          hexToU8a(messageHash),
-          hexToU8a(this.private_key)
-        ).toDERRawBytes()
-        return u8aToHex(signature)
+          const messageHash = blake2AsHex(message)
+          const signature = secp256k1.sign(
+            hexToU8a(messageHash),
+            hexToU8a(this.private_key)
+          ).toDERRawBytes()
+          return u8aToHex(signature)
       } else {
         throw new Error('Unsupported crypto type')
       }

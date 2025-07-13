@@ -193,7 +193,7 @@ export default function Modules() {
                 py-2 font-mono text-sm 
                 text-green-400 transition-all hover:border-green-400 hover:bg-green-900/20 sm:w-auto sm:px-4 sm:text-base'
           >
-            $ search
+            
           </button>
 
           <button
@@ -203,17 +203,11 @@ export default function Modules() {
                 py-2 font-mono text-sm 
                 text-green-400 transition-all hover:border-green-400 hover:bg-green-900/20 sm:w-auto sm:px-4 sm:text-base'
           >
-            $ new
+            +
           </button>
         </div>
       </div>
 
-      {/* Pagination Controls Top */}
-      {!loading && modules.length > 0 && (
-        <div className='mb-6'>
-          <PaginationControls />
-        </div>
-      )}
 
       {/* Actual modules listing */}
       <div className='min-h-[500px] w-full max-w-full overflow-y-auto p-10 px-4'>
