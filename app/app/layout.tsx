@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { Header } from './components'
+import { Header } from './components/Header'
 
 import "react-responsive-modal/styles.css"
 import "@/app/globals.css"
@@ -22,9 +22,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} h-full relative bg-gray-900`}>
-          <Header />
+      <body className={`${inter.className} h-full relative bg-black`}>
+        <Header />
+        <main className="pt-16">
           {children}
+        </main>
       </body>
     </html>
   )

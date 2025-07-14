@@ -1,121 +1,39 @@
-# ComHub - The Hub for Commune AI Modules
+# Simple Web App with Pagination
 
-ComHub is a web application that serves as a central hub for managing and discovering Commune AI modules. It provides a user-friendly interface to interact with modules and includes features like module search, creation, and management.
+A clean, minimalist web application featuring a simple header and pagination system.
 
-## 🚀 Quick Start
+## Features
 
-### Prerequisites
+- **Simple Header**: Clean navigation bar with sticky positioning
+- **Pagination**: Easy-to-use pagination with Previous/Next buttons
+- **Responsive Design**: Works well on desktop and mobile devices
+- **Keyboard Navigation**: Use arrow keys to navigate between pages
+- **Clean UI**: Minimalist design with subtle shadows and smooth transitions
 
-- Docker
-- Git
+## Structure
 
-### Installation
+- `index.html` - Main HTML structure
+- `styles.css` - All styling for the application
+- `script.js` - JavaScript for pagination functionality
 
-1. Clone the repository:
-```bash
-git clone https://github.com/commune-ai/app.git
-cd app
-```
+## How It Works
 
-2. Build the Docker image:
-```bash
-./run/build.sh # make build
-```
+1. The app displays 5 items per page
+2. Navigation is handled through Previous/Next buttons
+3. Current page information is displayed between the buttons
+4. Buttons are automatically disabled when at the first or last page
+5. Keyboard shortcuts (arrow keys) are supported for navigation
 
-3. Start the container:
-```bash
-./run/start.sh # make start or make up
-```
+## Usage
 
-This will:
-- Build the Docker image with all required dependencies
-- Start the container with the necessary port mappings
-- Mount required volumes for persistence
+Simply open `index.html` in a web browser. No build process or dependencies required.
 
-### Development
+## Customization
 
-The application consists of two main parts:
+- Change `ITEMS_PER_PAGE` in `script.js` to adjust items shown per page
+- Modify the `generateSampleData()` function to use your own data
+- Update colors and styling in `styles.css` to match your brand
 
-1. Frontend (Next.js app running on port 3000)
-2. Backend (FastAPI server running on port 8000)
+## Browser Support
 
-To run the development environment:
-
-```bash
-# Enter the container
-./run/enter.sh # make enter
-
-# Start the application
-./run/app.sh # make app
-```
-
-## 🛠️ Architecture
-
-The application is built with:
-
-- **Frontend**: Next.js, TailwindCSS, TypeScript
-- **Backend**: FastAPI, Python
-- **Storage**: Local file system for module data
-- **Container**: Docker
-
-## 📁 Project Structure
-
-```
-.
-├── app/                    # Frontend application
-│   ├── components/        # React components
-│   ├── modules/          # Module-related pages
-│   └── key/           # Key implementation
-├── api/                   # Backend API
-│   ├── api.py            # Main API implementation
-│   └── utils.py          # Utility functions
-├── run/                   # Shell scripts for running the application
-│   ├── app.sh            # Start the application
-│   ├── build.sh          # Build Docker image
-│   ├── enter.sh          # Enter container
-│   ├── start.sh          # Start container
-│   └── stop.sh           # Stop container
-└── Dockerfile            # Docker configuration
-```
-
-## 🔧 Configuration
-
-The application can be configured through environment variables:
-
-- `API_PORT`: Backend API port (default: 8000)
-- `APP_PORT`: Frontend application port (default: 3000)
-
-## 🚀 Features
-
-- Module discovery and search
-- Module creation and management
-- Key integration
-- Real-time module status
-- Grid and table views for modules
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Built on top of Commune AI
-- Inspired by the need for a central hub for AI modules
-
-```
-
-This README provides:
-1. Clear installation instructions using Docker
-2. Project structure overview
-3. Configuration options
-4. Development setup instructions
-5. Feature list
-6. Contributing guidelines
+Works in all modern browsers (Chrome, Firefox, Safari, Edge).

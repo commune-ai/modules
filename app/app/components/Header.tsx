@@ -1,33 +1,60 @@
 'use client'
 import Link from 'next/link'
-import { useState, FormEvent } from 'react'
-import config from '@/config.json'
+import { useState, FormEvent, useEffect } from 'react'
 import { Key } from '@/app/user/key'
-import { CopyButton } from '@/app/components/CopyButton'
-import { UserProfile } from '@/app/user/profile/UserProfile'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
-import { Menu, User, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, Plus, RefreshCw } from 'lucide-react'
+import { UserProfile } from '@/app/user/profile/UserProfile'
+import type { User } from '@/app/types/user'
+import { useRouter, usePathname } from 'next/navigation'
 
-
-function randomPassword(length: number = 12): string {
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+'
-  let password = ''
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * charset.length)
-    password += charset[randomIndex]
-  }
-  return password
+interface HeaderProps {
+  onSearch?: (term: string) => void
+  onRefresh?: () => void
+  onCreateModule?: () => void
 }
-export const Header = () => {
-  const defaultPassword = randomPassword(12);
-  const [password, setPassword] = useState(defaultPassword)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [walletInfo, setWalletInfo] = useState<{
-    address: string
-    crypto_type: string
-  } | null>(null)
+
+export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}) => {
+  const [password, setPassword] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [keyInstance, setKeyInstance] = useState<Key | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // Store user session in localStorage to persist across pages
+  useEffect(() => {
+    const storedUser = localStorage.getItem('dhub_user')
+    const storedKey = localStorage.getItem('dhub_key')
+    if (storedUser && storedKey) {
+      try {
+        const userData = JSON.parse(storedUser)
+        setUser(userData)
+        // Note: We can't fully restore the Key instance from localStorage
+        // but we can maintain the user session appearance
+      } catch (error) {
+        console.error('Failed to restore user session:', error)
+      }
+    }
+  }, [])
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchTerm(value)
+    if (onSearch) {
+      onSearch(value)
+    } else if (pathname === '/') {
+      // If we're on the home page, trigger a search via URL params
+      const params = new URLSearchParams(window.location.search)
+      if (value) {
+        params.set('search', value)
+      } else {
+        params.delete('search')
+      }
+      router.push(`/?${params.toString()}`)
+    }
+  }
 
   const handleSignIn = async (e: FormEvent) => {
     e.preventDefault()
@@ -35,152 +62,127 @@ export const Header = () => {
       await cryptoWaitReady()
       const key = new Key(password)
       setKeyInstance(key)
-      setWalletInfo({
+      const userData = {
         address: key.address,
         crypto_type: key.crypto_type,
-      })
+      }
+      setUser(userData)
+      
+      // Store user session
+      localStorage.setItem('dhub_user', JSON.stringify(userData))
+      localStorage.setItem('dhub_key', 'true') // Just a flag
+      
       setPassword('')
-      setIsMenuOpen(false)
+      setShowProfile(true) // Auto-open profile on login
     } catch (error) {
       console.error('Failed to create key:', error)
     }
   }
 
   const handleLogout = () => {
-    setWalletInfo(null)
     setKeyInstance(null)
-    setIsProfileOpen(false)
+    setUser(null)
+    setShowProfile(false)
+    localStorage.removeItem('dhub_user')
+    localStorage.removeItem('dhub_key')
+  }
+
+  const handleCreateClick = () => {
+    if (onCreateModule) {
+      onCreateModule()
+    } else if (pathname === '/') {
+      // Trigger create module via URL params or global event
+      window.dispatchEvent(new CustomEvent('createModule'))
+    }
+  }
+
+  const handleRefreshClick = () => {
+    if (onRefresh) {
+      onRefresh()
+    } else if (pathname === '/') {
+      // Trigger refresh via global event
+      window.dispatchEvent(new CustomEvent('refreshModules'))
+    }
   }
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-black border-b border-green-500/30 bg-opacity-90 backdrop-blur font-mono">
+      <header className="fixed top-0 z-50 w-full bg-black border-b border-green-500 font-mono">
         <nav className="p-3 px-5 mx-auto max-w-7xl">
-          {/* Desktop Layout */}
-          <div className="hidden md:flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <Link href="/" className="flex items-center">
-                <span className="text-green-500 text-5xl">©</span>
-              </Link>
-            </div>
-            <div className="flex gap-4">
-              {walletInfo ? (
+          <div className="flex items-center justify-between gap-4">
+            {/* Logo */}
+            <Link href="/" className="text-green-500 text-4xl font-bold">©</Link>
+
+            {/* Search Bar */}
+            <input
+              type="text"
+              placeholder="SEARCH..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="flex-1 max-w-2xl px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none font-mono uppercase"
+            />
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              {pathname === '/' && (
+                <>
+                  <button
+                    onClick={handleCreateClick}
+                    className="p-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black"
+                    title="Create"
+                  >
+                    <Plus size={18} />
+                  </button>
+
+                  <button
+                    onClick={handleRefreshClick}
+                    className="p-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black"
+                    title="Refresh"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+                </>
+              )}
+
+              {/* User Section */}
+              {user ? (
                 <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-900/30 rounded border-2 border-green-400 hover:bg-green-800/40 hover:border-green-300 transition-all shadow-lg shadow-green-500/20 group"
+                  onClick={() => setShowProfile(!showProfile)}
+                  className="px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono"
                 >
-                  <User size={18} className="text-green-400" />
-                  <span className="text-green-300 text-sm font-medium">
-                    {walletInfo.address.slice(0, 6)}...
-                    {walletInfo.address.slice(-4)}
-                  </span>
-                  {isProfileOpen ? (
-                    <ChevronUp size={18} className="text-green-400 group-hover:text-green-300" />
-                  ) : (
-                    <ChevronDown size={18} className="text-green-400 group-hover:text-green-300" />
-                  )}
+                  {user.address.slice(0, 6)}...
                 </button>
               ) : (
-                <form onSubmit={handleSignIn} className="flex items-center gap-2">
-                  <span className="text-green-400">$</span>
+                <form onSubmit={handleSignIn} className="flex gap-2">
                   <input
                     type="password"
-                    placeholder="enter password"
+                    placeholder="PASSWORD"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="px-4 py-2 bg-black/60 border border-green-500/30 rounded text-green-400 text-sm focus:outline-none focus:border-green-400"
+                    className="px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none w-32 font-mono"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-black/60 text-green-400 border border-green-500/30 rounded hover:bg-green-900/20 transition-colors"
+                    className="px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono"
                   >
-                    $ login
+                    LOGIN
                   </button>
                 </form>
               )}
             </div>
           </div>
-
-          {/* Mobile Layout */}
-          <div className="md:hidden flex items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <span className="text-green-500 text-4xl">©</span>
-            </Link>
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-green-400 p-2"
-            >
-              <Menu size={24} />
-            </button>
-          </div>
-
-          {/* Mobile Menu */}
-          {isMenuOpen && (
-            <div className="md:hidden mt-4 p-4 bg-black/90 rounded-lg border border-green-500/30">
-              {walletInfo ? (
-                <button
-                  onClick={() => {
-                    setIsProfileOpen(!isProfileOpen)
-                    setIsMenuOpen(false)
-                  }}
-                  className="w-full flex items-center justify-between gap-2 px-4 py-2 bg-green-900/30 rounded border-2 border-green-400 shadow-lg shadow-green-500/20"
-                >
-                  <div className="flex items-center gap-2">
-                    <User size={18} className="text-green-400" />
-                    <span className="text-green-300 text-sm font-medium">
-                      {walletInfo.address.slice(0, 6)}...
-                      {walletInfo.address.slice(-4)}
-                    </span>
-                  </div>
-                  {isProfileOpen ? (
-                    <ChevronUp size={18} className="text-green-400" />
-                  ) : (
-                    <ChevronDown size={18} className="text-green-400" />
-                  )}
-                </button>
-              ) : (
-                <form onSubmit={handleSignIn} className="flex flex-col gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-400">$</span>
-                    <input
-                      type="password"
-                      placeholder="enter password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-2 bg-black/60 border border-green-500/30 rounded text-green-400 text-sm focus:outline-none focus:border-green-400"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full px-4 py-2 bg-black/60 text-green-400 border border-green-500/30 rounded hover:bg-green-900/20 transition-colors"
-                  >
-                    $ login
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
         </nav>
       </header>
-
-      {/* User Profile Panel */}
-      {walletInfo && keyInstance && (
-        <>
-          <UserProfile 
-            user={walletInfo} 
-            isOpen={isProfileOpen} 
-            onClose={() => setIsProfileOpen(false)}
-            keyInstance={keyInstance}
-            onLogout={handleLogout}
-          />
-          {/* Overlay */}
-          {isProfileOpen && (
-            <div 
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setIsProfileOpen(false)}
-            />
-          )}
-        </>
+      
+      {/* User Profile Sidebar */}
+      {user && (
+        <UserProfile
+          user={user}
+          isOpen={showProfile}
+          onClose={() => setShowProfile(false)}
+          keyInstance={keyInstance}
+          onLogout={handleLogout}
+        />
       )}
     </>
   )

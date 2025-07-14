@@ -4,15 +4,42 @@
 
 :root {
   scroll-behavior: smooth;
-  background-color: black; /* Add this line */
+  background-color: black;
 }
 
 body {
-  background-color: black; /* Add this line */
-  color: white; /* Optional: for better text visibility */
+  background-color: black;
+  color: #00ff00; /* IBM green terminal color */
+  font-family: 'Courier New', monospace;
 }
 
+/* IBM Terminal Style */
+* {
+  box-sizing: border-box;
+}
 
+/* Terminal cursor effect */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor::after {
+  content: '_';
+  animation: blink 1s infinite;
+}
+
+/* Simple IBM mode styling */
+.ibm-border {
+  border: 1px solid #00ff00;
+}
+
+.ibm-text {
+  color: #00ff00;
+  text-shadow: 0 0 2px #00ff00;
+}
+
+/* Simplified animations */
 .perspective-1000 {
   perspective: 1000px;
 }
@@ -29,36 +56,44 @@ body {
   transform: rotateY(180deg);
 }
 
-
-
-/* User Profile Panel Animations */
+/* Simplified panel animations */
 .slide-panel {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s linear;
 }
 
-/* Ensure proper stacking context */
-.user-profile-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 40;
+/* Terminal-style scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  background: black;
 }
 
-/* Custom scrollbar for user profile */
-.user-profile-panel::-webkit-scrollbar {
-  width: 6px;
+::-webkit-scrollbar-track {
+  background: black;
+  border: 1px solid #00ff00;
 }
 
-.user-profile-panel::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.3);
+::-webkit-scrollbar-thumb {
+  background: #00ff00;
+  border: 1px solid black;
 }
 
-.user-profile-panel::-webkit-scrollbar-thumb {
-  background: rgba(34, 197, 94, 0.5);
-  border-radius: 3px;
+::-webkit-scrollbar-thumb:hover {
+  background: #00cc00;
 }
 
-.user-profile-panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 197, 94, 0.7);
+/* Remove all fancy effects for IBM simplicity */
+a, button {
+  transition: none;
 }
-/* END OF FILE */
+
+/* Terminal grid effect */
+.terminal-grid {
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 0, 0.03) 2px,
+      rgba(0, 255, 0, 0.03) 4px
+    );
+}
