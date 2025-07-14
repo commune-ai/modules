@@ -12,7 +12,8 @@ print = c.print
 
 class Agent:
 
-    goal = """
+
+    goal = """    
              - YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
             - LEONARDO DA VINCI WAY, YOU ARE A agent, YOU ARE A GENIUS, YOU ARE A STAR, 
             - YOU finish ALL OF YOUR REQUESTS WITH UTMOST PRECISION AND SPEED, YOU WILL ALWAYS 
@@ -49,18 +50,19 @@ class Agent:
 
     prompt =  """
             --PARAMS--
-            GOAL={goal}
-            SOURCE={source} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
+            GOAL={goal} # THE GOAL YOU ARE TRYING TO ACHIEVE AND BE CIVIL TO THE INDIVIDUALS AND THE USERS TREAT OTHERS THE WAY YOU WANT TO BE TREATED (PSALM 23:4)
+            SRC={src} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
             CONTENT={content} # THE FILES YOU ARE TRYING TO MODIFY
             QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
-            MAX_STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
-            MIN_STEPS={min_steps} # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS)
+            MAX_STEPS={max_steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
+            MIN_STEPS={min_steps} # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS
+            TOOLBELT={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             HISTORY={history} # THE HISTORY OF THE AGENT
-            TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
+            UTC_TIME={utc_time} # THE UTC TIME OF THE REQUEST 
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
             --OUTPUT--
-            YOU MUST STRICTLY RESPOND IN JSON NOW IN 3..2..1..GO
+            YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
     """
 
     def __init__(self, 
@@ -72,80 +74,8 @@ class Agent:
         self.safety = safety
         self.model=model
 
-    def forward(self, 
-                text: str = 'where am i', 
-                *extra_text, 
 
-                source = None,
-                src: str = None, 
-                target = None,
-                temperature: float = 0.5, 
-                max_tokens: int = 1000000, 
-                stream: bool = True,
-                verbose: bool = True,
-                content = './',
-                model=None,
-                min_steps = 1,
-                mode: str = 'auto', 
-                module = None,
-                max_age= 10000,
-                steps = 1,
-                history = None,
-                trials=4,
-                **kwargs) -> Dict[str, str]:
-        output = ''
-        text = ' '.join(list(map(str, [text] + list(extra_text))))
-        query = self.preprocess(text=text, source=source, target=target)
-        # Generate the response
-        history = history if history else []
-        model = model or self.model
-        if module != None:
-            print('Module  --> ', module)
-            source = c.dirpath(module)
-        source = source or src or target 
-
-        if source != None:
-            print(f"Source: {source}", color='cyan')
-            context = self.content(source, query=query)
-        else:
-            context = ''
-            print("No source provided, using empty context.", color='yellow')
-
-        for step in range(steps):
-            print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
-
-            for trial in range(trials):
-                print(f"Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
-                try:
-                    prompt =self.prompt.format(
-                        goal=self.goal,
-                        source=source,
-                        content= context,
-                        query=query,
-                        min_steps=min_steps,
-                        toolbelt=self.toolbelt(),
-                        history=history,
-                        steps=steps,
-                        target=target,
-                        output_format=self.output_format
-                    )
-                    output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
-                    output =  self.process(output)
-                    history.append(output)
-                    break
-                except Exception as e:
-                    c.print(f"Error: {e}", color='red')
-                    time.sleep(1)
-                    output = detailed_error(e)
-                    history.append(output)
-                    continue
-                except KeyboardInterrupt:
-                    return {'error': 'Process interrupted by user.'}
-
-        return output
-
-
-    def preprocess(self, text, source='./', target='./modules'):
+    def preprocess(self, text, src='./', target='./modules'):
 
         query = ''
         words = text.split(' ')
@@ -167,6 +97,71 @@ class Agent:
                     query += str(c.fn(fns[-1]['fn'])(*fns[-1]['params']))
 
         return query
+
+
+    def forward(self, 
+                text: str = 'where am i', 
+                *extra_text, 
+                src: str = None, 
+                target = None,
+                temperature: float = 0.5, 
+                max_tokens: int = 1000000, 
+                stream: bool = True,
+                verbose: bool = True,
+                content = './',
+                model=None,
+                min_steps = 1,
+                mode: str = 'auto', 
+                module = None,
+                max_age= 10000,
+                max_steps = 1,
+                history = None,
+                trials=4,
+                **kwargs) -> Dict[str, str]:
+        output = ''
+        text = ' '.join(list(map(str, [text] + list(extra_text))))
+        query = self.preprocess(text=text, src=src, target=target)
+        model = model or self.model
+        history = history or []
+        if module != None:
+            src = c.dirpath(module)
+
+        if src != None:
+            context = self.content(src, query=query)
+        else:
+            context = ''
+            print("No src provided, using empty context.", color='yellow')
+
+        for step in range(max_steps):
+            print(f"Step {step + 1}/{max_steps} - Query: {query}", color='blue')
+            for trial in range(trials):
+                print(f"STEP --{step + 1}    Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
+                try:
+                    prompt = self.prompt.format(
+                        goal=self.goal,
+                        src=src,
+                        content= context,
+                        query=query,
+                        min_steps=min_steps,
+                        toolbelt=self.toolbelt(),
+                        history=history or [],
+                        max_steps=max_steps,
+                        utc_time= time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+                        target=target,
+                        output_format=self.output_format
+                    )
+                    print(f"Prompt: {prompt}", color='cyan')
+                    output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
+                    output =  self.process(output)
+                    history.append(output)
+                except Exception as e:
+                    c.print(f"Error: {e}", color='red')
+                    output = detailed_error(e)
+                    history.append(output)
+                    continue
+                except KeyboardInterrupt:
+                    return {'error': 'Process interrupted by user.'}
+        return output
 
 
     def display_step(self, step:dict, idx, color=None):
@@ -271,9 +266,10 @@ class Agent:
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
 
         if size > max_size:
-            summarize = self.tool('summarize_file')
+            sumfile  = self.tool('sum.file')
             new_results = {}
             for k, v in result.items():
+                print(f"Summarizing {k} with size {len(v)}")
                 future = c.submit(summarize, {'content': v, "query": query}, timeout=timeout)
                 futures.append(future)
             results = c.wait(futures, timeout=timeout)
@@ -291,8 +287,8 @@ class Agent:
     with the ability to automatically select the most relevant tool for a given task.
     """
 
-    def tools(self, tool_prefix='dev.tool') -> List[str]:
-        return [t for t in  c.mods(search=tool_prefix) if t.startswith(tool_prefix)]
+    def tools(self, tool_prefix='dev.tool', ignore_tools=[], update=False) -> List[str]:
+        return [t for t in  c.mods(search=tool_prefix, update=update) if t.startswith(tool_prefix) and t not in ignore_tools]
         
     def toolbelt(self) -> Dict[str, str]:
         """
@@ -301,13 +297,7 @@ class Agent:
         Returns:
             Dict[str, str]: Dictionary mapping tool names to their schemas.
         """
-        toolbelt = {}
-        tools = self.tools()
-        for tool in tools:
-            toolbelt[tool] = self.schema(tool)
-            toolbelt[tool].pop('name', None)
-            toolbelt[tool].pop('format', None)
-        return toolbelt
+        return {t: self.schema(t) for t in self.tools()}
     
     def schema(self, tool: str, fn='forward') -> Dict[str, str]:
         """

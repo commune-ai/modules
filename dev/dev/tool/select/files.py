@@ -32,7 +32,7 @@ class SelectFiles:
               temperature: float = 0.5,
               content: bool = True,
               allow_selection: bool = False,
-              verbose: bool = True) -> List[str]:
+              verbose: bool = True, **kwargs) -> List[str]:
         """
         Find the most relevant options based on a query.
         
