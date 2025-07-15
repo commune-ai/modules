@@ -3,10 +3,11 @@ import Link from 'next/link'
 import { useState, FormEvent, useEffect } from 'react'
 import { Key } from '@/app/user/key'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
-import { Search, Plus, RefreshCw } from 'lucide-react'
+import { Search, Plus, RefreshCw, User as UserIcon } from 'lucide-react'
 import { UserProfile } from '@/app/user/profile/UserProfile'
 import type { User } from '@/app/types/user'
 import { useRouter, usePathname } from 'next/navigation'
+import { CopyButton } from './CopyButton'
 
 interface HeaderProps {
   onSearch?: (term: string) => void
@@ -25,18 +26,33 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
 
   // Store user session in localStorage to persist across pages
   useEffect(() => {
-    const storedUser = localStorage.getItem('dhub_user')
-    const storedKey = localStorage.getItem('dhub_key')
-    if (storedUser && storedKey) {
-      try {
-        const userData = JSON.parse(storedUser)
-        setUser(userData)
-        // Note: We can't fully restore the Key instance from localStorage
-        // but we can maintain the user session appearance
-      } catch (error) {
-        console.error('Failed to restore user session:', error)
+    const initializeFromStorage = async () => {
+      const storedUser = localStorage.getItem('dhub_user')
+      const storedKeyData = localStorage.getItem('dhub_key_data')
+      
+      if (storedUser && storedKeyData) {
+        try {
+          await cryptoWaitReady()
+          const userData = JSON.parse(storedUser)
+          const keyData = JSON.parse(storedKeyData)
+          
+          // Recreate the key instance from stored data
+          const key = new Key()
+          // Set the properties from stored data
+          Object.assign(key, keyData)
+          
+          setUser(userData)
+          setKeyInstance(key)
+        } catch (error) {
+          console.error('Failed to restore user session:', error)
+          // Clear invalid storage
+          localStorage.removeItem('dhub_user')
+          localStorage.removeItem('dhub_key_data')
+        }
       }
     }
+    
+    initializeFromStorage()
   }, [])
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,9 +84,16 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
       }
       setUser(userData)
       
-      // Store user session
+      // Store user session with key data
       localStorage.setItem('dhub_user', JSON.stringify(userData))
-      localStorage.setItem('dhub_key', 'true') // Just a flag
+      // Store key data for restoration
+      const keyData = {
+        address: key.address,
+        public_key: key.public_key,
+        crypto_type: key.crypto_type,
+        // Note: We don't store private key for security
+      }
+      localStorage.setItem('dhub_key_data', JSON.stringify(keyData))
       
       setPassword('')
       setShowProfile(true) // Auto-open profile on login
@@ -84,7 +107,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
     setUser(null)
     setShowProfile(false)
     localStorage.removeItem('dhub_user')
-    localStorage.removeItem('dhub_key')
+    localStorage.removeItem('dhub_key_data')
   }
 
   const handleCreateClick = () => {
@@ -146,12 +169,17 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
 
               {/* User Section */}
               {user ? (
-                <button
-                  onClick={() => setShowProfile(!showProfile)}
-                  className="px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono"
-                >
-                  {user.address.slice(0, 6)}...
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setShowProfile(!showProfile)}
+                    className="flex items-center gap-2 px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono transition-colors"
+                    title="Open profile"
+                  >
+                    <UserIcon size={16} />
+                    <span>{user.address.slice(0, 6)}...</span>
+                  </button>
+                  <CopyButton code={user.address} />
+                </div>
               ) : (
                 <form onSubmit={handleSignIn} className="flex gap-2">
                   <input
@@ -174,8 +202,8 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
         </nav>
       </header>
       
-      {/* User Profile Sidebar */}
-      {user && (
+      {/* User Profile Sidebar - Only render if keyInstance exists */}
+      {user && keyInstance && (
         <UserProfile
           user={user}
           isOpen={showProfile}

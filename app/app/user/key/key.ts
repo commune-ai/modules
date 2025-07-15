@@ -61,7 +61,7 @@ import {
       let key: WalletType
   
       if (crypto_type === 'sr25519') {
-        // Generate sr25519 keypair
+        // Generate sr25519 keypair - sr25519PairFromSeed is synchronous
         const keyPair = sr25519PairFromSeed(seedBytes)
         const address = encodeAddress(keyPair.publicKey, 42)
   
