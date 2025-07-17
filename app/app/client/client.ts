@@ -1,6 +1,6 @@
 
 import config from '@/config.json';
-import Key from '@/key';
+import Key from '@/app/user/key';
 
 export class Client {
   public url: string;
@@ -10,8 +10,9 @@ export class Client {
    * Ensures the URL starts with the specified mode (http/https).
    * @param url - The base URL for the client (default: value from config).
    * @param mode - The protocol mode ('http' or 'https', default: 'http').
+   * @param key - An optional key for authentication or other purposes.
    */
-  constructor(url: string = config.url, mode: string = 'http', key: string = '') {
+  constructor(url: string = config.url, mode: string = 'http', key: Key) {
     if (!url.startsWith(`${mode}://`)) {
       url = `${mode}://${url}`;
     }

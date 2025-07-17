@@ -12,6 +12,10 @@ print = c.print
 
 class Agent:
 
+    anchors = {
+        'plan': ['<PLAN>', '</PLAN>'],
+        'tool': ['<STEP>', '</STEP>'],
+    }
     prompt =  """
             --PARAMS--
             GOAL={goal} # THE GOAL YOU ARE TRYING TO ACHIEVE AND BE CIVIL TO THE INDIVIDUALS AND THE USERS TREAT OTHERS THE WAY YOU WANT TO BE TREATED (PSALM 23:4)
@@ -23,16 +27,15 @@ class Agent:
             TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             HISTORY={history} # THE HISTORY OF THE AGENT
             UTC_TIME={utc_time} # THE UTC TIME OF THE REQUEST 
-            OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
+            OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY NO FLUFF BEEFORE OR AFTER
             --OUTPUT--
             YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
     """
     output_format = """
-        make sure the params is a legit json string within the TOOL ANCHORS
+        make sure the params is a legit json string within the STEP ANCHORS
         <PLAN>
-        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 1 
-        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 2
-        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 3 
+        <STEP>JSON(tool:str, params:dict)</STEP> # STEP 1 
+        <STEP>JSON(tool:str, params:dict)</STEP> # STEP 2
         </PLAN>
 
         WHEN YOU ARE FINISHED YOU CAN RESPONE WITH THE FINISH tool with empty  params
@@ -85,61 +88,55 @@ class Agent:
                 max_tokens: int = 1000000, 
                 stream: bool = True,
                 verbose: bool = True,
-                content = './',
                 model=None,
                 mode: str = 'auto', 
+                mod=None,
                 module = None,
                 max_age= 10000,
                 steps = 1,
                 history = None,
                 trials=4,
                 **kwargs) -> Dict[str, str]:
+        """
+        use this to run the agent with a specific text and parameters
+        """
         output = ''
+        content = ''
         text = ' '.join(list(map(str, [text] + list(extra_text))))
         query = self.preprocess(text=text, src=src, target=target)
         model = model or self.model
         history = history or []
+        module = module or mod
         if module != None:
             src = c.dirpath(module)
-
         if src != None:
-            context = self.content(src, query=query)
+            content = self.content(src, query=query)
         else:
-            context = ''
-            print("No src provided, using empty context.", color='yellow')
-
+            print("No src provided, using empty content.", color='yellow')
         for step in range(steps):
-            print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
-            for trial in range(trials):
-                print(f"STEP --{step + 1}    Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
-                try:
-                    prompt = self.prompt.format(
-                        goal=self.goal,
-                        src=src,
-                        content= context,
-                        query=query,
-                        toolbelt=self.toolbelt(),
-                        history=history or [],
-                        steps=steps,
-                        utc_time= time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
-                        target=target,
-                        output_format=self.output_format
-                    )
-                    output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
-                    output =  self.process(output)
-                    history.append(output)
-                    if output['plan'][-1]['tool'] == 'finish':
-                        print("Finish tool detected, ending process.", color='green')
-                        return output
-                except Exception as e:
-                    c.print(f"Error: {e}", color='red')
-                    output = detailed_error(e)
-                    history.append(output)
-                    continue
-                except KeyboardInterrupt:
-                    return {'error': 'Process interrupted by user.'}
-        return output
-
+            print(f"STEP({step + 1}/{steps}) ", color='green')
+            try:
+                prompt = self.prompt.format(
+                    goal=self.goal,
+                    src=src,
+                    content= content,
+                    query=query,
+                    toolbelt=self.toolbelt(),
+                    history=history,
+                    steps=steps,
+                    utc_time= time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+                    target=target,
+                    output_format=self.output_format
+                )
+                output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
+                plan =  self.process(output)
+                if plan[-1]['tool'].lower() == 'finish':
+                    return plan
+                history.append(plan)
+            except Exception as e:
+                history.append(c.detailed_error(e))
+                continue
+        return plan
 
     def preprocess(self, text, src='./', target='./modules'):
 
@@ -164,82 +161,45 @@ class Agent:
 
         return query
 
-    
-
-    def display_step(self, step:dict, idx, color=None):
-        """
-        Display the step in a readable format.
-        
-        Args:
-            step (dict): The step to display.
-        """
-        if not color:
-            color = c.random_color()
-        c.print(f"Step ({idx}): {step['tool']}", color=color)
-        for k, v in step['params'].items():
-            c.print(f"  {k}: {v}", color=color)
+    def load_step(self, text):
+        text = text.split(self.anchors['tool'][0])[1].split(self.anchors['tool'][1])[0]
+        try:
+            step = json.loads(text)
+        except json.JSONDecodeError:
+            step = self.tool('fix.json')(text)
         return step
 
-
     def process(self, output:str) -> list:
-
-        """
-        Postprocess tool outputs and extract fn calls.
-        
-        This fn parses the raw output text and identifies fn calls in the format:
-        <FN::function_name><PARAMS/>{"param1": "value1"}</PARAMS/><FN_END>
-        
-        Args:
-            output (str): The raw output from the model                
-        Returns:
-            list: The processed output with extracted fn calls
-        """
         text = ''
         plan = []
-        text_lines = []
-        anchors = {
-            'plan': ['<PLAN>', '</PLAN>'],
-            'tool': ['<TOOL>', '</TOOL>'],
-        }
         for ch in output:
             text += ch
-            # print per line 
             c.print(ch, end='')
-            tool_in_text = anchors['tool'][0] in text and anchors['tool'][1] in text
-            if anchors['tool'][0] in text and anchors['tool'][1] in text:
-                tool_data = text.split(anchors['tool'][0])[1].split(anchors['tool'][1])[0]
-                tool_data = json.loads(tool_data)
-                plan.append(tool_data)
+            is_plan_step = self.anchors['tool'][0] in text and self.anchors['tool'][1] in text
+            if is_plan_step:
+                plan.append(self.load_step(text))
                 text = ''
-                print(f"Extracted tool data: {tool_data}", color='green')
         c.print("Plan:", plan, color='yellow')
-        results = []
         if self.safety:
-            input_text = input("Do you want to execute the plan? (y/n): ")
-            if input_text.startswith('y'):
-                for fn in plan:
-                    c.print(f"Function: {fn['tool']}" ,fn['params'])
-                    if fn['tool'] in ['finish', 'review']:
-                        break
-                    else:
-                        try:
-                            result = self.tool(fn['tool'])(**fn['params'])
-                            results.append(result)
-                        except Exception as e:
-                            result = {'error': str(e), 'tool': fn['tool'], 'params': fn['params']}
-                            c.print(f"Error executing {fn['tool']}: {e}", color='red')
-        return {'plan': plan, 'results': results}
+            input_text = input("Do you want to execute the plan? (y/Y) for YES: ")
+            if not input_text in ['y', 'Y']:
+                print("Plan execution aborted by user.", color='yellow')
+                return plan
+        for i,step in enumerate(plan):
+            c.print(f"Step({step})", color='cyan')
+            if step['tool'].lower()  in ['finish', 'review']:
+                break
+            else:
+                try:
+                    result = self.tool(step['tool'])(**step['params'])
+                except Exception as e:
+                    result = {'error': str(e), 'tool': step['tool'], 'params': step['params']}
+                plan[i]['result'] = result
+        return plan
 
     def content(self, path: str = './', query=None, max_size=100000, timeout=20) -> List[str]:
         """
         Find files in a directory matching a specific pattern.
-        
-        Args:
-            path (str): The directory to search in.
-            pattern (str): The file pattern to match.
-            
-        Returns:
-            List[str]: A list of file paths matching the pattern.
         """
         result = self.tool('select.files')(path=path, query=query, trials=4)
         content = str(result)
@@ -259,14 +219,6 @@ class Agent:
             result = content
         c.print(f"Content found: {len(result)} items", color='green')
         return result
-
-    """
-    A toolbelt that provides access to various tools and can intelligently select
-    the most appropriate tool based on a query.
-    
-    This module helps organize and access tools within the dev.tool namespace,
-    with the ability to automatically select the most relevant tool for a given task.
-    """
 
     tool_prefix = 'dev.tool'
 
@@ -292,30 +244,11 @@ class Agent:
     def schema(self, tool: str, fn='forward') -> Dict[str, str]:
         """
         Get the schema for a specific tool.
-        
-        Args:
-            tool (str): The name of the tool.
-        
-        Returns:
-            Dict[str, str]: The schema for the specified tool.
         """
-        schema =  c.schema(self.tool_prefix + '.' +tool)[fn]
-        schema['input'].pop('self', None)
-        params_format = ' '.join([f'<{k.upper()}>{v["type"]}</{k.upper()}>' for k,v in schema['input'].items()]) 
-        fn_format = f'FN::{fn.upper()}'
-        schema['format'] =  f'<{fn_format}>' + params_format + f'</{fn_format}>'
-        return schema
+        return  c.schema(self.tool_prefix + '.' +tool)[fn]
 
     def tool(self, tool_name: str='cmd', prefix='dev.tool', *args, **kwargs) -> Any:
         """
         Execute a specific tool by name with provided arguments.
-        
-        Args:
-            tool_name (str): The name of the tool to execute.
-            *args: Positional arguments for the tool.
-            **kwargs: Keyword arguments for the tool.
-            
-        Returns:
-            Any: The result of the tool execution.
         """
         return c.module(prefix + '.'+tool_name)(*args, **kwargs).forward

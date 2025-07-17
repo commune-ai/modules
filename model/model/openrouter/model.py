@@ -16,6 +16,7 @@ class OpenRouter:
         url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
         prompt:str=None,
+        model = 'anthropic/claude-opus-4',
         max_retries: int = 10,
         storage_path = '~/.commune/openrouter',
         key = None,
@@ -39,6 +40,7 @@ class OpenRouter:
             timeout=timeout,
             max_retries=max_retries,
         )
+        self.model = model
         self.prompt = prompt
 
     def forward(
@@ -49,7 +51,7 @@ class OpenRouter:
         prompt: str =  None,
         system_prompt: str = None,
         stream: bool = False,
-        model:str = 'anthropic/claude-3.7-sonnet',
+        model:str = 'anthropic/claude-opus-4',
         max_tokens: int = 10000000,
         temperature: float = 1.0,
         **kwargs
@@ -73,7 +75,6 @@ class OpenRouter:
         history = history or []
         prompt = prompt or self.prompt
         message = message + prompt if prompt else message
-        print('model', model)
         model = self.resolve_model(model)
         model_info = self.get_model_info(model)
         num_tokens = len(message)
@@ -119,6 +120,7 @@ class OpenRouter:
         return history
 
     def resolve_model(self, model=None):
+        model = model or self.model
         models =  self.models()
         model = str(model)
         if str(model) not in models:

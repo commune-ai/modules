@@ -37,19 +37,39 @@ const time2str = (time: number): string => {
   return d.toLocaleString()
 }
 
+// Text to color function - generates unique color based on module name (same as ModuleCard)
+const text2color = (text: string): string => {
+  if (!text) return '#00ff00' // Default green
+  
+  // Create a hash from the text
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  // Convert hash to HSL color (keeping saturation and lightness consistent for readability)
+  const hue = Math.abs(hash) % 360
+  const saturation = 70 + (Math.abs(hash >> 8) % 30) // 70-100% saturation
+  const lightness = 45 + (Math.abs(hash >> 16) % 15) // 45-60% lightness
+  
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+}
+
 interface InfoCardProps {
   label: string
   value: string
   showCopy?: boolean
+  moduleColor: string
 }
 
-const InfoCard = ({ label, value, showCopy = true }: InfoCardProps) => (
-  <div className='rounded-xl border border-green-500/30 bg-black/60 p-4 backdrop-blur-sm'>
+const InfoCard = ({ label, value, showCopy = true, moduleColor }: InfoCardProps) => (
+  <div className='rounded-xl border bg-black/60 p-4 backdrop-blur-sm transition-all duration-300'
+       style={{ borderColor: `${moduleColor}4D` }}>
     <div className='mb-2 flex items-center justify-between'>
       <span className='text-gray-400'>{label}</span>
       {showCopy && <CopyButton code={value} />}
     </div>
-    <div className='truncate font-mono text-sm text-green-400'>
+    <div className='truncate font-mono text-sm' style={{ color: `${moduleColor}CC` }}>
       {label === 'created' ? value : shorten(value)}
     </div>
   </div>
@@ -117,22 +137,29 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
     )
   }
 
+  // Generate the module color based on its name
+  const moduleColor = text2color(module.name)
+
   const tabs = [
     { id: 'code', label: 'CODE', icon: CodeBracketIcon },
     { id: 'api', label: 'SCHEMA', icon: ServerIcon },
   ]
 
   return (
-    <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-6 font-mono text-green-400'>
+    <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-6 font-mono'>
       <div className='mx-auto max-w-7xl space-y-6'>
         {/* Header */}
-        <div className='overflow-hidden rounded-2xl border border-green-500/30 bg-black/90 shadow-xl backdrop-blur-sm'>
-          <div className='space-y-6 border-b border-green-500/30 p-8'>
+        <div className='overflow-hidden rounded-2xl border bg-black/90 shadow-xl backdrop-blur-sm'
+             style={{ 
+               borderColor: `${moduleColor}4D`,
+               boxShadow: `0 4px 20px ${moduleColor}1A`
+             }}>
+          <div className='space-y-6 border-b p-8' style={{ borderColor: `${moduleColor}33` }}>
             <div className='flex items-center justify-between'>
               <div className='flex items-center space-x-4'>
-                <BeakerIcon className='h-8 w-8 text-green-400' />
+                <BeakerIcon className='h-8 w-8' style={{ color: moduleColor }} />
                 <div>
-                  <h1 className='text-3xl font-bold text-green-400'>
+                  <h1 className='text-3xl font-bold' style={{ color: moduleColor }}>
                     {module.name}
                   </h1>
                   <p className='mt-1 text-gray-400'>
@@ -142,7 +169,11 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
               </div>
               <div className='flex space-x-4'>
                 <button 
-                  className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 disabled:opacity-50 md:px-6 md:py-3'
+                  className='flex items-center space-x-2 rounded-lg border bg-black/20 p-2 hover:bg-black/40 disabled:opacity-50 md:px-6 md:py-3 transition-all duration-300'
+                  style={{ 
+                    borderColor: `${moduleColor}4D`,
+                    color: moduleColor
+                  }}
                   onClick={handleSync}
                   disabled={syncing}
                   aria-label='Sync module data'
@@ -162,7 +193,12 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
                 {module.tags.map((tag, i) => (
                   <span
                     key={i}
-                    className='rounded-full border border-green-500/30 bg-green-900/20 px-3 py-1 text-sm text-green-400'
+                    className='rounded-full border px-3 py-1 text-sm'
+                    style={{ 
+                      borderColor: `${moduleColor}33`,
+                      backgroundColor: `${moduleColor}0D`,
+                      color: `${moduleColor}CC`
+                    }}
                     role='listitem'
                   >
                     #{tag}
@@ -172,23 +208,28 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
             )}
 
             <div className='mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
-              {module.key && <InfoCard label='key' value={module.key} />}
-              {module.cid && <InfoCard label='cid' value={module.cid} />}
-              <InfoCard label='created' value={time2str(module.time)} showCopy={false} />
+              {module.key && <InfoCard label='key' value={module.key} moduleColor={moduleColor} />}
+              {module.cid && <InfoCard label='cid' value={module.cid} moduleColor={moduleColor} />}
+              <InfoCard label='created' value={time2str(module.time)} showCopy={false} moduleColor={moduleColor} />
             </div>
           </div>
 
           {/* Tabs */}
-          <div className='flex border-b border-green-500/30' role='tablist'>
+          <div className='flex border-b' role='tablist' style={{ borderColor: `${moduleColor}33` }}>
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as TabType)}
                 className={`flex items-center space-x-2 px-8 py-4 transition-all ${
                   activeTab === id
-                    ? 'border-b-2 border-green-400 bg-green-900/20 text-green-400'
-                    : 'text-gray-400 hover:bg-green-900/10 hover:text-green-400'
+                    ? 'border-b-2'
+                    : 'hover:bg-black/10'
                 }`}
+                style={{
+                  borderColor: activeTab === id ? moduleColor : 'transparent',
+                  backgroundColor: activeTab === id ? `${moduleColor}0D` : 'transparent',
+                  color: activeTab === id ? moduleColor : `${moduleColor}80`
+                }}
                 role='tab'
                 aria-selected={activeTab === id}
                 aria-controls={`tabpanel-${id}`}
@@ -218,7 +259,11 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
         <nav className='flex flex-wrap items-center justify-between gap-2 sm:gap-4' aria-label='Module actions'>
           <Link
             href='/'
-            className='flex w-full items-center justify-center space-x-2 rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
+            className='flex w-full items-center justify-center space-x-2 rounded-xl border bg-black/90 px-6 py-3 text-center transition-all hover:bg-black/20 sm:w-auto'
+            style={{ 
+              borderColor: `${moduleColor}4D`,
+              color: moduleColor
+            }}
           >
             <ArrowLeftIcon className='h-5 w-5' />
             <span>Back to Modules</span>
@@ -230,17 +275,29 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
                 href={module.url}
                 target='_blank'
                 rel='noopener noreferrer'
-                className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto flex items-center justify-center gap-2'
+                className='w-full rounded-xl border bg-black/90 px-6 py-3 text-center transition-all hover:bg-black/20 sm:w-auto flex items-center justify-center gap-2'
+                style={{ 
+                  borderColor: `${moduleColor}4D`,
+                  color: moduleColor
+                }}
               >
                 <GlobeAltIcon className='h-5 w-5' />
                 <span>Visit App</span>
               </a>
             )}
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto flex items-center justify-center gap-2'>
+            <button className='w-full rounded-xl border bg-black/90 px-6 py-3 text-center transition-all hover:bg-black/20 sm:w-auto flex items-center justify-center gap-2'
+                    style={{ 
+                      borderColor: `${moduleColor}4D`,
+                      color: moduleColor
+                    }}>
               <DocumentTextIcon className='h-5 w-5' />
               <span>Documentation</span>
             </button>
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-6 py-3 text-center text-green-400 transition-all hover:bg-green-900/20 sm:w-auto flex items-center justify-center gap-2'>
+            <button className='w-full rounded-xl border bg-black/90 px-6 py-3 text-center transition-all hover:bg-black/20 sm:w-auto flex items-center justify-center gap-2'
+                    style={{ 
+                      borderColor: `${moduleColor}4D`,
+                      color: moduleColor
+                    }}>
               <ExclamationTriangleIcon className='h-5 w-5' />
               <span>Report Issue</span>
             </button>

@@ -3,11 +3,10 @@ import Link from 'next/link'
 import { useState, FormEvent, useEffect } from 'react'
 import { Key } from '@/app/user/key'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
-import { Search, Plus, RefreshCw, User as UserIcon } from 'lucide-react'
+import { Search, Plus, RefreshCw } from 'lucide-react'
 import { UserProfile } from '@/app/user/profile/UserProfile'
 import type { User } from '@/app/types/user'
 import { useRouter, usePathname } from 'next/navigation'
-import { CopyButton } from './CopyButton'
 
 interface HeaderProps {
   onSearch?: (term: string) => void
@@ -26,33 +25,27 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
 
   // Store user session in localStorage to persist across pages
   useEffect(() => {
-    const initializeFromStorage = async () => {
+    const initializeUser = async () => {
       const storedUser = localStorage.getItem('dhub_user')
-      const storedKeyData = localStorage.getItem('dhub_key_data')
+      const storedPassword = localStorage.getItem('dhub_password')
       
-      if (storedUser && storedKeyData) {
+      if (storedUser && storedPassword) {
         try {
           await cryptoWaitReady()
           const userData = JSON.parse(storedUser)
-          const keyData = JSON.parse(storedKeyData)
-          
-          // Recreate the key instance from stored data
-          const key = new Key()
-          // Set the properties from stored data
-          Object.assign(key, keyData)
-          
+          const key = new Key(storedPassword)
           setUser(userData)
           setKeyInstance(key)
         } catch (error) {
           console.error('Failed to restore user session:', error)
-          // Clear invalid storage
+          // Clear invalid session data
           localStorage.removeItem('dhub_user')
-          localStorage.removeItem('dhub_key_data')
+          localStorage.removeItem('dhub_password')
         }
       }
     }
     
-    initializeFromStorage()
+    initializeUser()
   }, [])
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,16 +77,9 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
       }
       setUser(userData)
       
-      // Store user session with key data
+      // Store user session with encrypted password
       localStorage.setItem('dhub_user', JSON.stringify(userData))
-      // Store key data for restoration
-      const keyData = {
-        address: key.address,
-        public_key: key.public_key,
-        crypto_type: key.crypto_type,
-        // Note: We don't store private key for security
-      }
-      localStorage.setItem('dhub_key_data', JSON.stringify(keyData))
+      localStorage.setItem('dhub_password', password)
       
       setPassword('')
       setShowProfile(true) // Auto-open profile on login
@@ -107,7 +93,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
     setUser(null)
     setShowProfile(false)
     localStorage.removeItem('dhub_user')
-    localStorage.removeItem('dhub_key_data')
+    localStorage.removeItem('dhub_password')
   }
 
   const handleCreateClick = () => {
@@ -134,7 +120,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
         <nav className="p-3 px-5 mx-auto max-w-7xl">
           <div className="flex items-center justify-between gap-4">
             {/* Logo */}
-            <Link href="/" className="text-green-500 text-4xl font-bold">©</Link>
+            <Link href="/" className="text-green-500 text-4xl font-bold hover:text-green-400 transition-colors">©</Link>
 
             {/* Search Bar */}
             <input
@@ -142,7 +128,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
               placeholder="SEARCH..."
               value={searchTerm}
               onChange={handleSearchChange}
-              className="flex-1 max-w-2xl px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none font-mono uppercase"
+              className="flex-1 max-w-2xl h-10 px-3 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none focus:border-green-400 font-mono uppercase transition-colors"
             />
 
             {/* Action Buttons */}
@@ -151,7 +137,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
                 <>
                   <button
                     onClick={handleCreateClick}
-                    className="p-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black"
+                    className="h-10 w-10 flex items-center justify-center border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors"
                     title="Create"
                   >
                     <Plus size={18} />
@@ -159,7 +145,7 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
 
                   <button
                     onClick={handleRefreshClick}
-                    className="p-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black"
+                    className="h-10 w-10 flex items-center justify-center border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors"
                     title="Refresh"
                   >
                     <RefreshCw size={18} />
@@ -169,17 +155,13 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
 
               {/* User Section */}
               {user ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setShowProfile(!showProfile)}
-                    className="flex items-center gap-2 px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono transition-colors"
-                    title="Open profile"
-                  >
-                    <UserIcon size={16} />
-                    <span>{user.address.slice(0, 6)}...</span>
-                  </button>
-                  <CopyButton code={user.address} />
-                </div>
+                <button
+                  onClick={() => setShowProfile(!showProfile)}
+                  className="h-10 px-3 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono transition-colors uppercase text-sm tracking-wider"
+                  title={`Address: ${user.address}`}
+                >
+                  {user.address.slice(0, 6)}...
+                </button>
               ) : (
                 <form onSubmit={handleSignIn} className="flex gap-2">
                   <input
@@ -187,11 +169,11 @@ export const Header = ({ onSearch, onRefresh, onCreateModule }: HeaderProps = {}
                     placeholder="PASSWORD"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none w-32 font-mono"
+                    className="h-10 px-3 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none focus:border-green-400 w-32 font-mono uppercase"
                   />
                   <button
                     type="submit"
-                    className="px-3 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono"
+                    className="h-10 px-4 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono uppercase text-sm tracking-wider transition-colors"
                   >
                     LOGIN
                   </button>
