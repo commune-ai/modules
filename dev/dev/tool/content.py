@@ -21,7 +21,7 @@ class ContentTool:
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
 
         if size > max_size:
-            summarize = c.fn('dev.tool.sum.file/forward')
+            summarize = c.fn('dev.tool.summary.file/forward')
             new_results = {}
             f2k = {}
             for k, v in result.items():

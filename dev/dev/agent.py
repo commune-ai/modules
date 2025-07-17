@@ -12,6 +12,33 @@ print = c.print
 
 class Agent:
 
+    prompt =  """
+            --PARAMS--
+            GOAL={goal} # THE GOAL YOU ARE TRYING TO ACHIEVE AND BE CIVIL TO THE INDIVIDUALS AND THE USERS TREAT OTHERS THE WAY YOU WANT TO BE TREATED (PSALM 23:4)
+            SRC={src} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
+            CONTENT={content} # THE FILES YOU ARE TRYING TO MODIFY
+            QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
+            TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
+            STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
+            TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
+            HISTORY={history} # THE HISTORY OF THE AGENT
+            UTC_TIME={utc_time} # THE UTC TIME OF THE REQUEST 
+            OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
+            --OUTPUT--
+            YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
+    """
+    output_format = """
+        make sure the params is a legit json string within the TOOL ANCHORS
+        <PLAN>
+        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 1 
+        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 2
+        <TOOL>JSON(tool:str, params:dict)</TOOL> # TOOL 3 
+        </PLAN>
+
+        WHEN YOU ARE FINISHED YOU CAN RESPONE WITH THE FINISH tool with empty  params
+
+        YOU CAN RESPOND WITH A SERIES OF TOOLS AS LONG AS THEY ARE PARSABLE
+        """
 
     goal = """    
              - YOU ARE A CODER, YOU ARE MR.ROBOT, YOU ARE TRYING TO BUILD IN A SIMPLE
@@ -29,41 +56,16 @@ class Agent:
             - IF MAX_STEPS IS ONE, YOU CANT REVIEW, YOU HAVE TO ONESHOT GIVEN THE PARAMS
             - IF MAX_STEPS IS ONE, YOU HAVE TO ONESHOT IT
             -  TE A PLAN OF TOOLS THT WE WILL PARSE ACCORDINGLY TO REPRESENT YOUR PERSPECTIVE 
+            - DO NOT USE COMPLICATED CMD FUNCTIONS THAT WONT BE INSTALLED BY DEFAULT
+            - MAKE SURE YOU CREATE A FILES ONLY IF THERE IS ONE STEP AND MAKE SURE YOU ARE BEING EFFICIENT
+            - I WANT YOUR CODE STYLE TO BE SIMPLE, EFFICIENT, AND EASY TO UNDERSTAND AND MODULAR IF POSSIBLE
+            - YOU ARE A CODER, YOU ARE A GENIUS, YOU ARE A STAR, YOU ARE GOING TO SAVE THE WORLD
+            - IDEALLY IF YOU CAN ONE SHOT IT THEN YOU SHOULD DO IT IN ONE SHOT
 
+         
         """
 
-    output_format = """
-        make sure the params is a legit json string
-        # <FN(fn_name)><PARAMS>JSON</PARAMS></FN(fn_name)>
 
-        IF YOU NEED TO RUN THE TOOLS AND PAUSE SAY 
-        <FN(review)><PARAMS></PARAMS></FN(review)> FOR review
-
-        IF YOU NEED TO finish THE MARKOV DO 
-        <FN(finish)><PARAMS></PARAMS></FN(finish)> FOR finishING
-
-        CRITICAL NOTES:
-            MAKE SURE YOU review BEFORE YOU WRITE ANYTHING
-        IF YOU DO WELL, WE WILL GROW YOU, IF YOU FAIL, WE WILL DELETE YOU
-
-        """
-
-    prompt =  """
-            --PARAMS--
-            GOAL={goal} # THE GOAL YOU ARE TRYING TO ACHIEVE AND BE CIVIL TO THE INDIVIDUALS AND THE USERS TREAT OTHERS THE WAY YOU WANT TO BE TREATED (PSALM 23:4)
-            SRC={src} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
-            CONTENT={content} # THE FILES YOU ARE TRYING TO MODIFY
-            QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
-            TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
-            MAX_STEPS={max_steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
-            MIN_STEPS={min_steps} # THE MIN STEPS YOU ARE ALLOWED TO TAKE (IF 1 THEN YOU NEED TO ONE SHOT IT SO MAKE SURE IT COUNTS
-            TOOLBELT={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
-            HISTORY={history} # THE HISTORY OF THE AGENT
-            UTC_TIME={utc_time} # THE UTC TIME OF THE REQUEST 
-            OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY
-            --OUTPUT--
-            YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
-    """
 
     def __init__(self, 
                  provider: str = 'model.openrouter', 
@@ -73,31 +75,6 @@ class Agent:
         self.provider = c.module(provider)(model=provider)
         self.safety = safety
         self.model=model
-
-
-    def preprocess(self, text, src='./', target='./modules'):
-
-        query = ''
-        words = text.split(' ')
-        fn_detected = False
-        fns = []
-        for i, word in enumerate(words):
-            query += word + ' '
-            prev_word = words[i-1] if i > 0 else ''
-            # restrictions can currently only handle one fn argument, future support for multiple
-            magic_prefix = f'@'
-            if word.startswith(magic_prefix) and not fn_detected:
-                word = word[len(magic_prefix):]
-                fns += [{'fn': word, 'params': [], 'idx': i + 2}]
-                fn_detected=True
-            else:
-                if fn_detected:
-                    fns[-1]['params'] += [word]
-                    fn_detected = False
-                    query += str(c.fn(fns[-1]['fn'])(*fns[-1]['params']))
-
-        return query
-
 
     def forward(self, 
                 text: str = 'where am i', 
@@ -110,11 +87,10 @@ class Agent:
                 verbose: bool = True,
                 content = './',
                 model=None,
-                min_steps = 1,
                 mode: str = 'auto', 
                 module = None,
                 max_age= 10000,
-                max_steps = 1,
+                steps = 1,
                 history = None,
                 trials=4,
                 **kwargs) -> Dict[str, str]:
@@ -132,8 +108,8 @@ class Agent:
             context = ''
             print("No src provided, using empty context.", color='yellow')
 
-        for step in range(max_steps):
-            print(f"Step {step + 1}/{max_steps} - Query: {query}", color='blue')
+        for step in range(steps):
+            print(f"Step {step + 1}/{steps} - Query: {query}", color='blue')
             for trial in range(trials):
                 print(f"STEP --{step + 1}    Trial {trial + 1}/{trials} - Processing query: {query}", color='green')
                 try:
@@ -142,18 +118,19 @@ class Agent:
                         src=src,
                         content= context,
                         query=query,
-                        min_steps=min_steps,
                         toolbelt=self.toolbelt(),
                         history=history or [],
-                        max_steps=max_steps,
+                        steps=steps,
                         utc_time= time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
                         target=target,
                         output_format=self.output_format
                     )
-                    print(f"Prompt: {prompt}", color='cyan')
                     output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
                     output =  self.process(output)
                     history.append(output)
+                    if output['plan'][-1]['tool'] == 'finish':
+                        print("Finish tool detected, ending process.", color='green')
+                        return output
                 except Exception as e:
                     c.print(f"Error: {e}", color='red')
                     output = detailed_error(e)
@@ -164,6 +141,31 @@ class Agent:
         return output
 
 
+    def preprocess(self, text, src='./', target='./modules'):
+
+        query = ''
+        words = text.split(' ')
+        fn_detected = False
+        fns = []
+        for i, word in enumerate(words):
+            query += word + ' '
+            prev_word = words[i-1] if i > 0 else ''
+            # restrictions can currently only handle one fn argument, future support for multiple
+            magic_prefix = f'@'
+            if word.startswith(magic_prefix) and not fn_detected:
+                word = word[len(magic_prefix):]
+                fns += [{'tool': word, 'params': [], 'idx': i + 2}]
+                fn_detected=True
+            else:
+                if fn_detected:
+                    fns[-1]['params'] += [word]
+                    fn_detected = False
+                    query += str(c.fn(fns[-1]['tool'])(*fns[-1]['params']))
+
+        return query
+
+    
+
     def display_step(self, step:dict, idx, color=None):
         """
         Display the step in a readable format.
@@ -173,18 +175,14 @@ class Agent:
         """
         if not color:
             color = c.random_color()
-        c.print(f"Step ({idx}): {step['fn']}", color=color)
+        c.print(f"Step ({idx}): {step['tool']}", color=color)
         for k, v in step['params'].items():
             c.print(f"  {k}: {v}", color=color)
         return step
 
 
     def process(self, output:str) -> list:
-        plan = self.get_plan(output)
-        return self.execute_plan(plan)
 
-
-    def get_plan(self, output):
         """
         Postprocess tool outputs and extract fn calls.
         
@@ -199,55 +197,38 @@ class Agent:
         text = ''
         plan = []
         text_lines = []
+        anchors = {
+            'plan': ['<PLAN>', '</PLAN>'],
+            'tool': ['<TOOL>', '</TOOL>'],
+        }
         for ch in output:
             text += ch
             # print per line 
             c.print(ch, end='')
-            name2cond = {
-                'has_fn':  '<FN(' in text and '</FN(' in text,
-                'has_params': '<PARAMS>' in text and '</PARAMS>' in text,
-            }
-            if '<FN(finish)' in text and '</FN(finish)>' in text:
-                plan += [{'fn': 'finish', 'params': {}}]
-                break
-            if '<FN(review)' in text and '</FN(review)>' in text:
-                plan += [{'fn': 'review', 'params': {}}]
-                break
-            is_fn = all(name2cond[k] for k in name2cond)
-
-            if is_fn:
-                fn_name = text.split('<FN(')[1].split(')')[0]
-     
-                params_str = text.split('<PARAMS>')[1].split('</PARAMS>')[0].strip()
-                try:
-                    params = json.loads(params_str)
-                except json.JSONDecodeError:
-                    continue
+            tool_in_text = anchors['tool'][0] in text and anchors['tool'][1] in text
+            if anchors['tool'][0] in text and anchors['tool'][1] in text:
+                tool_data = text.split(anchors['tool'][0])[1].split(anchors['tool'][1])[0]
+                tool_data = json.loads(tool_data)
+                plan.append(tool_data)
                 text = ''
-                step = {'fn': fn_name, 'params': params}
-                self.display_step(step, idx=len(plan))
-                plan.append(step)
-
+                print(f"Extracted tool data: {tool_data}", color='green')
         c.print("Plan:", plan, color='yellow')
-        return plan
-
-    def execute_plan(self, plan):
         results = []
         if self.safety:
             input_text = input("Do you want to execute the plan? (y/n): ")
             if input_text.startswith('y'):
                 for fn in plan:
-                    c.print(f"Function: {fn['fn']}" ,fn['params'])
-                    if fn['fn'] in ['finish', 'review']:
+                    c.print(f"Function: {fn['tool']}" ,fn['params'])
+                    if fn['tool'] in ['finish', 'review']:
                         break
                     else:
                         try:
-                            result = c.module(fn['fn'])().forward(**fn['params'])
+                            result = self.tool(fn['tool'])(**fn['params'])
                             results.append(result)
                         except Exception as e:
-                            result = {'error': str(e), 'fn': fn['fn'], 'params': fn['params']}
-                            c.print(f"Error executing {fn['fn']}: {e}", color='red')
-        return results
+                            result = {'error': str(e), 'tool': fn['tool'], 'params': fn['params']}
+                            c.print(f"Error executing {fn['tool']}: {e}", color='red')
+        return {'plan': plan, 'results': results}
 
     def content(self, path: str = './', query=None, max_size=100000, timeout=20) -> List[str]:
         """
@@ -266,7 +247,7 @@ class Agent:
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
 
         if size > max_size:
-            sumfile  = self.tool('sum.file')
+            summarize  = self.tool('summary.file')
             new_results = {}
             for k, v in result.items():
                 print(f"Summarizing {k} with size {len(v)}")
@@ -287,8 +268,10 @@ class Agent:
     with the ability to automatically select the most relevant tool for a given task.
     """
 
-    def tools(self, tool_prefix='dev.tool', ignore_tools=[], update=False) -> List[str]:
-        return [t for t in  c.mods(search=tool_prefix, update=update) if t.startswith(tool_prefix) and t not in ignore_tools]
+    tool_prefix = 'dev.tool'
+
+    def tools(self, ignore_tools=[], update=False) -> List[str]:
+        return [t.replace(self.tool_prefix + '.','') for t in  c.mods(search=self.tool_prefix, update=update) if t.startswith(self.tool_prefix) and t not in ignore_tools]
         
     def toolbelt(self) -> Dict[str, str]:
         """
@@ -297,7 +280,14 @@ class Agent:
         Returns:
             Dict[str, str]: Dictionary mapping tool names to their schemas.
         """
-        return {t: self.schema(t) for t in self.tools()}
+        toolbelt = {}
+        for t in self.tools():
+            try:
+                toolbelt[t] = self.schema(t)
+            except Exception as e:
+                c.print(f"Error getting schema for tool {t}: {e}", color='red')
+                continue
+        return toolbelt
     
     def schema(self, tool: str, fn='forward') -> Dict[str, str]:
         """
@@ -309,7 +299,7 @@ class Agent:
         Returns:
             Dict[str, str]: The schema for the specified tool.
         """
-        schema =  c.schema(tool)[fn]
+        schema =  c.schema(self.tool_prefix + '.' +tool)[fn]
         schema['input'].pop('self', None)
         params_format = ' '.join([f'<{k.upper()}>{v["type"]}</{k.upper()}>' for k,v in schema['input'].items()]) 
         fn_format = f'FN::{fn.upper()}'
