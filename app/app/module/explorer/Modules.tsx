@@ -9,7 +9,195 @@ import { CreateModule } from '@/app/module/explorer/ModuleCreate'
 import { ModuleType } from '@/app/types/module'
 import { AdvancedSearch, SearchFilters } from '@/app/module/explorer/search'
 import { filterModules } from '@/app/module/explorer/search'
-import { ChevronLeft, ChevronRight, Filter, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Filter, Search, X, Menu } from 'lucide-react'
+
+// Vibey ASCII Loading Component with fixed height
+function VibeLoader() {
+  const [frame, setFrame] = useState(0)
+  const [dots, setDots] = useState('')
+  const [glitch, setGlitch] = useState(false)
+  const [matrixRain, setMatrixRain] = useState<Array<{char: string, y: number, speed: number}>>([])
+  
+  const asciiFrames = [
+    `
+     ╔══════════════════════════════════════╗
+     ║  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  ║
+     ║  █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█  ║
+     ║  █░░╔═╗░╔═╗░╔╗░░╔╗░╔╗░░╔╗░╔═╗░░█  ║
+     ║  █░░║░╚╗║░║░║║░░║║░║║░░║║░║░╚╗░█  ║
+     ║  █░░║░░║║░║░║║░░║║░║║░░║║░║░░║░█  ║
+     ║  █░░║░╔╝║░║░║║░░║║░║║░░║║░║░╔╝░█  ║
+     ║  █░░╚═╝░╚═╝░╚╝░░╚╝░╚╝░░╚╝░╚═╝░░█  ║
+     ║  █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█  ║
+     ║  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ║
+     ╚══════════════════════════════════════╝`,
+    `
+     ╔══════════════════════════════════════╗
+     ║  ┌─────────────────────────────────┐  ║
+     ║  │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ║
+     ║  │▓╔═══╗╔═══╗╔╗──╔╗╔╗──╔╗╔═══╗▓▓▓│  ║
+     ║  │▓║╔═╗║║╔═╗║║║──║║║║──║║║╔═╗║▓▓▓│  ║
+     ║  │▓║║─╚╝║║─║║║╚╗╔╝║║╚╗╔╝║║║─║║▓▓▓│  ║
+     ║  │▓║║─╔╗║║─║║║╔╗╔╗║║╔╗╔╗║║║─║║▓▓▓│  ║
+     ║  │▓║╚═╝║║╚═╝║║║╚╝║║║║╚╝║║║╚═╝║▓▓▓│  ║
+     ║  │▓╚═══╝╚═══╝╚╝──╚╝╚╝──╚╝╚═══╝▓▓▓│  ║
+     ║  │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ║
+     ║  └─────────────────────────────────┘  ║
+     ╚══════════════════════════════════════╝`,
+    `
+     ╔══════════════════════════════════════╗
+     ║  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ║
+     ║  ░█▀▀░█▀█░█▄█░█▄█░█░█░█▀█░█▀▀░░░░░  ║
+     ║  ░█░░░█░█░█░█░█░█░█░█░█░█░█▀▀░░░░░  ║
+     ║  ░▀▀▀░▀▀▀░▀░▀░▀░▀░▀▀▀░▀░▀░▀▀▀░░░░░  ║
+     ║  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ║
+     ║  ░▒▓█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█▓▒░░░  ║
+     ║  ░▒▓█░░░░░░░░░░░░░░░░░░░░░░░█▓▒░░░  ║
+     ║  ░▒▓█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█▓▒░░░  ║
+     ║  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ║
+     ╚══════════════════════════════════════╝`
+  ]
+  
+  const loadingMessages = [
+    "INITIALIZING QUANTUM TUNNELS",
+    "SYNCHRONIZING NEURAL MATRICES",
+    "CALIBRATING DATA STREAMS",
+    "ESTABLISHING HYPERLINKS",
+    "LOADING MODULE MANIFESTS",
+    "PARSING COSMIC METADATA"
+  ]
+  
+  const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?░▒▓█▀▄■□'
+  
+  // Initialize matrix rain
+  useEffect(() => {
+    const chars = Array.from({ length: 15 }, (_, i) => ({
+      char: String.fromCharCode(65 + Math.floor(Math.random() * 26)),
+      y: Math.random() * -20,
+      speed: 0.5 + Math.random() * 1.5
+    }))
+    setMatrixRain(chars)
+  }, [])
+  
+  // Update matrix rain positions
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMatrixRain(prev => prev.map(drop => ({
+        ...drop,
+        y: drop.y > 20 ? -20 : drop.y + drop.speed,
+        char: Math.random() > 0.95 ? String.fromCharCode(65 + Math.floor(Math.random() * 26)) : drop.char
+      })))
+    }, 50)
+    return () => clearInterval(interval)
+  }, [])
+  
+  useEffect(() => {
+    const frameInterval = setInterval(() => {
+      setFrame(prev => (prev + 1) % asciiFrames.length)
+    }, 500)
+    return () => clearInterval(frameInterval)
+  }, [])
+  
+  useEffect(() => {
+    const dotsInterval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? '' : prev + '.')
+    }, 400)
+    return () => clearInterval(dotsInterval)
+  }, [])
+  
+  useEffect(() => {
+    const glitchInterval = setInterval(() => {
+      setGlitch(true)
+      setTimeout(() => setGlitch(false), 100)
+    }, 3000)
+    return () => clearInterval(glitchInterval)
+  }, [])
+  
+  const currentMessage = loadingMessages[Math.floor(frame / asciiFrames.length * loadingMessages.length)]
+  
+  const glitchText = (text: string) => {
+    if (!glitch) return text
+    return text.split('').map(char => 
+      Math.random() > 0.7 ? glitchChars[Math.floor(Math.random() * glitchChars.length)] : char
+    ).join('')
+  }
+  
+  return (
+    <div className='flex items-center justify-center' style={{ minHeight: '400px', height: '400px' }}>
+      <div className='relative'>
+        {/* ASCII Art Frame */}
+        <pre className='text-green-500 font-mono text-xs sm:text-sm animate-pulse'>
+          {asciiFrames[frame]}
+        </pre>
+        
+        {/* Glitch overlay */}
+        {glitch && (
+          <div className='absolute inset-0 flex items-center justify-center'>
+            <pre className='text-green-400 font-mono text-xs sm:text-sm opacity-50'>
+              {glitchText(asciiFrames[(frame + 1) % asciiFrames.length])}
+            </pre>
+          </div>
+        )}
+      </div>
+      
+      {/* Side content */}
+      <div className='ml-8 relative' style={{ width: '300px' }}>
+        {/* Loading message */}
+        <div className='text-center mb-4'>
+          <div className='text-green-500 font-mono text-sm mb-2'>
+            [{glitchText(currentMessage)}]
+          </div>
+          <div className='text-green-400 font-mono text-lg'>
+            LOADING{dots}
+          </div>
+        </div>
+        
+        {/* Progress bar */}
+        <div className='w-full mb-4'>
+          <div className='h-2 bg-black border border-green-500 rounded-full overflow-hidden'>
+            <div 
+              className='h-full bg-gradient-to-r from-green-500 via-green-400 to-green-500 animate-pulse'
+              style={{
+                width: `${((frame + 1) / asciiFrames.length) * 100}%`,
+                transition: 'width 0.5s ease-out'
+              }}
+            />
+          </div>
+        </div>
+        
+        {/* Matrix rain effect */}
+        <div className='relative h-20 overflow-hidden'>
+          {matrixRain.map((drop, i) => (
+            <div
+              key={i}
+              className='absolute font-mono text-xs text-green-400'
+              style={{
+                left: `${i * 20}px`,
+                top: `${drop.y}px`,
+                opacity: Math.max(0, 1 - (drop.y / 20))
+              }}
+            >
+              {drop.char}
+            </div>
+          ))}
+        </div>
+        
+        {/* Random tech stats */}
+        <div className='mt-4 space-y-1 text-xs font-mono'>
+          <div className='text-green-500/70'>
+            CPU: {Math.floor(20 + Math.random() * 60)}%
+          </div>
+          <div className='text-green-500/70'>
+            MEM: {Math.floor(30 + Math.random() * 50)}%
+          </div>
+          <div className='text-green-500/70'>
+            NET: {Math.floor(100 + Math.random() * 900)}KB/s
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface ModulesState {
   modules: ModuleType[]
@@ -22,9 +210,9 @@ interface ModulesState {
 export default function Modules() {
   const client = new Client()
   const [page, setPage] = useState(1)
-  const [pageSize] = useState(20)
+  const [pageSize] = useState(9)
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(true) // Default to open
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false) // Default to closed
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     searchTerm: '',
     includeTags: [],
@@ -155,7 +343,7 @@ export default function Modules() {
               className='p-1 text-green-500 hover:text-green-400'
               aria-label='Close search panel'
             >
-              <ChevronLeft size={20} />
+              <X size={20} />
             </button>
           </div>
           
@@ -184,16 +372,14 @@ export default function Modules() {
         </div>
       </div>
 
-      {/* Floating Toggle Button when panel is closed */}
-      {!showAdvancedSearch && (
-        <button
-          onClick={() => setShowAdvancedSearch(true)}
-          className='fixed left-4 top-24 p-2 bg-black border border-green-500 text-green-500 hover:bg-green-500 hover:text-black z-50'
-          aria-label='Open search panel'
-        >
-          <ChevronRight size={20} />
-        </button>
-      )}
+      {/* Floating Toggle Button - Always visible */}
+      <button
+        onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+        className={`fixed ${showAdvancedSearch ? 'left-[304px]' : 'left-4'} top-24 p-2 bg-black border border-green-500 text-green-500 hover:bg-green-500 hover:text-black z-50 transition-all duration-300`}
+        aria-label={showAdvancedSearch ? 'Close search panel' : 'Open search panel'}
+      >
+        {showAdvancedSearch ? <ChevronLeft size={20} /> : <Menu size={20} />}
+      </button>
 
       {/* Main Content */}
       <div className={`flex-1 transition-all duration-300 ${showAdvancedSearch ? 'ml-80' : 'ml-0'}`}>
@@ -211,29 +397,6 @@ export default function Modules() {
           </div>
         )}
 
-        {/* Header */}
-        <div className='border-b border-green-500 p-6'>
-          {/* Action Buttons */}
-          <div className='flex gap-4 justify-center'>
-            <button
-              onClick={() => fetchModules()}
-              disabled={state.loading}
-              className='px-4 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 uppercase transition-none'
-              aria-label='Refresh modules'
-            >
-              [REFRESH]
-            </button>
-
-            <button
-              onClick={() => setShowCreateForm(true)}
-              disabled={state.loading}
-              className='px-4 py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 uppercase transition-none'
-              aria-label='Create new module'
-            >
-              [CREATE]
-            </button>
-          </div>
-        </div>
 
         {/* Create Module Modal */}
         {showCreateForm && (
@@ -249,11 +412,7 @@ export default function Modules() {
 
         {/* Modules Grid */}
         <main className='p-6' role='main'>
-          {state.loading && (
-            <div className='text-center py-8'>
-              <div className='text-green-500 text-xl'>LOADING...</div>
-            </div>
-          )}
+          {state.loading && <VibeLoader />}
           
           {!state.loading && paginatedModules.length === 0 && (
             <div className='py-8 text-center text-green-500' role='status'>

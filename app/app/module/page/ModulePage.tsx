@@ -1,18 +1,17 @@
 'use client'
-'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Client } from '@/app/client/client'
 import { Loading } from '@/app/components/Loading'
 import { ModuleType } from '@/app/types/module'
 import {
   CodeBracketIcon,
   ServerIcon,
-  GlobeAltIcon,
-  BeakerIcon,
   ArrowLeftIcon,
+  ArrowPathIcon,
+  DocumentTextIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import { ShareIcon } from '@heroicons/react/20/solid'
 import { CopyButton } from '@/app/components/CopyButton'
 import { ModuleCode } from './ModuleCode'
 import ModuleSchema from './ModuleSchema'
@@ -20,367 +19,270 @@ import Link from 'next/link'
 
 type TabType = 'code' | 'api'
 
-function shorten(str: string) {
+interface ModuleClientProps {
+  module_name: string
+  code: boolean
+  api: boolean
+}
+
+const shorten = (str: string): string => {
   if (!str || str.length <= 12) return str
   return `${str.slice(0, 8)}...${str.slice(-4)}`
 }
 
-function time2str(time: number) {
+const time2str = (time: number): string => {
   const d = new Date(time * 1000)
   return d.toLocaleString()
 }
 
-// Retro Loading Animation Component
-function RetroLoader() {
-  const [progress, setProgress] = useState(0)
-  const [currentPhase, setCurrentPhase] = useState(0)
-  const [terminalLines, setTerminalLines] = useState<string[]>([])
-  const [blinkState, setBlink] = useState(true)
+// Text to color function - generates unique color based on module name
+const text2color = (text: string): string => {
+  if (!text) return '#00ff00' // Default green
   
-  const phases = [
-    { text: 'INITIALIZING SYSTEM', code: 'SYS.INIT' },
-    { text: 'LOADING KERNEL MODULES', code: 'KERN.LOAD' },
-    { text: 'ESTABLISHING NETWORK', code: 'NET.CONN' },
-    { text: 'AUTHENTICATING USER', code: 'AUTH.PROC' },
-    { text: 'MOUNTING FILESYSTEMS', code: 'FS.MOUNT' },
-    { text: 'STARTING SERVICES', code: 'SVC.START' },
-    { text: 'SYNCHRONIZING DATA', code: 'DATA.SYNC' }
-  ]
+  // Create a hash from the text
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash)
+  }
   
-  // Progress animation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) return 0
-        return prev + Math.random() * 3
-      })
-    }, 100)
-    return () => clearInterval(interval)
-  }, [])
+  // Convert hash to HSL color (keeping saturation and lightness consistent for readability)
+  const hue = Math.abs(hash) % 360
+  const saturation = 70 + (Math.abs(hash >> 8) % 30) // 70-100% saturation
+  const lightness = 45 + (Math.abs(hash >> 16) % 15) // 45-60% lightness
   
-  // Phase cycling
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPhase(prev => (prev + 1) % phases.length)
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [])
-  
-  // Terminal output simulation
-  useEffect(() => {
-    const messages = [
-      `[${new Date().toISOString()}] System check: OK`,
-      `[${new Date().toISOString()}] Memory test: 16384MB OK`,
-      `[${new Date().toISOString()}] CPU cores detected: 8`,
-      `[${new Date().toISOString()}] Network adapter: eth0 UP`,
-      `[${new Date().toISOString()}] Quantum tunnel established`,
-      `[${new Date().toISOString()}] Neural matrix calibrated`,
-      `[${new Date().toISOString()}] Data streams synchronized`
-    ]
-    
-    const interval = setInterval(() => {
-      const randomMessage = messages[Math.floor(Math.random() * messages.length)]
-      setTerminalLines(prev => {
-        const newLines = [...prev, randomMessage]
-        return newLines.slice(-5) // Keep only last 5 lines
-      })
-    }, 800)
-    return () => clearInterval(interval)
-  }, [])
-  
-  // Cursor blink
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setBlink(prev => !prev)
-    }, 500)
-    return () => clearInterval(interval)
-  }, [])
-  
-  return (
-    <div className="flex items-center justify-center p-8">
-      <div className="relative w-full max-w-2xl">
-        {/* IBM-style frame */}
-        <div className="relative rounded-none border-2 border-green-500 bg-black p-6 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
-          {/* Terminal header */}
-          <div className="mb-4 border-b border-green-500/50 pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="h-3 w-3 rounded-full bg-green-500" />
-                <div className="h-3 w-3 rounded-full bg-green-500/60" />
-                <div className="h-3 w-3 rounded-full bg-green-500/30" />
-              </div>
-              <div className="font-mono text-xs text-green-400">
-                IBM SYSTEM/370 - TERMINAL SESSION
-              </div>
-            </div>
-          </div>
-          
-          {/* Main display */}
-          <div className="space-y-4">
-            {/* Status display */}
-            <div className="border border-green-500/30 bg-green-950/20 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="font-mono text-sm text-green-400">
-                  {phases[currentPhase].code}
-                </span>
-                <span className="font-mono text-sm text-green-300">
-                  {Math.floor(progress)}%
-                </span>
-              </div>
-              <div className="mb-2 h-2 overflow-hidden bg-black border border-green-500/50">
-                <div 
-                  className="h-full bg-green-500 transition-all duration-100"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="font-mono text-xs text-green-400">
-                {phases[currentPhase].text}
-              </div>
-            </div>
-            
-            {/* System information grid */}
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-              <div className="border border-green-500/30 bg-green-950/10 p-2">
-                <div className="text-green-300">CPU USAGE</div>
-                <div className="text-green-400">{Math.floor(Math.random() * 30 + 20)}%</div>
-              </div>
-              <div className="border border-green-500/30 bg-green-950/10 p-2">
-                <div className="text-green-300">MEMORY</div>
-                <div className="text-green-400">{Math.floor(Math.random() * 40 + 40)}%</div>
-              </div>
-              <div className="border border-green-500/30 bg-green-950/10 p-2">
-                <div className="text-green-300">NETWORK I/O</div>
-                <div className="text-green-400">{Math.floor(Math.random() * 900 + 100)}KB/s</div>
-              </div>
-              <div className="border border-green-500/30 bg-green-950/10 p-2">
-                <div className="text-green-300">DISK I/O</div>
-                <div className="text-green-400">{Math.floor(Math.random() * 50 + 10)}MB/s</div>
-              </div>
-            </div>
-            
-            {/* Terminal output */}
-            <div className="border border-green-500/30 bg-black p-3">
-              <div className="mb-1 font-mono text-xs text-green-300">
-                SYSTEM LOG:
-              </div>
-              <div className="space-y-1 font-mono text-xs text-green-400/80">
-                {terminalLines.map((line, i) => (
-                  <div key={i} className="animate-fadeIn">
-                    {line}
-                  </div>
-                ))}
-                <div className="flex items-center">
-                  <span className="text-green-400">$</span>
-                  <span className={`ml-1 ${blinkState ? 'opacity-100' : 'opacity-0'}`}>
-                    _
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            {/* IBM-style status bar */}
-            <div className="flex items-center justify-between border-t border-green-500/30 pt-2">
-              <div className="font-mono text-xs text-green-400">
-                COMM MODULE v2.4.1 - READY
-              </div>
-              <div className="flex items-center space-x-4 font-mono text-xs text-green-300">
-                <span>F1=HELP</span>
-                <span>F3=EXIT</span>
-                <span>F5=REFRESH</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Decorative corners */}
-        <div className="absolute -top-1 -left-1 h-3 w-3 border-l-2 border-t-2 border-green-500" />
-        <div className="absolute -top-1 -right-1 h-3 w-3 border-r-2 border-t-2 border-green-500" />
-        <div className="absolute -bottom-1 -left-1 h-3 w-3 border-l-2 border-b-2 border-green-500" />
-        <div className="absolute -bottom-1 -right-1 h-3 w-3 border-r-2 border-b-2 border-green-500" />
-      </div>
-      
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-5px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
-    </div>
-  )
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
 }
 
-export default function ModuleClient({ module_name, code, api }: { module_name: string; code: boolean; api: boolean }) {
+export default function ModuleClient({ module_name, code, api }: ModuleClientProps) {
   const client = new Client()
   const [module, setModule] = useState<ModuleType | undefined>()
   const [error, setError] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(true)
+  const [syncing, setSyncing] = useState<boolean>(false)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({})
   const initialTab: TabType = code ? 'code' : api ? 'api' : 'code'
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
-  const [updateModule, setUpdateModule] = useState<boolean>(false)
-  const [isRetrying, setIsRetrying] = useState<boolean>(false)
+
+  const fetchModule = useCallback(async (update = false) => {
+    try {
+      if (update) setSyncing(true)
+      const params = { module: module_name, update }
+      const foundModule = await client.call('module', params)
+      
+      if (foundModule) {
+        setModule(foundModule)
+        if (foundModule.code && typeof foundModule.code === 'object') {
+          setCodeMap(foundModule.code as Record<string, string>)
+        }
+        setError('')
+      } else {
+        setError(`Module ${module_name} not found`)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch module')
+    } finally {
+      setLoading(false)
+      setSyncing(false)
+    }
+  }, [module_name, client])
 
   useEffect(() => {
-    const fetchModule = async () => {
-      try {
-        const params = { module: module_name, update: updateModule }
-        const foundModule = await client.call('module', params)
-        if (updateModule) {
-          // Add a small delay to show the animation
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          setUpdateModule(false)
-          setIsRetrying(false)
-        }
-        if (foundModule) {
-          setModule(foundModule)
-          if (foundModule.code && typeof foundModule.code === 'object') {
-            setCodeMap(foundModule.code as Record<string, string>)
-          }
-        } else {
-          setError(`Module ${module_name} not found`)
-        }
-      } catch (err) {
-        setError('Failed to fetch module')
-        setIsRetrying(false)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchModule()
-  }, [module_name, updateModule, client])
+  }, [fetchModule])
 
-  if (loading && !isRetrying) return <Loading />
-  if (error || !module)
+  const handleSync = () => {
+    fetchModule(true)
+  }
+
+  if (loading) return <Loading />
+  
+  if (error || !module) {
     return (
-      <div className='flex min-h-screen items-center justify-center bg-black text-red-500'>
-        {error}
+      <div className='flex min-h-screen items-center justify-center bg-black'>
+        <div className='max-w-md text-center'>
+          <ExclamationTriangleIcon className='mx-auto h-12 w-12 text-red-500 mb-4' />
+          <h2 className='text-xl font-semibold text-red-500 mb-2'>Error Loading Module</h2>
+          <p className='text-gray-400 mb-6'>{error}</p>
+          <Link
+            href='/'
+            className='inline-flex items-center gap-2 rounded-lg border border-green-500/30 bg-black/90 px-4 py-2 text-green-400 hover:bg-green-900/20'
+          >
+            <ArrowLeftIcon className='h-4 w-4' />
+            Back to Modules
+          </Link>
+        </div>
       </div>
     )
+  }
+
+  // Generate the module color based on its name
+  const moduleColor = text2color(module.name)
 
   const tabs = [
     { id: 'code', label: 'CODE', icon: CodeBracketIcon },
     { id: 'api', label: 'SCHEMA', icon: ServerIcon },
   ]
 
-  const handleRetry = () => {
-    setIsRetrying(true)
-    setUpdateModule(true)
-  }
-
   return (
-    <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-3 font-mono text-green-400'>
-      <div className='mx-auto max-w-7xl space-y-4'>
-        {/* Header */}
-        <div className='overflow-hidden rounded-2xl border border-green-500/30 bg-black/90 shadow-xl backdrop-blur-sm'>
-          <div className='space-y-3 border-b border-green-500/30 p-4'>
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center space-x-4'>
-                <h1 className='text-2xl font-bold text-green-400'>
-                  {module.name}
-                </h1>
-                {module.tags?.length > 0 && (
-                  <div className='flex flex-wrap gap-1'>
-                    {module.tags.map((tag, i) => (
-                      <span
-                        key={i}
-                        className='rounded-full border border-green-500/30 bg-green-900/20 px-2 py-0.5 text-xs text-green-400'
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+    <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-6 font-mono'>
+      <div className='mx-auto max-w-7xl space-y-6'>
+        {/* Header with key info */}
+        <div className='space-y-4'>
+          {/* Module name with sync */}
+          <div className='flex items-center justify-between'>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className='group flex items-center space-x-3 text-left transition-all duration-300'
+              style={{ color: moduleColor }}
+            >
+              <h1 className='text-3xl font-bold group-hover:underline'>
+                {module.name}
+              </h1>
+              <ArrowPathIcon className={`h-6 w-6 opacity-0 group-hover:opacity-100 ${syncing ? 'animate-spin' : ''}`} />
+            </button>
+            <Link
+              href='/'
+              className='flex items-center gap-2 rounded-lg border bg-black/90 px-4 py-2 transition-all hover:bg-black/20'
+              style={{ 
+                borderColor: `${moduleColor}4D`,
+                color: moduleColor
+              }}
+            >
+              <ArrowLeftIcon className='h-4 w-4' />
+              <span>Back</span>
+            </Link>
+          </div>
+
+          {/* Key info row */}
+          <div className='flex flex-wrap gap-4 text-sm'>
+            {module.key && (
+              <div className='flex items-center gap-2'>
+                <span className='text-gray-400'>key:</span>
+                <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
+                  {shorten(module.key)}
+                </span>
+                <CopyButton code={module.key} />
               </div>
-              <button className='flex items-center space-x-2 rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-green-400 hover:bg-green-900/40 md:px-4 md:py-2'
-                onClick={handleRetry}>
-                <GlobeAltIcon className='h-4 w-4'  />
-                <span className='hidden md:inline'>retry</span>
-              </button>
-            </div>
-
-
-            <div className='flex flex-wrap gap-3'>
-              {[
-                { label: 'key', value: module.key || 'N/A' },
-                { label: 'cid', value: module.cid || 'N/A' },
-                { label: 'created', value: time2str(module.time) },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className='flex items-center gap-2 rounded-lg border border-green-500/30 bg-black/60 px-3 py-1.5 backdrop-blur-sm'
-                >
-                  <span className='text-xs text-gray-400'>{item.label}:</span>
-                  <div className='flex items-center gap-1'>
-                    <span className='font-mono text-xs text-green-400'>
-                      {shorten(item.value)}
-                    </span>
-                    <CopyButton code={item.value} />
-                  </div>
-                </div>
-              ))}
+            )}
+            {module.cid && (
+              <div className='flex items-center gap-2'>
+                <span className='text-gray-400'>cid:</span>
+                <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
+                  {shorten(module.cid)}
+                </span>
+                <CopyButton code={module.cid} />
+              </div>
+            )}
+            <div className='flex items-center gap-2'>
+              <span className='text-gray-400'>created:</span>
+              <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
+                {time2str(module.time)}
+              </span>
             </div>
           </div>
 
+          {/* Description and tags */}
+          {module.desc && (
+            <p className='max-w-3xl text-gray-400'>
+              {module.desc}
+            </p>
+          )}
+          {module.tags?.length > 0 && (
+            <div className='flex flex-wrap gap-2'>
+              {module.tags.map((tag, i) => (
+                <span
+                  key={i}
+                  className='rounded-full border px-3 py-1 text-sm'
+                  style={{ 
+                    borderColor: `${moduleColor}33`,
+                    backgroundColor: `${moduleColor}0D`,
+                    color: `${moduleColor}CC`
+                  }}
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Main content card */}
+        <div className='overflow-hidden rounded-2xl border bg-black/90 shadow-xl backdrop-blur-sm'
+             style={{ 
+               borderColor: `${moduleColor}4D`,
+               boxShadow: `0 4px 20px ${moduleColor}1A`
+             }}>
           {/* Tabs */}
-          <div className='flex border-b border-green-500/30'>
+          <div className='flex border-b' style={{ borderColor: `${moduleColor}33` }}>
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as TabType)}
-                className={`flex items-center space-x-2 px-6 py-3 transition-all ${
+                className={`flex items-center space-x-2 px-8 py-4 transition-all ${
                   activeTab === id
-                    ? 'border-b-2 border-green-400 bg-green-900/20 text-green-400'
-                    : 'text-gray-400 hover:bg-green-900/10 hover:text-green-400'
+                    ? 'border-b-2'
+                    : 'hover:bg-black/10'
                 }`}
+                style={{
+                  borderColor: activeTab === id ? moduleColor : 'transparent',
+                  backgroundColor: activeTab === id ? `${moduleColor}0D` : 'transparent',
+                  color: activeTab === id ? moduleColor : `${moduleColor}80`
+                }}
               >
-                <Icon className='h-4 w-4' />
-                <span className='text-sm'>{label}</span>
+                <Icon className='h-5 w-5' />
+                <span>{label}</span>
               </button>
             ))}
           </div>
 
           {/* Content */}
-          <div className='p-4'>
-            {isRetrying ? (
-              <RetroLoader />
-            ) : (
-              <>
-                {activeTab === 'code' && (
-                  <ModuleCode
-                    files={codeMap}
-                    title=''
-                    showSearch={true}
-                    showFileTree={Object.keys(codeMap).length > 3}
-                    compactMode={false}
-                  />
-                )}
-                {activeTab === 'api' && <ModuleSchema mod={module} />}
-              </>
+          <div className='p-8'>
+            {activeTab === 'code' && (
+              <ModuleCode
+                files={codeMap}
+                title=''
+                showSearch={true}
+                showFileTree={Object.keys(codeMap).length > 3}
+                compactMode={false}
+              />
             )}
+            {activeTab === 'api' && <ModuleSchema mod={module} />}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className='flex flex-wrap items-center justify-between gap-2 sm:gap-4'>
-          <Link
-            href="/"
-            className='flex w-full items-center justify-center space-x-2 rounded-xl border border-green-500/30 bg-black/90 px-4 py-2 text-center text-sm text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'
-          >
-            <ArrowLeftIcon className='h-4 w-4' />
-            <span>Back to Modules</span>
-          </Link>
-
-          <div className='flex w-full flex-wrap justify-center gap-2 sm:w-auto sm:justify-end sm:gap-4'>
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-4 py-2 text-center text-sm text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'>
-              Documentation
-            </button>
-            <button className='w-full rounded-xl border border-green-500/30 bg-black/90 px-4 py-2 text-center text-sm text-green-400 transition-all hover:bg-green-900/20 sm:w-auto'>
-              Report Issue
-            </button>
-          </div>
+        {/* Footer Actions */}
+        <div className='flex flex-wrap items-center justify-center gap-4'>
+          {module.url && (
+            <a
+              href={module.url}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+              style={{ 
+                borderColor: `${moduleColor}4D`,
+                color: moduleColor
+              }}
+            >
+              <span>Visit App</span>
+            </a>
+          )}
+          <button className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+                  style={{ 
+                    borderColor: `${moduleColor}4D`,
+                    color: moduleColor
+                  }}>
+            <DocumentTextIcon className='h-5 w-5' />
+            <span>Documentation</span>
+          </button>
+          <button className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+                  style={{ 
+                    borderColor: `${moduleColor}4D`,
+                    color: moduleColor
+                  }}>
+            <ExclamationTriangleIcon className='h-5 w-5' />
+            <span>Report Issue</span>
+          </button>
         </div>
       </div>
     </div>

@@ -26,7 +26,6 @@ class Agent:
             STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
             TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             HISTORY={history} # THE HISTORY OF THE AGENT
-            UTC_TIME={utc_time} # THE UTC TIME OF THE REQUEST 
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY NO FLUFF BEEFORE OR AFTER
             --OUTPUT--
             YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
@@ -113,7 +112,10 @@ class Agent:
             content = self.content(src, query=query)
         else:
             print("No src provided, using empty content.", color='yellow')
+        
+        plan = []
         for step in range(steps):
+            
             print(f"STEP({step + 1}/{steps}) ", color='green')
             try:
                 prompt = self.prompt.format(
@@ -124,7 +126,6 @@ class Agent:
                     toolbelt=self.toolbelt(),
                     history=history,
                     steps=steps,
-                    utc_time= time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
                     target=target,
                     output_format=self.output_format
                 )

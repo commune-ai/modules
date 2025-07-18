@@ -6,18 +6,18 @@ import { SearchFilters } from './AdvancedSearch'
  */
 export function filterModules(modules: ModuleType[], filters: SearchFilters): ModuleType[] {
   return modules.filter(module => {
-    // Basic search term matching
+    // Basic search term matching - CASE INSENSITIVE
     if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase()
+      const searchTerm = filters.searchTerm.toLowerCase()
       const matchesSearch = 
-        module.name.toLowerCase().includes(searchLower) ||
-        (module.desc && module.desc.toLowerCase().includes(searchLower)) ||
-        (module.tags && module.tags.some(tag => tag.toLowerCase().includes(searchLower)))
+        module.name.toLowerCase().includes(searchTerm) ||
+        (module.desc && module.desc.toLowerCase().includes(searchTerm)) ||
+        (module.tags && module.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
       
       if (!matchesSearch) return false
     }
 
-    // Tag filtering
+    // Tag filtering - CASE INSENSITIVE
     if (module.tags) {
       const moduleTags = module.tags.map(tag => tag.toLowerCase())
       
@@ -41,7 +41,7 @@ export function filterModules(modules: ModuleType[], filters: SearchFilters): Mo
       if (filters.includeTags.length > 0) return false
     }
 
-    // Term filtering in name and description
+    // Term filtering in name and description - CASE INSENSITIVE
     const moduleText = `${module.name} ${module.desc || ''}`.toLowerCase()
     
     // Include terms - module must contain ALL specified terms
@@ -73,7 +73,7 @@ export function extractAllTags(modules: ModuleType[]): string[] {
   modules.forEach(module => {
     if (module.tags) {
       module.tags.forEach(tag => {
-        tagSet.add(tag.toLowerCase())
+        tagSet.add(tag) // Keep original case
       })
     }
   })
@@ -90,8 +90,7 @@ export function getTagFrequency(modules: ModuleType[]): Map<string, number> {
   modules.forEach(module => {
     if (module.tags) {
       module.tags.forEach(tag => {
-        const lowerTag = tag.toLowerCase()
-        tagFrequency.set(lowerTag, (tagFrequency.get(lowerTag) || 0) + 1)
+        tagFrequency.set(tag, (tagFrequency.get(tag) || 0) + 1)
       })
     }
   })

@@ -1,5 +1,5 @@
 'use client'
-import { useState, FormEvent } from 'react'
+import { useState, FormEvent, useEffect } from 'react'
 import { X, Shield } from 'lucide-react'
 
 interface MobileLoginModalProps {
@@ -9,9 +9,29 @@ interface MobileLoginModalProps {
   defaultPassword: string
 }
 
+// Function to generate a random password
+const generateRandomPassword = (length: number = 12): string => {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length))
+  }
+  return password
+}
+
 export const MobileLoginModal = ({ isOpen, onClose, onLogin, defaultPassword }: MobileLoginModalProps) => {
-  const [password, setPassword] = useState(defaultPassword)
+  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    // If no default password is provided, generate a random one
+    if (!defaultPassword || defaultPassword === '') {
+      const randomPassword = generateRandomPassword(12)
+      setPassword(randomPassword)
+    } else {
+      setPassword(defaultPassword)
+    }
+  }, [defaultPassword])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -58,6 +78,11 @@ export const MobileLoginModal = ({ isOpen, onClose, onLogin, defaultPassword }: 
                 className="w-full px-4 py-3 bg-black/60 border border-green-500/30 rounded text-green-400 font-mono focus:outline-none focus:border-green-400 transition-colors"
                 autoFocus
               />
+              {(!defaultPassword || defaultPassword === '') && (
+                <p className="mt-2 text-xs text-green-400/40 font-mono">
+                  auto-generated password: {password}
+                </p>
+              )}
             </div>
             
             <button

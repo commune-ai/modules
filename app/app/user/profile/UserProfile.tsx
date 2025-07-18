@@ -1,9 +1,8 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
-import { User } from '@/app/types/user'
-import { Key } from '@/app/user/key/key'
-import { CopyButton } from '@/app/components/CopyButton'
-import { X, Shield, Key as KeyIcon, FileSignature, CheckCircle, XCircle, LogOut, ShieldCheck, ChevronDown, GripVertical } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Copy, LogOut, Key as KeyIcon, Shield, Globe, FileSignature, CheckCircle, History, Package } from 'lucide-react'
+import { Key } from '@/app/user/key'
+import type { User } from '@/app/types/user'
 
 interface UserProfileProps {
   user: User
@@ -13,49 +12,80 @@ interface UserProfileProps {
   onLogout: () => void
 }
 
-function shortenAddress(address: string) {
-  if (!address || address.length <= 12) return address
-  return `${address.slice(0, 8)}...${address.slice(-4)}`
-}
-type ProfileFunction = 'wallet_info' | 'sign_message' | 'verify_signature'
-
 export const UserProfile = ({ user, isOpen, onClose, keyInstance, onLogout }: UserProfileProps) => {
-  const [selectedFunction, setSelectedFunction] = useState<ProfileFunction>('wallet_info')
-  const [message, setMessage] = useState('')
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [activeTab, setActiveTab] = useState<'profile' | 'sign' | 'transactions' | 'modules'>('profile')
+  const [signMessage, setSignMessage] = useState('')
   const [signature, setSignature] = useState('')
-  const [signResult, setSignResult] = useState<{ signature: string; success: boolean } | null>(null)
   const [verifyMessage, setVerifyMessage] = useState('')
   const [verifySignature, setVerifySignature] = useState('')
-  const [verifyPublicKey, setVerifyPublicKey] = useState(keyInstance.public_key)
-  const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [panelWidth, setPanelWidth] = useState(384) // Default width (w-96 = 24rem = 384px)
+  const [verifyPublicKey, setVerifyPublicKey] = useState('')
+  const [verifyResult, setVerifyResult] = useState<boolean | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [userModules, setUserModules] = useState<any[]>([])
   const [isDragging, setIsDragging] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const dragHandleRef = useRef<HTMLDivElement>(null)
+  const [dragStartX, setDragStartX] = useState(0)
+  const [panelWidth, setPanelWidth] = useState(384) // w-96 = 24rem = 384px
+  const MIN_WIDTH = 320
+  const MAX_WIDTH = 600
 
-  const functions: { value: ProfileFunction; label: string; icon: React.ReactNode }[] = [
-    { value: 'wallet_info', label: 'WALLET INFO', icon: <KeyIcon size={16} /> },
-    { value: 'sign_message', label: 'SIGN MESSAGE', icon: <FileSignature size={16} /> },
-    { value: 'verify_signature', label: 'VERIFY SIGNATURE', icon: <ShieldCheck size={16} /> },
-  ]
+  useEffect(() => {
+    if (isOpen) {
+      setIsAnimating(true)
+    }
+  }, [isOpen])
 
-  // Handle drag to resize
+  const handleClose = () => {
+    setIsAnimating(false)
+    setTimeout(onClose, 200)
+  }
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  const handleSign = async () => {
+    if (!signMessage || !keyInstance) return
+    try {
+      const sig = await keyInstance.sign(signMessage)
+      setSignature(sig)
+    } catch (error) {
+      console.error('Error signing message:', error)
+    }
+  }
+
+  const handleVerify = async () => {
+    if (!verifyMessage || !verifySignature || !verifyPublicKey || !keyInstance) return
+    try {
+      const result = await keyInstance.verify(verifyMessage, verifySignature, verifyPublicKey)
+      setVerifyResult(result)
+    } catch (error) {
+      console.error('Error verifying signature:', error)
+      setVerifyResult(false)
+    }
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    setDragStartX(e.clientX)
+    e.preventDefault()
+  }
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return
       
-      const newWidth = window.innerWidth - e.clientX
-      const minWidth = 320 // Minimum width
-      const maxWidth = 800 // Maximum width
-      
-      setPanelWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)))
+      const deltaX = dragStartX - e.clientX
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, panelWidth + deltaX))
+      setPanelWidth(newWidth)
+      setDragStartX(e.clientX)
     }
 
     const handleMouseUp = () => {
       setIsDragging(false)
-      document.body.style.cursor = 'default'
-      document.body.style.userSelect = 'auto'
     }
 
     if (isDragging) {
@@ -68,338 +98,316 @@ export const UserProfile = ({ user, isOpen, onClose, keyInstance, onLogout }: Us
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'auto'
+      document.body.style.userSelect = 'auto'
     }
-  }, [isDragging])
+  }, [isDragging, dragStartX, panelWidth])
 
-  const handleSign = async () => {
-    if (!message || !keyInstance) return
-    
-    try {
-      const sig = await keyInstance.sign(message)
-      setSignature(sig)
-      setSignResult({ signature: sig, success: true })
-      // Auto-fill verify fields for convenience
-      setVerifyMessage(message)
-      setVerifySignature(sig)
-      setVerifyPublicKey(keyInstance.public_key)
-    } catch (error) {
-      console.error('Failed to sign message:', error)
-      setSignResult({ signature: '', success: false })
-    }
-  }
+  if (!isOpen && !isAnimating) return null
 
-  const handleVerify = async () => {
-    if (!verifyMessage || !verifySignature || !verifyPublicKey) return
-    
-    try {
-      const isValid = await keyInstance.verify(verifyMessage, verifySignature, verifyPublicKey)
-      setVerifyResult({
-        success: isValid,
-        message: isValid ? 'SIGNATURE VALID' : 'SIGNATURE INVALID'
-      })
-    } catch (error) {
-      console.error('Failed to verify signature:', error)
-      setVerifyResult({
-        success: false,
-        message: 'ERROR: ' + (error as Error).message
-      })
-    }
-  }
-
-  const renderFunctionContent = () => {
-    switch (selectedFunction) {
-      case 'wallet_info':
-        return (
-          <div className="space-y-4">
-            {/* ADDRESS */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">ADDRESS</div>
-              </div>
-              <div className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-green-400 text-sm font-mono">
-                    {shortenAddress(keyInstance.address)}
-                  </span>
-                  <CopyButton code={keyInstance.address} />
-                </div>
-              </div>
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-200 ${
+          isAnimating ? 'opacity-100' : 'opacity-0'
+        }`}
+        onClick={handleClose}
+      />
+      
+      {/* Sidebar - Changed to right side */}
+      <div className={`fixed top-24 right-0 h-[calc(100vh-6rem)] bg-black border-l border-green-500 z-50 transform transition-all duration-200 ${
+        isAnimating ? 'translate-x-0' : 'translate-x-full'
+      }`}
+      style={{ width: `${panelWidth}px` }}>
+        {/* Drag Handle - Left side for right panel */}
+        <div
+          className="absolute top-0 left-0 w-1 h-full cursor-ew-resize hover:bg-green-500/50 transition-colors"
+          onMouseDown={handleMouseDown}
+        />
+        
+        <div className="p-6 border-b border-green-500">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <code className="text-green-500 text-xs font-mono">
+                {user.address.slice(0, 12)}...{user.address.slice(-8)}
+              </code>
+              <button
+                onClick={() => copyToClipboard(user.address, 'header-address')}
+                className="text-green-500 hover:text-green-400 transition-colors"
+                title="Copy address"
+              >
+                {copiedField === 'header-address' ? '✓' : <Copy size={16} />}
+              </button>
             </div>
-            
-            {/* CRYPTO TYPE */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">CRYPTO TYPE</div>
-              </div>
-              <div className="p-3">
-                <span className="text-green-400 text-sm font-mono">{keyInstance.crypto_type.toUpperCase()}</span>
-              </div>
-            </div>
-            
-            {/* PUBLIC KEY */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">PUBLIC KEY</div>
-              </div>
-              <div className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-green-400 text-xs font-mono break-all flex-1">
-                    {keyInstance.public_key}
-                  </span>
-                  <div className="flex-shrink-0">
-                    <CopyButton code={keyInstance.public_key} />
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onLogout}
+                className="text-green-500 hover:text-green-400 transition-colors"
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
+              <button
+                onClick={handleClose}
+                className="text-green-500 hover:text-green-400 transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
           </div>
-        )
+        </div>
 
-      case 'sign_message':
-        return (
-          <div className="space-y-4">
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">MESSAGE TO SIGN</div>
+        {/* Tabs */}
+        <div className="flex border-b border-green-500/30">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex-1 px-4 py-2 text-sm font-mono uppercase transition-colors ${
+              activeTab === 'profile' ? 'bg-green-500/10 text-green-400 border-b-2 border-green-500' : 'text-green-600 hover:text-green-400'
+            }`}
+          >
+            Profile
+          </button>
+          <button
+            onClick={() => setActiveTab('sign')}
+            className={`flex-1 px-4 py-2 text-sm font-mono uppercase transition-colors ${
+              activeTab === 'sign' ? 'bg-green-500/10 text-green-400 border-b-2 border-green-500' : 'text-green-600 hover:text-green-400'
+            }`}
+          >
+            Sign/Verify
+          </button>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            className={`flex-1 px-4 py-2 text-sm font-mono uppercase transition-colors ${
+              activeTab === 'transactions' ? 'bg-green-500/10 text-green-400 border-b-2 border-green-500' : 'text-green-600 hover:text-green-400'
+            }`}
+          >
+            History
+          </button>
+          <button
+            onClick={() => setActiveTab('modules')}
+            className={`flex-1 px-4 py-2 text-sm font-mono uppercase transition-colors ${
+              activeTab === 'modules' ? 'bg-green-500/10 text-green-400 border-b-2 border-green-500' : 'text-green-600 hover:text-green-400'
+            }`}
+          >
+            Modules
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6 overflow-y-auto h-[calc(100%-8rem)]">
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <>
+              {/* Full Address Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase">
+                  <Globe size={16} />
+                  <span>FULL ADDRESS</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-green-500 font-mono text-sm break-all bg-black/50 p-3 border border-green-500/30 rounded">
+                    {user.address}
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard(user.address, 'address')}
+                    className="p-2 border border-green-500/30 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded"
+                    title="Copy address"
+                  >
+                    {copiedField === 'address' ? '✓' : <Copy size={16} />}
+                  </button>
+                </div>
               </div>
-              <div className="p-3">
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="ENTER MESSAGE..."
-                  className="w-full p-2 bg-black border border-green-500/30 text-green-400 text-sm placeholder-green-600/50 focus:outline-none focus:border-green-400 resize-none h-20 font-mono"
-                />
+
+              {/* Crypto Type Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase">
+                  <Shield size={16} />
+                  <span>CRYPTO TYPE</span>
+                </div>
+                <div className="text-green-500 font-mono bg-black/50 p-3 border border-green-500/30 rounded">
+                  {user.crypto_type || 'sr25519'}
+                </div>
               </div>
-            </div>
-            
-            <button
-              onClick={handleSign}
-              disabled={!message}
-              className="w-full px-4 py-3 bg-black text-green-400 border border-green-500 hover:bg-green-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase font-mono text-sm tracking-wider"
-            >
-              [SIGN MESSAGE]
-            </button>
-            
-            {signResult && (
-              <div className="border border-green-500 bg-black">
-                <div className={`border-b border-green-500 px-3 py-2 ${signResult.success ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+
+              {/* Public Key Section */}
+              {keyInstance && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase">
+                    <KeyIcon size={16} />
+                    <span>PUBLIC KEY</span>
+                  </div>
                   <div className="flex items-center gap-2">
-                    {signResult.success ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}
-                    <span className={`text-xs font-mono uppercase tracking-wider ${signResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                      {signResult.success ? 'SIGNED SUCCESSFULLY' : 'SIGNING FAILED'}
-                    </span>
+                    <code className="flex-1 text-green-500 font-mono text-xs break-all bg-black/50 p-3 border border-green-500/30 rounded">
+                      {keyInstance.public_key}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(keyInstance.public_key, 'publicKey')}
+                      className="p-2 border border-green-500/30 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded"
+                      title="Copy public key"
+                    >
+                      {copiedField === 'publicKey' ? '✓' : <Copy size={16} />}
+                    </button>
                   </div>
                 </div>
-                {signResult.success && (
-                  <div className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-green-300 text-xs font-mono break-all flex-1">
+              )}
+            </>
+          )}
+
+          {/* Sign/Verify Tab */}
+          {activeTab === 'sign' && (
+            <div className="space-y-6">
+              {/* Sign Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase">
+                  <FileSignature size={16} />
+                  <span>SIGN MESSAGE</span>
+                </div>
+                <textarea
+                  value={signMessage}
+                  onChange={(e) => setSignMessage(e.target.value)}
+                  placeholder="Enter message to sign..."
+                  className="w-full h-24 bg-black/50 border border-green-500/30 rounded p-3 text-green-400 font-mono text-sm placeholder-green-600/50 focus:outline-none focus:border-green-500"
+                />
+                <button
+                  onClick={handleSign}
+                  disabled={!signMessage}
+                  className="w-full py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded font-mono uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Sign Message
+                </button>
+                {signature && (
+                  <div className="space-y-2">
+                    <div className="text-green-500/70 text-sm font-mono uppercase">Signature:</div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-green-500 font-mono text-xs break-all bg-black/50 p-3 border border-green-500/30 rounded">
                         {signature}
-                      </span>
-                      <div className="flex-shrink-0">
-                        <CopyButton code={signature} />
-                      </div>
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(signature, 'signature')}
+                        className="p-2 border border-green-500/30 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded"
+                        title="Copy signature"
+                      >
+                        {copiedField === 'signature' ? '✓' : <Copy size={16} />}
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        )
 
-      case 'verify_signature':
-        return (
-          <div className="space-y-4">
-            {/* MESSAGE */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">MESSAGE</div>
-              </div>
-              <div className="p-3">
+              {/* Verify Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase">
+                  <CheckCircle size={16} />
+                  <span>VERIFY SIGNATURE</span>
+                </div>
                 <textarea
                   value={verifyMessage}
                   onChange={(e) => setVerifyMessage(e.target.value)}
-                  placeholder="ENTER MESSAGE TO VERIFY..."
-                  className="w-full p-2 bg-black border border-green-500/30 text-green-400 text-sm placeholder-green-600/50 focus:outline-none focus:border-green-400 resize-none h-16 font-mono"
+                  placeholder="Enter message to verify..."
+                  className="w-full h-20 bg-black/50 border border-green-500/30 rounded p-3 text-green-400 font-mono text-sm placeholder-green-600/50 focus:outline-none focus:border-green-500"
                 />
-              </div>
-            </div>
-            
-            {/* SIGNATURE */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">SIGNATURE</div>
-              </div>
-              <div className="p-3">
-                <textarea
+                <input
+                  type="text"
                   value={verifySignature}
                   onChange={(e) => setVerifySignature(e.target.value)}
-                  placeholder="ENTER SIGNATURE..."
-                  className="w-full p-2 bg-black border border-green-500/30 text-green-400 text-sm placeholder-green-600/50 focus:outline-none focus:border-green-400 resize-none h-16 font-mono break-all"
+                  placeholder="Enter signature..."
+                  className="w-full bg-black/50 border border-green-500/30 rounded p-3 text-green-400 font-mono text-sm placeholder-green-600/50 focus:outline-none focus:border-green-500"
                 />
-              </div>
-            </div>
-            
-            {/* PUBLIC KEY */}
-            <div className="border border-green-500 bg-black">
-              <div className="border-b border-green-500 px-3 py-2 bg-green-500/10">
-                <div className="text-green-400 text-xs font-mono uppercase tracking-wider">PUBLIC KEY</div>
-              </div>
-              <div className="p-3">
                 <input
                   type="text"
                   value={verifyPublicKey}
                   onChange={(e) => setVerifyPublicKey(e.target.value)}
-                  placeholder="ENTER PUBLIC KEY..."
-                  className="w-full p-2 bg-black border border-green-500/30 text-green-400 text-sm placeholder-green-600/50 focus:outline-none focus:border-green-400 font-mono"
+                  placeholder="Enter public key (leave empty to use your own)..."
+                  className="w-full bg-black/50 border border-green-500/30 rounded p-3 text-green-400 font-mono text-sm placeholder-green-600/50 focus:outline-none focus:border-green-500"
                 />
+                <button
+                  onClick={handleVerify}
+                  disabled={!verifyMessage || !verifySignature}
+                  className="w-full py-2 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded font-mono uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Verify Signature
+                </button>
+                {verifyResult !== null && (
+                  <div className={`text-center p-3 border rounded font-mono ${
+                    verifyResult 
+                      ? 'border-green-500 bg-green-500/10 text-green-400' 
+                      : 'border-red-500 bg-red-500/10 text-red-400'
+                  }`}>
+                    {verifyResult ? 'SIGNATURE VALID ✓' : 'SIGNATURE INVALID ✗'}
+                  </div>
+                )}
               </div>
             </div>
-            
-            <button
-              onClick={handleVerify}
-              disabled={!verifyMessage || !verifySignature || !verifyPublicKey}
-              className="w-full px-4 py-3 bg-black text-green-400 border border-green-500 hover:bg-green-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase font-mono text-sm tracking-wider"
-            >
-              [VERIFY SIGNATURE]
-            </button>
-            
-            {verifyResult && (
-              <div className="border border-green-500 bg-black">
-                <div className={`border-b border-green-500 px-3 py-2 ${verifyResult.success ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                  <div className="flex items-center gap-2">
-                    {verifyResult.success ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}
-                    <span className={`text-xs font-mono uppercase tracking-wider ${verifyResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                      {verifyResult.message}
-                    </span>
-                  </div>
-                </div>
+          )}
+
+          {/* Transactions Tab */}
+          {activeTab === 'transactions' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase mb-4">
+                <History size={16} />
+                <span>TRANSACTION HISTORY</span>
               </div>
-            )}
-          </div>
-        )
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-green-600/50 font-mono">
+                  No transactions found
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx, index) => (
+                    <div key={index} className="p-3 border border-green-500/30 rounded bg-black/50">
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-500 font-mono text-sm">{tx.type}</span>
+                        <span className="text-green-600/70 font-mono text-xs">{tx.timestamp}</span>
+                      </div>
+                      <div className="text-green-600/50 font-mono text-xs mt-1">
+                        {tx.hash}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-      default:
-        return null
-    }
-  }
-
-  return (
-    <>
-      {/* Backdrop overlay when panel is open */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 transition-opacity duration-300"
-          onClick={onClose}
-        />
-      )}
-      
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        className={`fixed top-[60px] right-0 h-[calc(100vh-60px)] bg-black border-l border-green-500 transform transition-transform duration-300 ease-out z-40 shadow-2xl shadow-green-500/20 ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        style={{ width: `${panelWidth}px` }}
-      >
-        {/* Drag Handle */}
-        <div
-          ref={dragHandleRef}
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-green-500/50 transition-colors group"
-          onMouseDown={() => setIsDragging(true)}
-        >
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical size={16} className="text-green-400" />
-          </div>
+          {/* Modules Tab */}
+          {activeTab === 'modules' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-green-500/70 text-sm font-mono uppercase mb-4">
+                <Package size={16} />
+                <span>MY MODULES</span>
+              </div>
+              {userModules.length === 0 ? (
+                <div className="text-center py-8 text-green-600/50 font-mono">
+                  No modules created yet
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {userModules.map((module, index) => (
+                    <div key={index} className="p-3 border border-green-500/30 rounded bg-black/50 hover:border-green-500 transition-colors cursor-pointer">
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-500 font-mono text-sm font-bold">{module.name}</span>
+                        <span className="text-green-600/70 font-mono text-xs">{module.version}</span>
+                      </div>
+                      {module.description && (
+                        <div className="text-green-600/70 font-mono text-xs mt-1">
+                          {module.description}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
-        <div className="p-6 font-mono h-full flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6 border-b border-green-500 pb-4">
-            <div className="flex items-center gap-3 flex-1 mr-2">
-              <div className="group relative">
-                <Shield size={20} className="text-green-400 flex-shrink-0 cursor-pointer hover:text-green-300 transition-colors" />
-                <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-green-400 text-sm font-mono truncate uppercase tracking-wider">
-                  KEY: {keyInstance.address.slice(0, 6)}...{keyInstance.address.slice(-6)}
-                </span>
-                <CopyButton code={keyInstance.public_key} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Close Button */}
-              <button
-                onClick={onClose}
-                className="p-2 border border-green-500 text-green-400 hover:bg-green-500 hover:text-black transition-colors"
-                title="Close"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        {/* Visual Resize Indicator */}
+        {isDragging && (
+          <div className="absolute top-0 left-0 h-full w-full pointer-events-none">
+            <div className="absolute left-0 top-0 h-full w-1 bg-green-500 animate-pulse" />
           </div>
-
-          {/* Function Selector - IBM Terminal Style */}
-          <div className="mb-6 relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-black text-green-400 border border-green-500 hover:bg-green-500/10 focus:outline-none font-mono uppercase transition-colors tracking-wider"
-            >
-              <div className="flex items-center gap-2">
-                {functions.find(f => f.value === selectedFunction)?.icon}
-                <span className="text-sm">{functions.find(f => f.value === selectedFunction)?.label}</span>
-              </div>
-              <ChevronDown 
-                className={`transform transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} 
-                size={16} 
-              />
-            </button>
-            
-            {/* Custom Dropdown Menu */}
-            {dropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-0 bg-black border border-green-500 border-t-0 z-10">
-                {functions.map((fn) => (
-                  <button
-                    key={fn.value}
-                    onClick={() => {
-                      setSelectedFunction(fn.value)
-                      setDropdownOpen(false)
-                    }}
-                    className={`w-full flex items-center gap-2 px-4 py-3 text-left font-mono uppercase transition-colors tracking-wider text-sm ${
-                      selectedFunction === fn.value
-                        ? 'bg-green-500 text-black'
-                        : 'text-green-400 hover:bg-green-500/20'
-                    }`}
-                  >
-                    {fn.icon}
-                    <span>{fn.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Function Content */}
-          <div className="flex-1 overflow-y-auto">
-            {renderFunctionContent()}
-          </div>
-
-          {/* Logout Button */}
-          <div className="mt-6 pt-4 border-t border-green-500">
-            <button
-              onClick={onLogout}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-red-400 border border-red-500 hover:bg-red-500 hover:text-white transition-all uppercase font-mono text-sm font-bold tracking-wider"
-              title="Logout from wallet"
-            >
-              <LogOut size={16} />
-              <span>LOGOUT FROM WALLET</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </>
   )
 }
-
-export default UserProfile

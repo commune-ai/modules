@@ -24,8 +24,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} h-full relative bg-black`}>
         <Header />
-        <main className="pt-16">
-          {children}
+        <main className="pt-28">
+          <div className="min-h-screen">
+            {children}
+          </div>
         </main>
       </body>
     </html>
