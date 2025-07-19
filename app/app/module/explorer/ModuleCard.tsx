@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, memo, useCallback } from 'react'
+import { useState, memo, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ModuleType } from '../../types/module'
 import { CopyButton } from '@/app/components/CopyButton'
@@ -42,6 +42,69 @@ const getModuleColor = (name: string): string => {
   return colors[Math.abs(hash) % colors.length]
 }
 
+// Generate cyberpunk pattern based on key
+const generateCyberpunkPattern = (key: string, color: string): string => {
+  if (!key) return ''
+  
+  // Create a deterministic pattern based on the key
+  const canvas = `<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <rect width="40" height="40" fill="black"/>
+        <rect width="1" height="40" fill="${color}20" x="20"/>
+        <rect width="40" height="1" fill="${color}20" y="20"/>
+      </pattern>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+    <rect width="400" height="400" fill="url(#grid)"/>`
+  
+  // Generate circuit-like patterns based on key hash
+  let paths = ''
+  let hash = 0
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  // Create random but deterministic circuit paths
+  const rand = (seed: number) => {
+    const x = Math.sin(seed) * 10000
+    return x - Math.floor(x)
+  }
+  
+  for (let i = 0; i < 8; i++) {
+    const x1 = Math.floor(rand(hash + i) * 400)
+    const y1 = Math.floor(rand(hash + i + 1) * 400)
+    const x2 = Math.floor(rand(hash + i + 2) * 400)
+    const y2 = Math.floor(rand(hash + i + 3) * 400)
+    
+    paths += `<path d="M${x1},${y1} L${x2},${y2}" stroke="${color}" stroke-width="2" opacity="0.6" filter="url(#glow)"/>`
+    
+    // Add nodes
+    if (i % 2 === 0) {
+      paths += `<circle cx="${x1}" cy="${y1}" r="4" fill="${color}" filter="url(#glow)"/>`
+      paths += `<circle cx="${x2}" cy="${y2}" r="4" fill="${color}" filter="url(#glow)"/>`
+    }
+  }
+  
+  // Add some data blocks
+  for (let i = 0; i < 5; i++) {
+    const x = Math.floor(rand(hash + i + 10) * 350) + 25
+    const y = Math.floor(rand(hash + i + 11) * 350) + 25
+    const size = 20 + Math.floor(rand(hash + i + 12) * 30)
+    
+    paths += `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${color}15" stroke="${color}" stroke-width="1" filter="url(#glow)"/>`
+  }
+  
+  const svg = canvas + paths + '</svg>'
+  return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
 interface ModuleCardProps {
   module: ModuleType
   viewMode?: 'grid' | 'list'
@@ -52,6 +115,11 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
   const [isHovered, setIsHovered] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const moduleColor = getModuleColor(module.name)
+  
+  // Generate cyberpunk pattern
+  const cyberpunkPattern = useMemo(() => {
+    return generateCyberpunkPattern(module.key, moduleColor)
+  }, [module.key, moduleColor])
   
   const handleCardClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -130,12 +198,22 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
         </div>
       )}
       
-      {/* Header section with module name in top right */}
-      <div className='flex justify-between items-start mb-4'>
-        <div className='text-sm font-mono opacity-70' style={{ color: moduleColor }}>
-          module://
-        </div>
-        <div className='text-right'>
+      {/* Cyberpunk background pattern */}
+      {cyberpunkPattern && (
+        <div 
+          className='absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-300'
+          style={{
+            backgroundImage: `url(${cyberpunkPattern})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(0.5px)'
+          }}
+        />
+      )}
+      
+      {/* Header section with module name in top left and key in top right */}
+      <div className='flex justify-between items-start mb-4 relative z-10'>
+        <div className='flex flex-col'>
           <h3 className='font-bold text-3xl tracking-wider lowercase transition-all duration-300' 
               style={{ 
                 color: moduleColor,
@@ -148,15 +226,20 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
             [{module.network || 'commune'}]
           </div>
         </div>
+        <div className='text-right'>
+          <div className='flex items-center gap-2'>
+            <code className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
+              {shorten(module.key, 8)}
+            </code>
+            <div onClick={(e) => e.stopPropagation()}>
+              <CopyButton code={module.key} />
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Main content section */}
-      <div className='flex-1 flex flex-col justify-center items-center text-center mb-6 px-4'>
-        {/* Time indicator */}
-        <div className='text-sm font-mono mb-4' style={{ color: `${moduleColor}CC` }}>
-          {time2str(module.time)}
-        </div>
-        
+      <div className='flex-1 flex flex-col justify-center items-center text-center mb-6 px-4 relative z-10'>
         {/* Description */}
         {module.desc && (
           <p className='text-sm leading-relaxed max-w-full line-clamp-4' 
@@ -168,7 +251,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
 
       {/* Tags section */}
       {module.tags && module.tags.length > 0 && (
-        <div className='flex flex-wrap justify-center gap-2 mb-4'>
+        <div className='flex flex-wrap justify-center gap-2 mb-4 relative z-10'>
           {module.tags.slice(0, 4).map((tag, i) => (
             <span
               key={i}
@@ -189,54 +272,29 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
         </div>
       )}
 
-      {/* Bottom section with key info */}
-      <div className='mt-auto space-y-3'>
+      {/* Bottom section with CID and last update */}
+      <div className='mt-auto space-y-3 relative z-10'>
         {/* Divider */}
         <div className='w-full h-px' style={{ background: `linear-gradient(to right, transparent, ${moduleColor}40, transparent)` }} />
         
-        {/* Key and CID info */}
-        <div className='grid grid-cols-2 gap-3'>
-          {/* KEY box */}
-          <div className='border rounded-lg p-3 transition-all duration-200 hover:scale-105' 
-               style={{ 
-                 borderColor: `${moduleColor}40`, 
-                 backgroundColor: `${moduleColor}08`,
-                 boxShadow: isHovered ? `0 0 15px ${moduleColor}30` : 'none'
-               }}>
-            <div className='flex flex-col'>
-              <span className='text-xs lowercase font-bold mb-1' style={{ color: `${moduleColor}80` }}>key</span>
-              <div className='flex items-center justify-between'>
+        {/* CID and Last Update info */}
+        <div className='flex justify-between items-center px-2'>
+          <div className='flex items-center gap-2'>
+            {module.cid && (
+              <>
+                <span className='text-xs lowercase font-bold' style={{ color: `${moduleColor}60` }}>cid:</span>
                 <code className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
-                  {shorten(module.key, 8)}
+                  {shorten(module.cid, 8)}
                 </code>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <CopyButton code={module.key} />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
-          
-          {/* CID box */}
-          {module.cid && (
-            <div className='border rounded-lg p-3 transition-all duration-200 hover:scale-105' 
-                 style={{ 
-                   borderColor: `${moduleColor}40`, 
-                   backgroundColor: `${moduleColor}08`,
-                   boxShadow: isHovered ? `0 0 15px ${moduleColor}30` : 'none'
-                 }}>
-              <div className='flex flex-col'>
-                <span className='text-xs lowercase font-bold mb-1' style={{ color: `${moduleColor}80` }}>cid</span>
-                <div className='flex items-center justify-between'>
-                  <code className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
-                    {shorten(module.cid, 8)}
-                  </code>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <CopyButton code={module.cid} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className='flex items-center gap-2'>
+            <span className='text-xs lowercase font-bold' style={{ color: `${moduleColor}60` }}>updated:</span>
+            <span className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
+              {time2str(module.time)}
+            </span>
+          </div>
         </div>
 
         {/* Action button */}
