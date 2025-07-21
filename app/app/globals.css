@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,16 +7,18 @@
 :root {
   scroll-behavior: smooth;
   background-color: black;
+  --retro-font: 'VT323', 'Courier New', monospace;
 }
 
 body {
   background-color: black;
-  color: #00ff00; /* IBM green terminal color */
-  font-family: 'Courier New', monospace;
+  color: #00ff00;
+  font-family: var(--retro-font);
 }
 
-/* IBM Terminal Style */
+/* Override all font families to use retro font */
 * {
+  font-family: var(--retro-font) !important;
   box-sizing: border-box;
 }
 
@@ -96,4 +100,10 @@ a, button {
       rgba(0, 255, 0, 0.03) 2px,
       rgba(0, 255, 0, 0.03) 4px
     );
+}
+
+/* Force retro font everywhere */
+h1, h2, h3, h4, h5, h6, p, span, div, button, input, textarea, select, pre, code {
+  font-family: var(--retro-font) !important;
+  letter-spacing: 0.05em;
 }

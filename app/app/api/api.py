@@ -46,9 +46,9 @@ class Api:
                     page=1, 
                     update=False, 
                     modules:Optional[list]=None,
-                     page_size=10, 
+                     page_size=20, 
                     timeout=200, 
-                    code=False,
+                    code=True,
                     df = False,
                     names = False,
                     threads=8,
@@ -68,7 +68,7 @@ class Api:
             executor = self.executor(max_workers=threads, mode=mode)
             futures = []
             for module in modules:
-                future = executor.submit(self.module, module, max_age=max_age, update=update)
+                future = executor.submit(self.module, module, max_age=max_age, update=update, code=code)
                 futures.append(future)
             for future in c.as_completed(futures):
                 result = future.result()
@@ -93,22 +93,22 @@ class Api:
             results = [m['name'] for m in results]
         return results
 
-    def module(self, module:str, max_age=None, update=False, **kwargs):
+    def module(self, module:str, max_age=None, update=False, code=False, **kwargs):
 
         try:
             path = self.store.get_path(f'modules/{module}.json')
             info = c.get(path, None,  max_age=max_age, update=update)
             if info == None:
                 info = c.info(module, max_age=max_age, update=update)
-                c.put(path, info)
                 module_path = self.module_path(module)
                 info = load_json(module_path)["data"]
                 info['code'] = c.code_map(info['name'])
-                c.put(path, info)
             
         except Exception as e:
 
             print(f"Error loading module {module}: {e}")
+        if not code:
+            info.pop('code', None)
         return info
 
     def check_module_data(self, module) -> bool:

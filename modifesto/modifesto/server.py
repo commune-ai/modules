@@ -23,22 +23,4 @@ class Base:
         Returns:
             Result of the called method
         """
-        cmd = """
-        curl -X POST \
-		https://llm.chutes.ai/v1/chat/completions \
-		-H "Authorization: Bearer $CHUTES_API_TOKEN" \
-	-H "Content-Type: application/json" \
-	-d '  {
-    "model": "deepseek-ai/DeepSeek-R1",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Tell me a 250 word story."
-      }
-    ],
-    "stream": true,
-    "max_tokens": 1024,
-    "temperature": 0.7
-  }'
-        """
-        return c.cmd(cmd)
+        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)

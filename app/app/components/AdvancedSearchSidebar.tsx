@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { X, Plus, Search, Filter, Tag, Hash, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Search, Filter, Tag, Hash, ChevronRight, ChevronLeft } from 'lucide-react'
 import { debounce } from 'lodash'
 
 export interface SearchFilters {
@@ -12,26 +12,26 @@ export interface SearchFilters {
   excludeTerms: string[]
 }
 
-interface AdvancedSearchProps {
+interface AdvancedSearchSidebarProps {
+  isOpen: boolean
+  onClose: () => void
   onSearch: (filters: SearchFilters) => void
   availableTags?: string[]
-  isExpanded: boolean
-  onToggleExpanded: () => void
   // Pagination props
   currentPage?: number
   totalPages?: number
   onPageChange?: (page: number) => void
 }
 
-export const AdvancedSearch = ({ 
+export const AdvancedSearchSidebar = ({ 
+  isOpen, 
+  onClose,
   onSearch, 
-  availableTags = [], 
-  isExpanded,
-  onToggleExpanded,
+  availableTags = [],
   currentPage = 1,
   totalPages = 1,
   onPageChange
-}: AdvancedSearchProps) => {
+}: AdvancedSearchSidebarProps) => {
   const [filters, setFilters] = useState<SearchFilters>({
     searchTerm: '',
     includeTags: [],
@@ -44,18 +44,10 @@ export const AdvancedSearch = ({
   const [termInput, setTermInput] = useState('')
   const [activeFilter, setActiveFilter] = useState<'includeTags' | 'excludeTags' | 'includeTerms' | 'excludeTerms' | null>(null)
 
-  // Debounced search
-  const debouncedSearch = useCallback(
-    debounce((searchFilters: SearchFilters) => {
-      onSearch(searchFilters)
-    }, 300),
-    [onSearch]
-  )
-
-  // Update search when filters change
-  useEffect(() => {
-    debouncedSearch(filters)
-  }, [filters, debouncedSearch])
+  // Handle search submission
+  const handleSearchSubmit = () => {
+    onSearch(filters)
+  }
 
   const handleSearchTermChange = (value: string) => {
     setFilters(prev => ({ ...prev, searchTerm: value }))
@@ -101,57 +93,115 @@ export const AdvancedSearch = ({
     setTermInput('')
   }
 
-  const hasActiveFilters = filters.includeTags.length > 0 || 
+  const hasActiveFilters = filters.searchTerm || 
+                          filters.includeTags.length > 0 || 
                           filters.excludeTags.length > 0 || 
                           filters.includeTerms.length > 0 || 
                           filters.excludeTerms.length > 0
 
-  const handlePageChange = (newPage: number) => {
-    if (onPageChange && newPage >= 1 && newPage <= totalPages) {
-      onPageChange(newPage)
-    }
-  }
+  if (!isOpen) return null
 
   return (
-    <div className="w-full space-y-2 font-mono">
-      {/* Main Search Bar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            placeholder="SEARCH MODULES..."
-            value={filters.searchTerm}
-            onChange={(e) => handleSearchTermChange(e.target.value)}
-            className="w-full px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none uppercase"
-          />
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/50 z-40"
+        onClick={onClose}
+      />
+      
+      {/* Right Sidebar */}
+      <div className="fixed right-0 top-0 h-full w-80 bg-black border-l border-green-500 z-50 overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-green-500">
+          <div className="flex items-center justify-between">
+            <h2 className="text-green-500 text-xl font-mono uppercase flex items-center gap-2">
+              <Search size={20} />
+              ADVANCED SEARCH
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-green-500 hover:text-green-400 transition-colors"
+              title="Close"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
         
-        {/* Advanced Filter Toggle */}
-        <button
-          onClick={onToggleExpanded}
-          className={`px-3 py-2 bg-black border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors ${
-            hasActiveFilters ? 'bg-green-500/20' : ''
-          }`}
-          aria-label="Toggle advanced filters"
-          title="Advanced search"
-        >
-          <Filter size={18} className={isExpanded ? 'rotate-180' : ''} />
-        </button>
-      </div>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Main Search Input */}
+          <div className="space-y-2">
+            <label className="text-green-500 text-sm font-mono uppercase">SEARCH QUERY</label>
+            <input
+              type="text"
+              placeholder="Enter search terms..."
+              value={filters.searchTerm}
+              onChange={(e) => handleSearchTermChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearchSubmit()
+                }
+              }}
+              className="w-full px-3 py-2 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none focus:border-green-400"
+            />
+          </div>
 
-      {/* Advanced Filters Panel */}
-      {isExpanded && (
-        <div className="border border-green-500 bg-black p-4 space-y-4">
-          {/* Active Filters Summary */}
-          {hasActiveFilters && (
-            <div className="flex items-center justify-between border-b border-green-500/30 pb-2">
-              <span className="text-green-500 text-sm">ACTIVE FILTERS</span>
-              <button
-                onClick={clearAllFilters}
-                className="text-green-500 hover:text-green-400 text-sm"
-              >
-                [CLEAR ALL]
-              </button>
+          {/* Pagination Controls */}
+          {onPageChange && totalPages > 1 && (
+            <div className="space-y-2 p-3 bg-green-500/10 border border-green-500/30 rounded">
+              <label className="text-green-500 text-sm font-mono uppercase">PAGE NAVIGATION</label>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => onPageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="px-3 py-1 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed uppercase transition-none"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-green-500 text-sm font-mono">
+                  PAGE {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => onPageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed uppercase transition-none"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              
+              {/* Quick page jump */}
+              <div className="mt-2">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value)
+                      if (page >= 1 && page <= totalPages) {
+                        onPageChange(page)
+                      }
+                    }}
+                    className="flex-1 px-2 py-1 bg-black border border-green-500 text-green-500 text-center font-mono text-sm focus:outline-none focus:border-green-400"
+                    placeholder="PAGE #"
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.querySelector('input[type="number"]') as HTMLInputElement
+                      const page = parseInt(input.value)
+                      if (page >= 1 && page <= totalPages) {
+                        onPageChange(page)
+                      }
+                    }}
+                    className="px-3 py-1 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black uppercase text-xs font-mono"
+                  >
+                    GO
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -189,12 +239,6 @@ export const AdvancedSearch = ({
                   placeholder="ADD TAG"
                   className="px-2 py-1 bg-black border border-green-500/50 text-green-500 placeholder-green-500/30 focus:outline-none text-xs uppercase w-24"
                 />
-                <button
-                  onClick={() => addToFilter('includeTags', tagInput)}
-                  className="p-1 border border-green-500/50 text-green-500 hover:bg-green-500 hover:text-black"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
           </div>
@@ -237,15 +281,6 @@ export const AdvancedSearch = ({
                   placeholder="EXCLUDE TAG"
                   className="px-2 py-1 bg-black border border-red-500/50 text-red-500 placeholder-red-500/30 focus:outline-none text-xs uppercase w-24"
                 />
-                <button
-                  onClick={() => {
-                    addToFilter('excludeTags', tagInput)
-                    setActiveFilter(null)
-                  }}
-                  className="p-1 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-black"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
           </div>
@@ -288,15 +323,6 @@ export const AdvancedSearch = ({
                   placeholder="INCLUDE TERM"
                   className="px-2 py-1 bg-black border border-green-500/50 text-green-500 placeholder-green-500/30 focus:outline-none text-xs uppercase w-32"
                 />
-                <button
-                  onClick={() => {
-                    addToFilter('includeTerms', termInput)
-                    setActiveFilter(null)
-                  }}
-                  className="p-1 border border-green-500/50 text-green-500 hover:bg-green-500 hover:text-black"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
           </div>
@@ -339,15 +365,6 @@ export const AdvancedSearch = ({
                   placeholder="EXCLUDE TERM"
                   className="px-2 py-1 bg-black border border-red-500/50 text-red-500 placeholder-red-500/30 focus:outline-none text-xs uppercase w-32"
                 />
-                <button
-                  onClick={() => {
-                    addToFilter('excludeTerms', termInput)
-                    setActiveFilter(null)
-                  }}
-                  className="p-1 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-black"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
           </div>
@@ -369,42 +386,31 @@ export const AdvancedSearch = ({
               </div>
             </div>
           )}
-
-          {/* Pagination Controls at Bottom */}
-          {onPageChange && totalPages > 1 && (
-            <div className="pt-4 mt-4 border-t border-green-500/30">
-              <div className="flex items-center justify-between">
-                <span className="text-green-500 text-sm">PAGE NAVIGATION</span>
-                <nav className="flex items-center gap-2 font-mono text-sm">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage <= 1}
-                    className="px-2 py-1 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed uppercase transition-none"
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  
-                  <span className="px-2 text-green-500 text-xs">
-                    {currentPage}/{totalPages}
-                  </span>
-                  
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage >= totalPages}
-                    className="px-2 py-1 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed uppercase transition-none"
-                    aria-label="Next page"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </nav>
-              </div>
-            </div>
-          )}
         </div>
-      )}
-    </div>
+        
+        {/* Footer with Action Buttons */}
+        <div className="p-4 border-t border-green-500 space-y-2">
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="w-full px-4 py-2 text-green-500 border border-green-500/50 hover:bg-green-500/10 transition-colors text-sm font-mono uppercase"
+            >
+              CLEAR ALL FILTERS
+            </button>
+          )}
+          
+          {/* GO Button */}
+          <button
+            onClick={handleSearchSubmit}
+            className="w-full px-4 py-3 bg-green-500 text-black hover:bg-green-400 transition-colors font-mono uppercase font-bold flex items-center justify-center gap-2"
+          >
+            <Search size={20} />
+            GO
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
 
-export default AdvancedSearch
+export default AdvancedSearchSidebar

@@ -115,14 +115,15 @@ export const Header = ({ onSearch, onRefresh }: HeaderProps = {}) => {
           <div className="flex items-center justify-between gap-4">
             {/* Left side - Logo only */}
             <Link href="/" className="flex items-center group">
-              <div className="relative w-48 h-16">
-                <Image
-                  src="/commune-ai-logo.svg"
-                  alt="Commune AI"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+              <div className="relative flex items-center justify-center w-16 h-16">
+                <pre className="text-green-500 text-xs leading-none select-none" style={{ fontFamily: 'Courier New, monospace' }}>
+{`╔═══════╗
+║  ╔═╗  ║
+║ ╔╝ ╚╗ ║
+║ ╚╗ ╔╝ ║
+║  ╚═╝  ║
+╚═══════╝`}
+                </pre>
               </div>
             </Link>
 

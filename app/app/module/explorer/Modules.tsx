@@ -336,7 +336,7 @@ export default function Modules() {
           <div className='flex items-center justify-between mb-6'>
             <h2 className='text-green-500 text-lg font-bold uppercase flex items-center gap-2'>
               <Filter size={20} />
-              Search & Filters
+              Search
             </h2>
             <button
               onClick={() => setShowAdvancedSearch(false)}

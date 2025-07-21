@@ -143,24 +143,24 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
           <div className='flex items-center gap-4 flex-1'>
             <div className='flex flex-col'>
               <div className='flex items-center gap-2'>
-                <span className='font-bold text-2xl' style={{ color: moduleColor }}>{module.name.toLowerCase()}</span>
-                <span className='text-base' style={{ color: `${moduleColor}80` }}>• {shorten(module.key, 6)}</span>
+                <span className='font-bold text-3xl' style={{ color: moduleColor }}>{module.name.toLowerCase()}</span>
+                <span className='text-xl' style={{ color: `${moduleColor}80` }}>• {shorten(module.key, 6)}</span>
                 {module.cid && (
-                  <span className='text-base' style={{ color: `${moduleColor}60` }}>• cid: {shorten(module.cid, 8)}</span>
+                  <span className='text-xl' style={{ color: `${moduleColor}60` }}>• cid: {shorten(module.cid, 8)}</span>
                 )}
               </div>
               {module.desc && (
-                <span className='text-lg mt-1' style={{ color: `${moduleColor}99` }}>{module.desc}</span>
+                <span className='text-2xl mt-1' style={{ color: `${moduleColor}99` }}>{module.desc}</span>
               )}
             </div>
           </div>
           <div className='flex items-center gap-4'>
-            <span className='text-lg' style={{ color: `${moduleColor}80` }}>{time2str(module.time)}</span>
+            <span className='text-2xl' style={{ color: `${moduleColor}80` }}>{time2str(module.time)}</span>
             {module.url && (
               <Link
                 href={module.url}
                 onClick={(e) => e.stopPropagation()}
-                className='px-4 py-2 border text-lg hover:shadow-md transition-all'
+                className='px-4 py-2 border text-2xl hover:shadow-md transition-all'
                 style={{ 
                   borderColor: moduleColor,
                   color: moduleColor,
@@ -194,7 +194,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
       {/* Loading overlay */}
       {isLoading && (
         <div className='absolute inset-0 z-20 bg-black/90 flex items-center justify-center'>
-          <div className='text-3xl font-bold animate-pulse' style={{ color: moduleColor }}>loading...</div>
+          <div className='text-4xl font-bold animate-pulse' style={{ color: moduleColor }}>loading...</div>
         </div>
       )}
       
@@ -214,7 +214,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
       {/* Header section with module name in top left and key in top right */}
       <div className='flex justify-between items-start mb-4 relative z-10'>
         <div className='flex flex-col'>
-          <h3 className='font-bold text-3xl tracking-wider lowercase transition-all duration-300' 
+          <h3 className='font-bold text-4xl tracking-wider lowercase transition-all duration-300' 
               style={{ 
                 color: moduleColor,
                 textShadow: isHovered ? `0 0 15px ${moduleColor}80` : `0 0 5px ${moduleColor}40`,
@@ -222,13 +222,13 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
               }}>
             {module.name}
           </h3>
-          <div className='text-xs font-mono mt-1' style={{ color: `${moduleColor}80` }}>
+          <div className='text-lg font-mono mt-1' style={{ color: `${moduleColor}80` }}>
             [{module.network || 'commune'}]
           </div>
         </div>
         <div className='text-right'>
           <div className='flex items-center gap-2'>
-            <code className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
+            <code className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
               {shorten(module.key, 8)}
             </code>
             <div onClick={(e) => e.stopPropagation()}>
@@ -242,7 +242,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
       <div className='flex-1 flex flex-col justify-center items-center text-center mb-6 px-4 relative z-10'>
         {/* Description */}
         {module.desc && (
-          <p className='text-sm leading-relaxed max-w-full line-clamp-4' 
+          <p className='text-xl leading-relaxed max-w-full line-clamp-4' 
              style={{ color: `${moduleColor}B0` }}>
             {module.desc}
           </p>
@@ -255,7 +255,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
           {module.tags.slice(0, 4).map((tag, i) => (
             <span
               key={i}
-              className='text-xs border px-3 py-1 lowercase tracking-wide transition-all duration-200 hover:scale-110'
+              className='text-lg border px-3 py-1 lowercase tracking-wide transition-all duration-200 hover:scale-110'
               style={{ 
                 borderColor: `${moduleColor}50`,
                 color: moduleColor,
@@ -267,7 +267,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
             </span>
           ))}
           {module.tags.length > 4 && (
-            <span className='text-xs px-2 py-1' style={{ color: `${moduleColor}60` }}>+{module.tags.length - 4}</span>
+            <span className='text-lg px-2 py-1' style={{ color: `${moduleColor}60` }}>+{module.tags.length - 4}</span>
           )}
         </div>
       )}
@@ -282,16 +282,16 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
           <div className='flex items-center gap-2'>
             {module.cid && (
               <>
-                <span className='text-xs lowercase font-bold' style={{ color: `${moduleColor}60` }}>cid:</span>
-                <code className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
+                <span className='text-lg lowercase font-bold' style={{ color: `${moduleColor}60` }}>cid:</span>
+                <code className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
                   {shorten(module.cid, 8)}
                 </code>
               </>
             )}
           </div>
           <div className='flex items-center gap-2'>
-            <span className='text-xs lowercase font-bold' style={{ color: `${moduleColor}60` }}>updated:</span>
-            <span className='text-xs font-mono' style={{ color: `${moduleColor}CC` }}>
+            <span className='text-lg lowercase font-bold' style={{ color: `${moduleColor}60` }}>updated:</span>
+            <span className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
               {time2str(module.time)}
             </span>
           </div>
@@ -302,7 +302,7 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
           <Link
             href={module.url}
             onClick={(e) => e.stopPropagation()}
-            className='block w-full text-center border-2 py-3 transition-all duration-300 text-sm font-bold lowercase tracking-widest rounded-lg'
+            className='block w-full text-center border-2 py-3 transition-all duration-300 text-xl font-bold lowercase tracking-widest rounded-lg'
             style={{ 
               borderColor: moduleColor,
               color: moduleColor,

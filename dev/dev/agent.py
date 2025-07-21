@@ -210,12 +210,9 @@ class Agent:
         if size > max_size:
             summarize  = self.tool('summary.file')
             new_results = {}
-            for k, v in result.items():
-                print(f"Summarizing {k} with size {len(v)}")
-                future = c.submit(summarize, {'content': v, "query": query}, timeout=timeout)
-                futures.append(future)
-            results = c.wait(futures, timeout=timeout)
-            return new_results
+            print(f"Content size {size} exceeds max_size {max_size}, summarizing...", color='red')
+            futures = [c.submit(summarize, {'content': v, "query": query}, timeout=timeout) for k, v in result.items()]
+            return c.wait(futures, timeout=timeout)
         else:
             result = content
         c.print(f"Content found: {len(result)} items", color='green')
