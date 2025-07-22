@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useState, FormEvent, useEffect } from 'react'
 import { Key } from '@/app/user/key'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
-import { RefreshCw, LogOut, User, Search } from 'lucide-react'
+import { RefreshCw, LogOut, User, Search, Copy } from 'lucide-react'
 import { UserProfile } from '@/app/user/profile/UserProfile'
 import type { User as UserType } from '@/app/types/user'
 import { useRouter, usePathname } from 'next/navigation'
@@ -20,6 +20,7 @@ export const Header = ({ onSearch, onRefresh }: HeaderProps = {}) => {
   const [user, setUser] = useState<UserType | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [copiedAddress, setCopiedAddress] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -108,89 +109,65 @@ export const Header = ({ onSearch, onRefresh }: HeaderProps = {}) => {
     }
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedAddress(true)
+    setTimeout(() => setCopiedAddress(false), 2000)
+  }
+
   return (
     <>
-      <header className="fixed top-0 z-30 w-full bg-black border-b border-green-500 font-mono">
+      <header className="fixed top-0 z-40 w-full bg-black border-b border-green-500 font-mono">
         <nav className="p-4 px-4 mx-auto max-w-7xl">
           <div className="flex items-center justify-between gap-4">
-            {/* Left side - Logo only */}
+            {/* Left side - Logo image */}
             <Link href="/" className="flex items-center group">
-              <div className="relative flex items-center justify-center w-16 h-16">
-                <pre className="text-green-500 text-xs leading-none select-none" style={{ fontFamily: 'Courier New, monospace' }}>
-{`╔═══════╗
-║  ╔═╗  ║
-║ ╔╝ ╚╗ ║
-║ ╚╗ ╔╝ ║
-║  ╚═╝  ║
-╚═══════╝`}
-                </pre>
-              </div>
+              <Image
+                src="/logo.png"
+                alt="dhub logo"
+                width={64}
+                height={64}
+                className="w-16 h-16 object-contain"
+                priority
+              />
             </Link>
 
-            {/* Center - Search Bar */}
-            <form onSubmit={handleSearchSubmit} className="flex-1 max-w-md">
-              <div className="flex items-center gap-2 px-3 py-2 border border-green-500 hover:border-green-400 transition-colors">
-                <Search size={18} className="text-green-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="SEARCH MODULES..."
-                  className="flex-1 bg-transparent text-green-500 placeholder-green-500/50 focus:outline-none font-mono uppercase text-sm"
-                />
-              </div>
-            </form>
-
-            {/* Right side - Refresh Button and User Section */}
+            {/* Right side - User Section */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefreshClick}
-                className="h-12 w-12 flex items-center justify-center border border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw size={20} />
-              </button>
 
               {user ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowProfile(!showProfile)}
-                    className={`h-12 px-4 border-2 border-green-500 font-mono transition-all uppercase text-base tracking-wider flex items-center gap-3 group ${
+                    className={`h-12 px-4 border-2 border-green-500 font-mono transition-all uppercase text-base tracking-wider rounded-lg ${
                       showProfile 
                         ? 'bg-green-500 text-black' 
                         : 'text-green-500 hover:bg-green-500 hover:text-black'
                     }`}
                     title={`Address: ${user.address}`}
                   >
-                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                      showProfile
-                        ? 'border-black bg-black/20'
-                        : 'border-green-500 group-hover:border-black'
-                    }`}>
-                      <User size={18} className={showProfile ? 'text-black' : 'text-green-500 group-hover:text-black'} />
-                    </div>
-                    <span className="font-bold">{user.address.slice(0, 6)}...</span>
+                    <span className="font-bold">{user.address.slice(0, 6)}...{user.address.slice(-4)}</span>
                   </button>
                   <button
-                    onClick={handleLogout}
-                    className="h-12 w-12 flex items-center justify-center border-2 border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors"
-                    title="Logout"
+                    onClick={() => copyToClipboard(user.address)}
+                    className="h-12 w-12 flex items-center justify-center border-2 border-green-500 text-green-500 hover:bg-green-500 hover:text-black transition-colors rounded-lg"
+                    title={copiedAddress ? 'Copied!' : 'Copy address'}
                   >
-                    <LogOut size={20} />
+                    {copiedAddress ? '✓' : <Copy size={20} />}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSignIn} className="flex gap-3">
                   <input
                     type="password"
-                    placeholder="ENTROPY"
+                    placeholder="YOUR SECRET ;)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 px-4 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none focus:border-green-400 w-36 font-mono uppercase text-sm"
+                    className="h-12 px-4 bg-black border border-green-500 text-green-500 placeholder-green-500/50 focus:outline-none focus:border-green-400 w-36 font-mono uppercase text-sm rounded-lg"
                   />
                   <button
                     type="submit"
-                    className="h-12 px-6 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono uppercase text-sm tracking-wider transition-colors"
+                    className="h-12 px-6 border border-green-500 text-green-500 hover:bg-green-500 hover:text-black font-mono uppercase text-sm tracking-wider transition-colors rounded-lg"
                   >
                     LOGIN
                   </button>

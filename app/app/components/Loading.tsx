@@ -1,434 +1,218 @@
-import React from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 export function Loading() {
-  return (
-    <div className="grid h-screen w-screen place-content-center bg-black text-green-500 overflow-hidden relative">
-      {/* Matrix rain effect with multiple colors */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="matrix-rain">
-          {Array.from({ length: 80 }).map((_, i) => (
-            <div
-              key={i}
-              className="matrix-column"
-              style={{
-                left: `${i * 1.25}%`,
-                animationDelay: `${Math.random() * 5}s`,
-                animationDuration: `${8 + Math.random() * 12}s`
-              }}
-            >
-              {Array.from({ length: 40 }).map((_, j) => (
-                <span
-                  key={j}
-                  className="matrix-char"
-                  style={{ 
-                    animationDelay: `${j * 0.1}s`,
-                    color: `hsl(${120 + Math.random() * 240}, 100%, ${50 + Math.random() * 30}%)`
-                  }}
-                >
-                  {String.fromCharCode(33 + Math.floor(Math.random() * 94))}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [frame, setFrame] = useState(0)
+  
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    // Set canvas size
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    
+    // Ising model parameters
+    const gridSize = 100
+    const cellSize = Math.min(canvas.width, canvas.height) / gridSize
+    const temperature = 2.269 // Critical temperature
+    const J = 1.0 // Coupling constant
+    
+    // Initialize spins randomly
+    let spins: number[][] = Array(gridSize).fill(0).map(() => 
+      Array(gridSize).fill(0).map(() => Math.random() > 0.5 ? 1 : -1)
+    )
+    
+    // Color wave parameters
+    let colorPhase = 0
+    let waveOffset = 0
+    
+    // Metropolis algorithm step
+    const metropolisStep = () => {
+      for (let k = 0; k < gridSize * gridSize; k++) {
+        const i = Math.floor(Math.random() * gridSize)
+        const j = Math.floor(Math.random() * gridSize)
+        
+        // Calculate energy change
+        const neighbors = 
+          spins[(i + 1) % gridSize][j] +
+          spins[(i - 1 + gridSize) % gridSize][j] +
+          spins[i][(j + 1) % gridSize] +
+          spins[i][(j - 1 + gridSize) % gridSize]
+        
+        const deltaE = 2 * J * spins[i][j] * neighbors
+        
+        // Accept or reject flip
+        if (deltaE <= 0 || Math.random() < Math.exp(-deltaE / temperature)) {
+          spins[i][j] *= -1
+        }
+      }
+    }
+    
+    // Animation loop
+    const animate = () => {
+      // Clear canvas with subtle fade effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
       
-      {/* Glitchy cyberpunk container */}
-      <div className="relative z-10 text-center">
-        {/* Animated ASCII art - glitchy robot/skull hybrid */}
-        <div className="ascii-container">
-          <pre className="ascii-art font-mono text-xs sm:text-sm select-none">
-{`
-    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-   ██░▄▄▄██░▄▄▀██░▄▄▀██░▄▄▄░██░▄▄▄██▄░▄██
-   ██░▄▄▄██░██░██░▄▄▀██░███░██░▄▄▄████░███
-   ██░▀▀▀██░▀▀░██░▀▀░██░▀▀▀░██░▀▀▀██▀░▀██
-    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-         ╔═══════════════════════╗
-         ║  ┌─────────────────┐  ║
-         ║  │ ◉ ═══════════ ◉ │  ║
-         ║  │      ┌───┐      │  ║
-         ║  │  ╔═══╧═══╧═══╗  │  ║
-         ║  │  ║ ▓▓▓▓▓▓▓▓▓ ║  │  ║
-         ║  │  ╚═══════════╝  │  ║
-         ║  └─────────────────┘  ║
-         ╚═══════════════════════╝`}
-          </pre>
-          <div className="glitch-overlay">
-            <pre className="ascii-art-glitch font-mono text-xs sm:text-sm select-none">
-{`
-    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-   ▓▓░███▓▓░██░▓▓░██░▓▓░███░▓▓░███▓▓█░█▓▓
-   ██░▄▄▄██░██░██░▄▄▀██░███░██░▄▄▄████░███
-   ▓▓░▀▀▀▓▓░▀▀░▓▓░▀▀░▓▓░▀▀▀░▓▓░▀▀▀▓▓▀░▀▓▓
-    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-         ╔═══════════════════════╗
-         ║  ┌─────────────────┐  ║
-         ║  │ ◉ ═══════════ ◉ │  ║
-         ║  │      ┌───┐      │  ║
-         ║  │  ╔═══╧═══╧═══╗  │  ║
-         ║  │  ║ ░░░░░░░░░ ║  │  ║
-         ║  │  ╚═══════════╝  │  ║
-         ║  └─────────────────┘  ║
-         ╚═══════════════════════╝`}
-            </pre>
-          </div>
-        </div>
-        
-        {/* Cyberpunk loading text with color shifts */}
-        <div className="mt-4">
-          <div className="relative inline-block">
-            <h1 className="text-4xl font-mono font-bold tracking-wider glitch-text">
-              <span className="letter" style={{ animationDelay: '0ms' }}>S</span>
-              <span className="letter" style={{ animationDelay: '100ms' }}>Y</span>
-              <span className="letter" style={{ animationDelay: '200ms' }}>S</span>
-              <span className="letter" style={{ animationDelay: '300ms' }}>T</span>
-              <span className="letter" style={{ animationDelay: '400ms' }}>E</span>
-              <span className="letter" style={{ animationDelay: '500ms' }}>M</span>
-              <span className="letter-space"> </span>
-              <span className="letter" style={{ animationDelay: '700ms' }}>I</span>
-              <span className="letter" style={{ animationDelay: '800ms' }}>N</span>
-              <span className="letter" style={{ animationDelay: '900ms' }}>I</span>
-              <span className="letter" style={{ animationDelay: '1000ms' }}>T</span>
-            </h1>
-          </div>
-          
-          {/* Cyberpunk progress bar */}
-          <div className="mt-6 font-mono text-sm">
-            <div className="cyber-progress-container">
-              <div className="cyber-progress-bar">
-                <div className="cyber-progress-fill">
-                  <div className="cyber-progress-glow"></div>
-                </div>
-              </div>
-              <div className="progress-text">
-                <span className="flicker">████████████</span>
-                <span className="progress-percent">69%</span>
-                <span className="flicker">████████████</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Chaotic terminal messages */}
-          <div className="mt-4 text-xs font-mono space-y-1 terminal-messages">
-            <div className="message-line" style={{ animationDelay: '0s' }}>
-              <span className="prompt">[ROOT@SYSTEM]#</span> <span className="command">BYPASSING FIREWALL PROTOCOLS...</span>
-            </div>
-            <div className="message-line" style={{ animationDelay: '0.5s' }}>
-              <span className="prompt">[KERNEL]></span> <span className="warning">WARNING: REALITY.EXE HAS STOPPED RESPONDING</span>
-            </div>
-            <div className="message-line" style={{ animationDelay: '1s' }}>
-              <span className="prompt">[DAEMON]~</span> <span className="success">INJECTING CHAOS INTO MAINFRAME...</span>
-            </div>
-            <div className="message-line" style={{ animationDelay: '1.5s' }}>
-              <span className="prompt">[GHOST]$</span> <span className="error">ERROR 404: SANITY NOT FOUND</span>
-            </div>
-            <div className="message-line" style={{ animationDelay: '2s' }}>
-              <span className="prompt">[ANON]></span> <span className="info">DECRYPTING QUANTUM ENTANGLEMENTS...</span>
-            </div>
-          </div>
-          
-          {/* Spinning chaos symbols */}
-          <div className="mt-6 flex justify-center gap-4">
-            <div className="chaos-symbol spin-reverse">
-              <pre className="font-mono text-xs">
-{`  ╱╲
- ╱  ╲
-╱    ╲
-╲    ╱
- ╲  ╱
-  ╲╱`}
-              </pre>
-            </div>
-            <div className="chaos-symbol">
-              <pre className="font-mono text-xs">
-{`┌─┐
-│▓│
-└─┘`}
-              </pre>
-            </div>
-            <div className="chaos-symbol spin-reverse">
-              <pre className="font-mono text-xs">
-{`  ╱╲
- ╱  ╲
-╱    ╲
-╲    ╱
- ╲  ╱
-  ╲╱`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
+      // Update Ising model
+      metropolisStep()
       
-      {/* Add required styles */}
-      <style jsx>{`
-        .matrix-rain {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          overflow: hidden;
-        }
-        
-        .matrix-column {
-          position: absolute;
-          top: -100%;
-          font-family: monospace;
-          font-size: 20px;
-          line-height: 20px;
-          animation: matrix-fall linear infinite;
-        }
-        
-        .matrix-char {
-          display: block;
-          text-shadow: 0 0 8px currentColor;
-          opacity: 0;
-          animation: matrix-fade 2s linear infinite;
-          font-weight: bold;
-        }
-        
-        @keyframes matrix-fall {
-          to {
-            transform: translateY(200vh);
+      // Update color phase and wave
+      colorPhase += 0.02
+      waveOffset += 0.01
+      
+      // Draw spins with color waves
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          const x = (canvas.width - gridSize * cellSize) / 2 + j * cellSize
+          const y = (canvas.height - gridSize * cellSize) / 2 + i * cellSize
+          
+          // Calculate distance from center for radial effects
+          const centerX = gridSize / 2
+          const centerY = gridSize / 2
+          const distance = Math.sqrt((i - centerY) ** 2 + (j - centerX) ** 2)
+          
+          // Create mesmerizing color waves
+          const hue = (colorPhase * 100 + distance * 5 + Math.sin(waveOffset + i * 0.1) * 60 + Math.cos(waveOffset + j * 0.1) * 60) % 360
+          const saturation = 70 + Math.sin(colorPhase + distance * 0.1) * 30
+          const lightness = spins[i][j] === 1 ? 60 + Math.sin(colorPhase * 2 + distance * 0.05) * 20 : 20
+          
+          // Apply color with glow effect for spin up states
+          if (spins[i][j] === 1) {
+            // Create glow effect
+            const glowRadius = cellSize * 0.8
+            const gradient = ctx.createRadialGradient(x + cellSize/2, y + cellSize/2, 0, x + cellSize/2, y + cellSize/2, glowRadius)
+            gradient.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`)
+            gradient.addColorStop(0.5, `hsla(${hue}, ${saturation}%, ${lightness * 0.8}%, 0.5)`)
+            gradient.addColorStop(1, `hsla(${hue}, ${saturation}%, ${lightness * 0.6}%, 0)`)
+            ctx.fillStyle = gradient
+            ctx.fillRect(x - glowRadius/2 + cellSize/2, y - glowRadius/2 + cellSize/2, glowRadius, glowRadius)
+          }
+          
+          // Draw the actual cell
+          ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`
+          ctx.fillRect(x, y, cellSize - 1, cellSize - 1)
+          
+          // Add binary text overlay for some cells
+          if (Math.random() < 0.01) {
+            ctx.font = `${cellSize * 0.8}px monospace`
+            ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 70%, 0.8)`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(spins[i][j] === 1 ? '1' : '0', x + cellSize/2, y + cellSize/2)
           }
         }
-        
-        @keyframes matrix-fade {
-          0%, 10% { opacity: 1; }
-          90%, 100% { opacity: 0; }
-        }
-        
-        .ascii-container {
-          position: relative;
-          display: inline-block;
-        }
-        
-        .ascii-art {
-          color: #00ff00;
-          text-shadow: 0 0 10px #00ff00;
-          animation: pulse 2s ease-in-out infinite;
-        }
-        
-        .glitch-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          pointer-events: none;
-        }
-        
-        .ascii-art-glitch {
-          color: #ff00ff;
-          opacity: 0;
-          animation: glitch 3s infinite;
-          text-shadow: 0 0 20px #ff00ff;
-        }
-        
-        @keyframes glitch {
-          0%, 90%, 100% { opacity: 0; }
-          92% { opacity: 0.8; transform: translateX(-2px); }
-          94% { opacity: 0.8; transform: translateX(2px); }
-          96% { opacity: 0.8; transform: translateY(-2px); }
-          98% { opacity: 0.8; transform: translateY(2px); }
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.8; }
-        }
-        
-        .glitch-text .letter {
-          display: inline-block;
-          animation: bounce 0.5s ease-in-out infinite, colorShift 2s infinite;
-        }
-        
-        .letter-space {
-          display: inline-block;
-          width: 0.5em;
-        }
-        
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        
-        @keyframes colorShift {
-          0% { color: #00ff00; }
-          25% { color: #00ffff; }
-          50% { color: #ff00ff; }
-          75% { color: #ffff00; }
-          100% { color: #00ff00; }
-        }
-        
-        .cyber-progress-container {
-          position: relative;
-          width: 300px;
-          margin: 0 auto;
-        }
-        
-        .cyber-progress-bar {
-          height: 20px;
-          background: #000;
-          border: 2px solid #00ff00;
-          position: relative;
-          overflow: hidden;
-          box-shadow: 0 0 20px #00ff00;
-        }
-        
-        .cyber-progress-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #00ff00, #00ffff, #ff00ff, #ffff00);
-          animation: progressMove 3s linear infinite;
-          width: 100%;
-        }
-        
-        .cyber-progress-glow {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
-          animation: glowMove 2s linear infinite;
-        }
-        
-        @keyframes progressMove {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        
-        @keyframes glowMove {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        
-        .progress-text {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          color: #000;
-          font-weight: bold;
-          mix-blend-mode: difference;
-        }
-        
-        .progress-percent {
-          margin: 0 5px;
-          animation: percentChange 0.5s steps(1) infinite;
-        }
-        
-        @keyframes percentChange {
-          0% { content: '69%'; }
-          20% { content: '42%'; }
-          40% { content: '88%'; }
-          60% { content: '13%'; }
-          80% { content: '99%'; }
-          100% { content: '69%'; }
-        }
-        
-        .flicker {
-          animation: flicker 0.1s infinite;
-        }
-        
-        @keyframes flicker {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        
-        .terminal-messages {
-          max-width: 500px;
-          margin: 0 auto;
-          text-align: left;
-        }
-        
-        .message-line {
-          opacity: 0;
-          animation: typeIn 0.5s forwards;
-          white-space: nowrap;
-          overflow: hidden;
-        }
-        
-        @keyframes typeIn {
-          0% { opacity: 0; transform: translateX(-20px); }
-          100% { opacity: 1; transform: translateX(0); }
-        }
-        
-        .prompt {
-          color: #00ff00;
-          text-shadow: 0 0 5px #00ff00;
-        }
-        
-        .command {
-          color: #00ffff;
-          text-shadow: 0 0 5px #00ffff;
-        }
-        
-        .warning {
-          color: #ffff00;
-          text-shadow: 0 0 5px #ffff00;
-          animation: blink 0.5s infinite;
-        }
-        
-        .error {
-          color: #ff0000;
-          text-shadow: 0 0 5px #ff0000;
-          animation: shake 0.5s infinite;
-        }
-        
-        .success {
-          color: #00ff00;
-          text-shadow: 0 0 5px #00ff00;
-        }
-        
-        .info {
-          color: #ff00ff;
-          text-shadow: 0 0 5px #ff00ff;
-        }
-        
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-2px); }
-          75% { transform: translateX(2px); }
-        }
-        
-        .chaos-symbol {
-          color: #ff00ff;
-          text-shadow: 0 0 15px #ff00ff;
-          animation: spin 4s linear infinite, colorPulse 2s infinite;
-        }
-        
-        .spin-reverse {
-          animation: spin-reverse 4s linear infinite, colorPulse 2s infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        @keyframes spin-reverse {
-          from { transform: rotate(360deg); }
-          to { transform: rotate(0deg); }
-        }
-        
-        @keyframes colorPulse {
-          0% { color: #ff00ff; text-shadow: 0 0 15px #ff00ff; }
-          33% { color: #00ffff; text-shadow: 0 0 15px #00ffff; }
-          66% { color: #ffff00; text-shadow: 0 0 15px #ffff00; }
-          100% { color: #ff00ff; text-shadow: 0 0 15px #ff00ff; }
+      }
+      
+      // Draw loading text with glitch effect
+      const glitchOffset = Math.random() < 0.1 ? Math.random() * 10 - 5 : 0
+      ctx.save()
+      ctx.translate(canvas.width / 2 + glitchOffset, canvas.height / 2)
+      
+      // Background for text
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+      ctx.fillRect(-200, -50, 400, 100)
+      
+      // Main text with color animation
+      ctx.font = 'bold 48px monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      
+      // Create gradient text
+      const textGradient = ctx.createLinearGradient(-200, 0, 200, 0)
+      textGradient.addColorStop(0, `hsl(${colorPhase * 100}, 100%, 60%)`)
+      textGradient.addColorStop(0.5, `hsl(${colorPhase * 100 + 120}, 100%, 60%)`)
+      textGradient.addColorStop(1, `hsl(${colorPhase * 100 + 240}, 100%, 60%)`)
+      ctx.fillStyle = textGradient
+      ctx.fillText('LOADING', 0, -10)
+      
+      // Subtitle with wave effect
+      ctx.font = '20px monospace'
+      const subtitle = 'ISING MODEL SIMULATION'
+      for (let i = 0; i < subtitle.length; i++) {
+        const charX = (i - subtitle.length / 2) * 15
+        const charY = 20 + Math.sin(colorPhase * 2 + i * 0.5) * 5
+        const charHue = (colorPhase * 100 + i * 20) % 360
+        ctx.fillStyle = `hsl(${charHue}, 100%, 70%)`
+        ctx.fillText(subtitle[i], charX, charY)
+      }
+      
+      ctx.restore()
+      
+      // Update frame counter
+      setFrame(prev => prev + 1)
+      
+      requestAnimationFrame(animate)
+    }
+    
+    animate()
+    
+    // Handle window resize
+    const handleResize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    window.addEventListener('resize', handleResize)
+    
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+  
+  return (
+    <div className="fixed inset-0 bg-black overflow-hidden">
+      <canvas 
+        ref={canvasRef}
+        className="absolute inset-0"
+        style={{ filter: 'contrast(1.1) brightness(1.1)' }}
+      />
+      
+      {/* Additional UI elements */}
+      <div className="absolute bottom-8 left-8 font-mono text-xs space-y-1">
+        <div className="text-green-400 opacity-70">
+          <span className="text-yellow-400">FRAME:</span> {frame}
+        </div>
+        <div className="text-green-400 opacity-70">
+          <span className="text-cyan-400">TEMP:</span> 2.269 (CRITICAL)
+        </div>
+        <div className="text-green-400 opacity-70">
+          <span className="text-magenta-400">PHASE:</span> TRANSITION
+        </div>
+      </div>
+      
+      {/* Matrix rain effect overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-20">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute text-green-500 font-mono text-xs"
+            style={{
+              left: `${i * 5}%`,
+              animation: `fall ${10 + Math.random() * 10}s linear infinite`,
+              animationDelay: `${Math.random() * 10}s`
+            }}
+          >
+            {Array.from({ length: 30 }).map((_, j) => (
+              <div key={j} className="opacity-0 animate-pulse" style={{ animationDelay: `${j * 0.1}s` }}>
+                {Math.random() > 0.5 ? '1' : '0'}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      
+      <style jsx>{`
+        @keyframes fall {
+          from {
+            transform: translateY(-100%);
+          }
+          to {
+            transform: translateY(100vh);
+          }
         }
       `}</style>
       

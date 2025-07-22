@@ -328,118 +328,103 @@ export default function Modules() {
   )
 
   return (
-    <div className='min-h-screen bg-black text-green-500 font-mono flex'>
-      {/* Left Side Panel - Advanced Search */}
-      <div className={`fixed left-0 top-16 h-full bg-black border-r border-green-500 transition-all duration-300 z-40 ${showAdvancedSearch ? 'w-80' : 'w-0'} overflow-hidden`}>
-        <div className='p-4 h-full overflow-y-auto'>
-          {/* Header with Toggle Button */}
-          <div className='flex items-center justify-between mb-6'>
-            <h2 className='text-green-500 text-lg font-bold uppercase flex items-center gap-2'>
-              <Filter size={20} />
-              Search
-            </h2>
-            <button
-              onClick={() => setShowAdvancedSearch(false)}
-              className='p-1 text-green-500 hover:text-green-400'
-              aria-label='Close search panel'
-            >
-              <X size={20} />
-            </button>
-          </div>
-          
-          {/* Search and Filters */}
-          <AdvancedSearch
-            onSearch={handleSearch}
-            availableTags={[]}
-            isExpanded={true}
-            onToggleExpanded={() => {}}
-          />
-          
-          {/* Quick Stats */}
-          <div className='mt-6 pt-6 border-t border-green-500/30'>
-            <h3 className='text-green-500 text-sm font-bold mb-3 uppercase'>Module Stats</h3>
-            <div className='space-y-2 text-xs'>
-              <div className='flex justify-between'>
-                <span className='text-green-500/70'>Total Modules:</span>
-                <span className='text-green-500'>{state.totalModules}</span>
-              </div>
-              <div className='flex justify-between'>
-                <span className='text-green-500/70'>Filtered:</span>
-                <span className='text-green-500'>{filteredModules.length}</span>
-              </div>
-            </div>
+    <div className='min-h-screen bg-black text-green-500 font-mono'>
+      {/* Error Banner */}
+      {state.error && (
+        <div className='flex items-center justify-between p-4 bg-black border border-red-500 text-red-500' role='alert'>
+          <span>ERROR: {state.error}</span>
+          <button 
+            onClick={() => setState(prev => ({ ...prev, error: null }))} 
+            className='hover:bg-red-500 hover:text-black px-2 transition-none'
+            aria-label='Dismiss error'
+          >
+            [X]
+          </button>
+        </div>
+      )}
+
+      {/* Create Module Modal */}
+      {showCreateForm && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black'>
+          <div className='border border-green-500 bg-black p-4'>
+            <CreateModule
+              onClose={() => setShowCreateForm(false)}
+              onSuccess={handleCreateSuccess}
+            />
           </div>
         </div>
-      </div>
-
-      {/* Floating Toggle Button - Always visible */}
-      <button
-        onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-        className={`fixed ${showAdvancedSearch ? 'left-[304px]' : 'left-4'} top-24 p-2 bg-black border border-green-500 text-green-500 hover:bg-green-500 hover:text-black z-50 transition-all duration-300`}
-        aria-label={showAdvancedSearch ? 'Close search panel' : 'Open search panel'}
-      >
-        {showAdvancedSearch ? <ChevronLeft size={20} /> : <Menu size={20} />}
-      </button>
+      )}
 
       {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${showAdvancedSearch ? 'ml-80' : 'ml-0'}`}>
-        {/* Error Banner */}
-        {state.error && (
-          <div className='flex items-center justify-between p-4 bg-black border border-red-500 text-red-500' role='alert'>
-            <span>ERROR: {state.error}</span>
-            <button 
-              onClick={() => setState(prev => ({ ...prev, error: null }))} 
-              className='hover:bg-red-500 hover:text-black px-2 transition-none'
-              aria-label='Dismiss error'
-            >
-              [X]
-            </button>
+      <main className='p-6' role='main'>
+        {/* Search Section - Now at the top */}
+        <div className='mb-6'>
+          {/* Search Bar with Toggle */}
+          <div className='mb-4'>
+            <AdvancedSearch
+              onSearch={handleSearch}
+              availableTags={[]}
+              isExpanded={showAdvancedSearch}
+              onToggleExpanded={() => setShowAdvancedSearch(!showAdvancedSearch)}
+            />
           </div>
-        )}
-
-
-        {/* Create Module Modal */}
-        {showCreateForm && (
-          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black'>
-            <div className='border border-green-500 bg-black p-4'>
-              <CreateModule
-                onClose={() => setShowCreateForm(false)}
-                onSuccess={handleCreateSuccess}
-              />
+          
+          {/* Quick Stats when search is expanded */}
+          {showAdvancedSearch && (
+            <div className='bg-black/40 border border-green-500/30 rounded p-4 mb-4'>
+              <h3 className='text-green-500 text-sm font-bold mb-3 uppercase'>Module Stats</h3>
+              <div className='grid grid-cols-2 md:grid-cols-4 gap-4 text-xs'>
+                <div>
+                  <span className='text-green-500/70'>Total Modules:</span>
+                  <span className='text-green-500 ml-2'>{state.totalModules}</span>
+                </div>
+                <div>
+                  <span className='text-green-500/70'>Filtered:</span>
+                  <span className='text-green-500 ml-2'>{filteredModules.length}</span>
+                </div>
+                <div>
+                  <span className='text-green-500/70'>Showing:</span>
+                  <span className='text-green-500 ml-2'>{paginatedModules.length}</span>
+                </div>
+                <div>
+                  <span className='text-green-500/70'>Page:</span>
+                  <span className='text-green-500 ml-2'>{page}/{totalFilteredPages || 1}</span>
+                </div>
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Loading State */}
+        {state.loading && <VibeLoader />}
+        
+        {/* Empty State */}
+        {!state.loading && paginatedModules.length === 0 && (
+          <div className='py-8 text-center text-green-500' role='status'>
+            {searchFilters.searchTerm || searchFilters.includeTerms.length > 0 || searchFilters.excludeTerms.length > 0
+              ? 'NO MODULES MATCH YOUR FILTERS.'
+              : 'NO MODULES AVAILABLE.'}
           </div>
         )}
 
         {/* Modules Grid */}
-        <main className='p-6' role='main'>
-          {state.loading && <VibeLoader />}
-          
-          {!state.loading && paginatedModules.length === 0 && (
-            <div className='py-8 text-center text-green-500' role='status'>
-              {searchFilters.searchTerm || searchFilters.includeTerms.length > 0 || searchFilters.excludeTerms.length > 0
-                ? 'NO MODULES MATCH YOUR FILTERS.'
-                : 'NO MODULES AVAILABLE.'}
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' role='list'>
+          {paginatedModules.map((m) => (
+            <div key={m.key} role='listitem'>
+              <ModuleCard module={m} />
             </div>
-          )}
+          ))}
+        </div>
+      </main>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' role='list'>
-            {paginatedModules.map((m) => (
-              <div key={m.key} role='listitem'>
-                <ModuleCard module={m} />
-              </div>
-            ))}
-          </div>
-        </main>
+      {/* Pagination Controls Bottom */}
+      {!state.loading && paginatedModules.length > 0 && (
+        <div className='flex justify-center p-6 border-t border-green-500'>
+          <PaginationControls />
+        </div>
+      )}
 
-        {/* Pagination Controls Bottom */}
-        {!state.loading && paginatedModules.length > 0 && (
-          <div className='flex justify-center p-6 border-t border-green-500'>
-            <PaginationControls />
-          </div>
-        )}
-
-        <Footer />
-      </div>
+      <Footer />
     </div>
   )
 }

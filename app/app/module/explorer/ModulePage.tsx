@@ -88,8 +88,13 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
   const fetchModule = useCallback(async (update = false) => {
     try {
       if (update) setSyncing(true)
-      const params = { module: module_name, update }
+
+      if (!update) {
+        return setModule(undefined)
+      }
+      const params = { module: module_name, update , code: true}
       const foundModule = await client.call('module', params)
+      console.log('Fetched module:', foundModule)
       
       if (foundModule) {
         setModule(foundModule)
@@ -106,7 +111,7 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
       setLoading(false)
       setSyncing(false)
     }
-  }, [module_name, client])
+  }, [])
 
   useEffect(() => {
     fetchModule()

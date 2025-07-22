@@ -127,61 +127,12 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
     await router.push(`module/${module.name}?color=${encodeURIComponent(moduleColor)}`)
   }, [router, module.name, moduleColor])
 
-  if (viewMode === 'list') {
-    return (
-      <div
-        onClick={handleCardClick}
-        className='w-full cursor-pointer border bg-black p-4 font-mono hover:shadow-lg transition-all duration-200 relative overflow-hidden'
-        style={{ 
-          borderColor: moduleColor,
-          boxShadow: isHovered ? `0 0 10px ${moduleColor}60` : `0 0 3px ${moduleColor}20`
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className='flex items-center justify-between'>
-          <div className='flex items-center gap-4 flex-1'>
-            <div className='flex flex-col'>
-              <div className='flex items-center gap-2'>
-                <span className='font-bold text-3xl' style={{ color: moduleColor }}>{module.name.toLowerCase()}</span>
-                <span className='text-xl' style={{ color: `${moduleColor}80` }}>• {shorten(module.key, 6)}</span>
-                {module.cid && (
-                  <span className='text-xl' style={{ color: `${moduleColor}60` }}>• cid: {shorten(module.cid, 8)}</span>
-                )}
-              </div>
-              {module.desc && (
-                <span className='text-2xl mt-1' style={{ color: `${moduleColor}99` }}>{module.desc}</span>
-              )}
-            </div>
-          </div>
-          <div className='flex items-center gap-4'>
-            <span className='text-2xl' style={{ color: `${moduleColor}80` }}>{time2str(module.time)}</span>
-            {module.url && (
-              <Link
-                href={module.url}
-                onClick={(e) => e.stopPropagation()}
-                className='px-4 py-2 border text-2xl hover:shadow-md transition-all'
-                style={{ 
-                  borderColor: moduleColor,
-                  color: moduleColor,
-                  backgroundColor: isHovered ? `${moduleColor}10` : 'transparent'
-                }}
-                target='_blank'
-                rel='noopener noreferrer'
-              >
-                open →
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
+
 
   return (
     <div
       onClick={handleCardClick}
-      className='cursor-pointer border-2 bg-black p-6 font-mono hover:shadow-2xl transition-all duration-300 relative overflow-hidden group flex flex-col h-[400px]'
+      className='cursor-pointer border-2 bg-black p-6 font-mono hover:shadow-2xl transition-all duration-300 relative overflow-hidden group flex flex-col h-[420px]'
       style={{ 
         borderColor: moduleColor,
         boxShadow: isHovered ? `0 0 30px ${moduleColor}80, inset 0 0 20px ${moduleColor}20` : `0 0 10px ${moduleColor}40`,
@@ -194,151 +145,118 @@ const ModuleCard = memo(({ module, viewMode = 'grid' }: ModuleCardProps) => {
       {/* Loading overlay */}
       {isLoading && (
         <div className='absolute inset-0 z-20 bg-black/90 flex items-center justify-center'>
-          <div className='text-4xl font-bold animate-pulse' style={{ color: moduleColor }}>loading...</div>
+          <div className='text-5xl font-bold animate-pulse text-white'>{`loading...`}</div>
         </div>
       )}
       
-      {/* Cyberpunk background pattern */}
-      {cyberpunkPattern && (
-        <div 
-          className='absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-300'
-          style={{
-            backgroundImage: `url(${cyberpunkPattern})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: 'blur(0.5px)'
-          }}
-        />
-      )}
-      
-      {/* Header section with module name in top left and key in top right */}
-      <div className='flex justify-between items-start mb-4 relative z-10'>
-        <div className='flex flex-col'>
-          <h3 className='font-bold text-4xl tracking-wider lowercase transition-all duration-300' 
+      {/* Main content wrapper */}
+      <div className='flex-1 flex flex-col relative z-10'>
+        {/* Header section with module name */}
+        <div className='mb-4'>
+          <h3 className='font-bold text-4xl tracking-wider lowercase transition-all duration-300 text-white mb-3' 
               style={{ 
-                color: moduleColor,
                 textShadow: isHovered ? `0 0 15px ${moduleColor}80` : `0 0 5px ${moduleColor}40`,
                 letterSpacing: '0.05em'
               }}>
             {module.name}
           </h3>
-          <div className='text-lg font-mono mt-1' style={{ color: `${moduleColor}80` }}>
-            [{module.network || 'commune'}]
-          </div>
-        </div>
-        <div className='text-right'>
-          <div className='flex items-center gap-2'>
-            <code className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
-              {shorten(module.key, 8)}
-            </code>
-            <div onClick={(e) => e.stopPropagation()}>
-              <CopyButton code={module.key} />
+          
+          {/* Info section with pattern beside keys */}
+          <div className='flex gap-4'>
+            {/* Left side - Keys and info */}
+            <div className='flex flex-col gap-2 flex-1'>
+              {/* Key */}
+              <div className='flex items-center gap-2'>
+                <span className='text-xl lowercase font-bold text-white/60'>key</span>
+                <div className='border px-3 py-1 rounded-md' style={{ borderColor: `${moduleColor}50`, backgroundColor: `${moduleColor}10` }}>
+                  <code className='text-xl font-mono text-white/80'>
+                    {shorten(module.key, 4)}
+                  </code>
+                </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <CopyButton code={module.key} />
+                </div>
+              </div>
+              
+              {/* CID */}
+              {module.cid && (
+                <div className='flex items-center gap-2'>
+                  <span className='text-xl lowercase font-bold text-white/60'>cid</span>
+                  <div className='border px-3 py-1 rounded-md' style={{ borderColor: `${moduleColor}50`, backgroundColor: `${moduleColor}10` }}>
+                    <code className='text-xl font-mono text-white/80'>
+                      {shorten(module.cid, 4)}
+                    </code>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <CopyButton code={module.cid} />
+                  </div>
+                </div>
+              )}
+              
+              {/* Date */}
+              <div className='flex items-center gap-2'>
+                <span className='text-xl lowercase font-bold text-white/60'>time</span>
+                <div className='border px-3 py-1 rounded-md' style={{ borderColor: `${moduleColor}50`, backgroundColor: `${moduleColor}10` }}>
+                  <span className='text-xl font-mono text-white/80'>
+                    {time2str(module.time)}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Main content section */}
-      <div className='flex-1 flex flex-col justify-center items-center text-center mb-6 px-4 relative z-10'>
-        {/* Description */}
-        {module.desc && (
-          <p className='text-xl leading-relaxed max-w-full line-clamp-4' 
-             style={{ color: `${moduleColor}B0` }}>
-            {module.desc}
-          </p>
-        )}
-      </div>
-
-      {/* Tags section */}
-      {module.tags && module.tags.length > 0 && (
-        <div className='flex flex-wrap justify-center gap-2 mb-4 relative z-10'>
-          {module.tags.slice(0, 4).map((tag, i) => (
-            <span
-              key={i}
-              className='text-lg border px-3 py-1 lowercase tracking-wide transition-all duration-200 hover:scale-110'
-              style={{ 
-                borderColor: `${moduleColor}50`,
-                color: moduleColor,
-                backgroundColor: `${moduleColor}15`,
-                boxShadow: isHovered ? `0 0 10px ${moduleColor}40` : 'none'
-              }}
-            >
-              {tag}
-            </span>
-          ))}
-          {module.tags.length > 4 && (
-            <span className='text-lg px-2 py-1' style={{ color: `${moduleColor}60` }}>+{module.tags.length - 4}</span>
-          )}
-        </div>
-      )}
-
-      {/* Bottom section with CID and last update */}
-      <div className='mt-auto space-y-3 relative z-10'>
-        {/* Divider */}
-        <div className='w-full h-px' style={{ background: `linear-gradient(to right, transparent, ${moduleColor}40, transparent)` }} />
-        
-        {/* CID and Last Update info */}
-        <div className='flex justify-between items-center px-2'>
-          <div className='flex items-center gap-2'>
-            {module.cid && (
-              <>
-                <span className='text-lg lowercase font-bold' style={{ color: `${moduleColor}60` }}>cid:</span>
-                <code className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
-                  {shorten(module.cid, 8)}
-                </code>
-              </>
+            
+            {/* Right side - Pattern image */}
+            {cyberpunkPattern && (
+              <div 
+                className='w-48 h-48 rounded-lg overflow-hidden border-2 opacity-70 group-hover:opacity-90 transition-opacity duration-300'
+                style={{
+                  borderColor: `${moduleColor}40`,
+                  backgroundImage: `url(${cyberpunkPattern})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
+              />
             )}
           </div>
-          <div className='flex items-center gap-2'>
-            <span className='text-lg lowercase font-bold' style={{ color: `${moduleColor}60` }}>updated:</span>
-            <span className='text-lg font-mono' style={{ color: `${moduleColor}CC` }}>
-              {time2str(module.time)}
-            </span>
-          </div>
         </div>
 
-        {/* Action button */}
-        {module.url && (
-          <Link
-            href={module.url}
-            onClick={(e) => e.stopPropagation()}
-            className='block w-full text-center border-2 py-3 transition-all duration-300 text-xl font-bold lowercase tracking-widest rounded-lg'
-            style={{ 
-              borderColor: moduleColor,
-              color: moduleColor,
-              backgroundColor: isHovered ? `${moduleColor}20` : 'transparent',
-              boxShadow: isHovered ? `0 0 20px ${moduleColor}60, inset 0 0 10px ${moduleColor}20` : 'none',
-              transform: isHovered ? 'scale(1.02)' : 'scale(1)'
-            }}
-            target='_blank'
-            rel='noopener noreferrer'
-          >
-            access module →
-          </Link>
+        {/* Description section */}
+        {module.desc && (
+          <div className='flex-1 flex flex-col justify-center mb-4'>
+            <p className='text-2xl leading-relaxed line-clamp-2 text-white/70'>
+              {module.desc}
+            </p>
+          </div>
         )}
+
+        {/* Bottom section with tags */}
+        <div className='mt-auto'>
+          {/* Tags at the bottom */}
+          <div className='flex flex-wrap gap-2 min-h-[32px]'>
+            {module.tags && module.tags.length > 0 ? (
+              <>
+                {module.tags.slice(0, 8).map((tag, i) => (
+                  <span
+                    key={i}
+                    className='text-lg border px-3 py-1 lowercase tracking-wide transition-all duration-200 hover:scale-110 text-white'
+                    style={{ 
+                      borderColor: `${moduleColor}50`,
+                      backgroundColor: `${moduleColor}15`,
+                      boxShadow: isHovered ? `0 0 10px ${moduleColor}40` : 'none'
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {module.tags.length > 8 && (
+                  <span className='text-lg px-3 py-1 text-white/60'>+{module.tags.length - 8}</span>
+                )}
+              </>
+            ) : (
+              <span className='text-lg text-white/40 italic'>no tags</span>
+            )}
+          </div>
+        </div>
       </div>
-      
-      {/* Corner accents */}
-      <div className='absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 transition-all duration-300'
-           style={{ 
-             borderColor: moduleColor,
-             opacity: isHovered ? 1 : 0.5
-           }} />
-      <div className='absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 transition-all duration-300'
-           style={{ 
-             borderColor: moduleColor,
-             opacity: isHovered ? 1 : 0.5
-           }} />
-      <div className='absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 transition-all duration-300'
-           style={{ 
-             borderColor: moduleColor,
-             opacity: isHovered ? 1 : 0.5
-           }} />
-      <div className='absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 transition-all duration-300'
-           style={{ 
-             borderColor: moduleColor,
-             opacity: isHovered ? 1 : 0.5
-           }} />
     </div>
   )
 })
