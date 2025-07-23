@@ -3,6 +3,9 @@ class Base:
     """
     A base class that provides fundamental functionality for commune modules.
     """
+    trusts = [
+        ""
+    ]
     def __init__(self, **kwargs):
         """
         Initialize the base class with configurable parameters.
