@@ -1,6 +1,6 @@
 import commune as c 
 import os
-class Base:
+class Mod:
     """
     A base class that provides fundamental functionality for commune modules.
     """
