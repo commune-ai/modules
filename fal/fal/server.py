@@ -1,8 +1,12 @@
 import commune as c 
+import fal-client
+
+
 class Fal:
     """
     A base class that provides fundamental functionality for commune modules.
     """
+    url = ['https://docs.fal.ai/clients/python']
     def __init__(self, **kwargs):
         """
         Initialize the base class with configurable parameters.
@@ -24,3 +28,8 @@ class Fal:
             Result of the called method
         """
         return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)
+
+
+
+    def ensure_env(self, deps=['fal-client']):
+        pip_list = c.cmd('pip list').split('\n')
