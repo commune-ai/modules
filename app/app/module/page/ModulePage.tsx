@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Client } from '@/app/client/client'
 import { Loading } from '@/app/components/Loading'
 import { ModuleType } from '@/app/types/module'
@@ -54,7 +54,9 @@ const text2color = (text: string): string => {
 }
 
 export default function ModuleClient({ module_name, code, api }: ModuleClientProps) {
-  const client = new Client()
+  // Create client instance once using useMemo to prevent recreation
+  const client = useMemo(() => new Client(), [])
+  
   const [module, setModule] = useState<ModuleType | undefined>()
   const [error, setError] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(true)
@@ -62,11 +64,19 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
   const [codeMap, setCodeMap] = useState<Record<string, string>>({})
   const initialTab: TabType = code ? 'code' : api ? 'api' : 'code'
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
+  
+  // Track if we've already fetched to prevent duplicate calls
+  const [hasFetched, setHasFetched] = useState(false)
 
   const fetchModule = useCallback(async (update = false) => {
     try {
-      if (update) setSyncing(true)
-      const params = { module: module_name, update }
+      if (update) {
+        setSyncing(true)
+      } else {
+        setLoading(true)
+      }
+      
+      const params = { module: module_name, update: update, code: true }
       const foundModule = await client.call('module', params)
       
       if (foundModule) {
@@ -86,13 +96,17 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
     }
   }, [module_name, client])
 
+  // Initial fetch - only run once
   useEffect(() => {
-    fetchModule()
-  }, [fetchModule])
+    if (!hasFetched) {
+      setHasFetched(true)
+      fetchModule(false)
+    }
+  }, [hasFetched, fetchModule])
 
-  const handleSync = () => {
+  const handleSync = useCallback(() => {
     fetchModule(true)
-  }
+  }, [fetchModule])
 
   if (loading) return <Loading />
   

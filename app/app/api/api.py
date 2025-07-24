@@ -103,6 +103,7 @@ class Api:
                 module_path = self.module_path(module)
                 info = load_json(module_path)["data"]
                 info['code'] = c.code_map(info['name'])
+                self.store.put(module, info)
             
         except Exception as e:
 

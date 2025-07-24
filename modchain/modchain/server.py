@@ -1,4 +1,5 @@
 import commune as c 
+import os
 class Base:
     """
     A base class that provides fundamental functionality for commune modules.
@@ -10,10 +11,11 @@ class Base:
             **kwargs: Arbitrary keyword arguments to configure the instance
         """
         # Store configuration as a Munch object for dot notation access
-        self.model = c.module('openrouter')()
+        self.model = c.mod('openrouter')()
+        self.my_dir = os.path.dirname(__file__)
+        self.my_module = os.path.basename(self.my_dir)
         
-        
-    def forward(self, *args,  module: str='explain', stream=1,  **kwargs):
+    def forward(self,query = "what does this do", *extra_query , module: str=None, stream=1,  **kwargs):
         """
         Dynamically call a method of the class.
         Args:
@@ -23,4 +25,6 @@ class Base:
         Returns:
             Result of the called method
         """
-        return self.model.forward(f'what does this do? {c.code(module)}', stream=stream)
+        query = query + ' ' + ' '.join(extra_query)
+        module = module or self.my_module
+        return self.model.forward(f'{query}  {c.code_map(module)}', stream=stream)

@@ -1,5 +1,6 @@
 import commune as c 
-class Base:
+class Mod:
+    url = 'https://www.eraser.io/diagramgpt'
     """
     A base class that provides fundamental functionality for commune modules.
     """

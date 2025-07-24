@@ -94,7 +94,7 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
       }
       const params = { module: module_name, update , code: true}
       const foundModule = await client.call('module', params)
-      console.log('Fetched module:', foundModule)
+      console.log('Fetched module:', foundModule,params)
       
       if (foundModule) {
         setModule(foundModule)
