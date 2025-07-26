@@ -73,6 +73,15 @@ the transaction is a reciept that involves the client claling
 }
 
 
+These transactions are saved locally and are posted once every epoch where the transactions are counted on chain and the cost from the transactions debits the client key. and credits the server This means the client needs to reserve tokens to as credit to be transfered to the server. 
+
+
+the server defines the cost per call while the user sets a maximum usage/cost in their request. This prevents the server from maliciously setting an arbitrary cost that can exceed the agreed upon amount or advertised amount. 
+
+This bundles trandactions on offchain and verifies onchain once every epoch to allow for scalability of verifying offchain transactions
+
+
+
 
 Tree
 
@@ -113,3 +122,9 @@ a consensus module is a mechanism that converts
 
 stake time tokens
 when you stake to
+
+
+
+consensus modules 
+
+each module haas a consensu module that is is bound to. the default consensu mechanism is consensus 0 which is responsible for handling the lock and escrow for debiting and crediting offchain transacitons. we plan to allow for modules to addopt custom consensus types to fit their sepcific needs, like if they are another token on another chain or want something really specific that hasnt been done before. ideally we will allow for an offchain consensus mechanism that prooves logic consensys via a zero knowledge proof. 
