@@ -5,7 +5,7 @@ import os
 from typing import List, Dict, Union, Optional, Any
 
 print = c.print
-class SumFile:
+class SumText:
     """
     Advanced search and relevance ranking module powered by LLMs.
     
@@ -26,27 +26,14 @@ class SumFile:
     def __init__(self, model='model.openrouter'):
         self.model = c.module(model)()
 
-    def abspath(self, path: str) -> str:
-        return os.path.abspath(os.path.expanduser(path))
-
-
     def forward(self,  
-              path: str = __file__, # Path to the file containing options or a file  
+              text: str = "1 + 2 = 1  and 1 + 2 = 1", # Path to the file containing options or a file  
               query: str = 'most relevant', 
               model: str = None,
               temperature: float = 0.5,
               content=  None,
               update = False,
               **kwargs) -> List[str]:
-
-        path = self.abspath(path)        
-        assert os.path.exists(path), f"File not found: {path}"
-        if not os.path.isfile(path):
-            return self.summarize_folder(path=path, query=query, model=model,   
-                                         temperature=temperature, content=content, update=update, **kwargs)
-        assert os.path.isfile(path), f"Path is not a file: {path}"
-        print(f"Summarizing file: {path}", color="cyan")       
-        content = content or  c.text(path)
         # hash
         prompt = f'''
         TASK={self.task}
@@ -54,14 +41,8 @@ class SumFile:
         CONTENT={content} 
         RESULT_FORMAT={self.result_format}
         '''
-        path = self.cache_dir +  c.hash(prompt)
-        result = c.get(path, update=update)
-        # Generate the response
-        if result != None:
-            return result
         result = self.model.forward( prompt, model=model,  stream=True, temperature=temperature )
         return self.process_result(result, path=path)
-
 
     def process_result(self, response: Union[str, List[str]], path=None ) -> Any:
         """

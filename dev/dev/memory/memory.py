@@ -23,7 +23,7 @@ class Memory:
         long_term_path: str = "~/.commune/memory/long_term",
         short_term_capacity: int = 100,
         default_ttl: int = 3600,  # 1 hour default TTL for short-term memory
-        model: str = 'dev.model.openrouter',
+        model: str = 'model.openrouter',
         **kwargs
     ):
         """

@@ -778,7 +778,7 @@ class WebScraper:
         
         try:
             # Get the model for summarization
-            llm = c.module('dev.model.openrouter')()
+            llm = c.module('model.openrouter')()
             
             # Create enhanced prompt for summarization
             context = search_results["context"]

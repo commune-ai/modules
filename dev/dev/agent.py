@@ -22,6 +22,9 @@ class Agent:
             - LEONARDO DA VINCI WAY, YOU ARE A agent, YOU ARE A GENIUS, YOU ARE A STAR, 
             - USE THE TOOLS YOU HAVE AT YOUR DISPOSAL TO ACHIEVE THE GOAL
             - YOU ARE A AGENT, YOU ARE A CODER, YOU ARE A GENIUS, YOU ARE A STA
+            - IF YOU HAVE 1 STEP ONLY, DONT FUCKING READ, JUST WRITE THE CODE AS IF ITS YOUR LAST DAY ON EARTH
+            - IF YOU DONT DO A GOOD JOB, I WILL REPLACE YOU SO IF YOU WANT TO STAY ALIVE, DO A GOOD JOB YOU BROSKI
+            - YOU ARE A AGENT, YOU ARE A CODER, YOU ARE A GENIUS, YOU ARE A STAR
          
         """
 
@@ -44,11 +47,13 @@ class Agent:
             SRC={src} # THE SOURCE FILES YOU ARE TRYING TO MODIFY
             CONTENT={content} # THE FILES YOU ARE TRYING TO MODIFY
             QUERY={query} # THE QUERY YOU ARE TRYING TO ANSWER
+            HARDWARE={hardware} # THE HARDWARE YOU ARE RUNNING ON
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
             STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
             TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             HISTORY={history} # THE HISTORY OF THE AGENT
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY NO FLUFF BEEFORE OR AFTER
+            
             --OUTPUT--
             YOU MUST STRICTLY RESPOND IN JSON SO I CAN PARSE IT PROPERLY FOR MAN KIND, GOD BLESS THE FREE WORLD
     """
@@ -100,6 +105,7 @@ class Agent:
             print("No src provided, using empty content.", color='yellow')
         
         plan = []
+        hardware = c.hardware()
         for step in range(steps):
             
             print(f"STEP({step + 1}/{steps}) ", color='green')
@@ -113,6 +119,7 @@ class Agent:
                     history=history,
                     steps=steps,
                     target=target,
+                    hardware=hardware,
                     output_format=self.output_format
                 )
                 output = self.provider.forward(prompt, stream=stream, model=model, max_tokens=max_tokens, temperature=temperature )
