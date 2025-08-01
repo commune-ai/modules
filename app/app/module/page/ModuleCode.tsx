@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { CopyButton } from '@/app/components/CopyButton'
-import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, FolderIcon, FolderOpenIcon, MagnifyingGlassIcon, CodeBracketIcon, DocumentTextIcon, PhotoIcon, FilmIcon, MusicalNoteIcon, ArchiveBoxIcon, DocumentChartBarIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
+import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, FolderIcon, FolderOpenIcon, MagnifyingGlassIcon, CodeBracketIcon, DocumentTextIcon, PhotoIcon, FilmIcon, MusicalNoteIcon, ArchiveBoxIcon, DocumentChartBarIcon, ClipboardDocumentIcon, FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import crypto from 'crypto'
 
 interface ModuleCodeProps {
@@ -207,27 +207,27 @@ function FileTreeItem({
     <div>
       <div
         className={`group flex items-center px-2 py-1.5 cursor-pointer hover:bg-gray-800/50 rounded-md text-xs transition-all duration-150 ${
-          isSelected ? 'bg-green-900/30 text-green-300' : 'text-gray-400'
+          isSelected ? 'bg-gray-800 border-l-2 border-blue-400' : 'text-gray-400 hover:text-gray-200'
         } ${matchesSearch && searchTerm ? 'ring-1 ring-yellow-400/30' : ''}`}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleClick}
       >
         {node.type === 'folder' && (
           isExpanded ? (
-            <ChevronDownIcon className="h-3 w-3 mr-1" />
+            <ChevronDownIcon className="h-3 w-3 mr-1 text-gray-500" />
           ) : (
-            <ChevronRightIcon className="h-3 w-3 mr-1" />
+            <ChevronRightIcon className="h-3 w-3 mr-1 text-gray-500" />
           )
         )}
         <FileIcon className={`h-4 w-4 mr-2 flex-shrink-0 ${
-          node.type === 'folder' ? 'text-yellow-500' : 'text-gray-400'
+          node.type === 'folder' ? 'text-blue-400' : isSelected ? 'text-blue-400' : 'text-gray-500'
         }`} />
-        <span className="truncate font-mono flex-1">
+        <span className="truncate font-mono flex-1 text-sm">
           {searchTerm ? highlightSearchTerm(node.name, searchTerm) : node.name}
         </span>
         {node.type === 'file' && (
           <>
-            <span className="ml-2 text-xs opacity-60">{node.size}</span>
+            <span className="ml-2 text-xs opacity-50 hidden group-hover:inline">{node.size}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -236,7 +236,7 @@ function FileTreeItem({
               className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Copy file content"
             >
-              <ClipboardDocumentIcon className="h-3 w-3 text-green-400 hover:text-green-300" />
+              <ClipboardDocumentIcon className="h-3.5 w-3.5 text-gray-400 hover:text-blue-400" />
             </button>
           </>
         )}
@@ -249,7 +249,7 @@ function FileTreeItem({
             className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
             title="Copy folder contents"
           >
-            <ClipboardDocumentIcon className="h-3 w-3 text-green-400 hover:text-green-300" />
+            <ClipboardDocumentIcon className="h-3.5 w-3.5 text-gray-400 hover:text-blue-400" />
           </button>
         )}
       </div>
@@ -276,7 +276,7 @@ function FileTreeItem({
 
 export const ModuleCode: React.FC<ModuleCodeProps> = ({ 
   files, 
-  title = 'Compressed Code Viewer',
+  title = 'Code Explorer',
   showSearch = true,
   showFileTree = true,
   compactMode = false,
@@ -289,8 +289,20 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
   const [fileTree, setFileTree] = useState<FileNode[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [searchResults, setSearchResults] = useState<{path: string; lineNumbers: number[]}[]>([])
+  const [fileTypeFilter, setFileTypeFilter] = useState<string>('all')
+  const [showFilters, setShowFilters] = useState(false)
   const codeRefs = useRef<Record<string, HTMLDivElement>>({});
-  console.log(files)
+  
+  // Get unique file types
+  const fileTypes = useMemo(() => {
+    const types = new Set<string>()
+    Object.keys(files).forEach(path => {
+      const ext = path.split('.').pop()?.toLowerCase() || 'unknown'
+      types.add(ext)
+    })
+    return Array.from(types).sort()
+  }, [files])
+  
   // Build file tree on mount or when files change
   useEffect(() => {
     const tree = buildFileTree(files)
@@ -379,16 +391,29 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
     }))
   }, [files])
   
-  // Filter files based on search
+  // Filter files based on search and file type
   const filteredSections = useMemo(() => {
-    if (!searchTerm) return fileSections
+    let filtered = fileSections
     
-    const term = searchTerm.toLowerCase()
-    return fileSections.filter(section => 
-      section.path.toLowerCase().includes(term) ||
-      section.content.toLowerCase().includes(term)
-    )
-  }, [fileSections, searchTerm])
+    // Filter by file type
+    if (fileTypeFilter !== 'all') {
+      filtered = filtered.filter(section => {
+        const ext = section.path.split('.').pop()?.toLowerCase() || 'unknown'
+        return ext === fileTypeFilter
+      })
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(section => 
+        section.path.toLowerCase().includes(term) ||
+        section.content.toLowerCase().includes(term)
+      )
+    }
+    
+    return filtered
+  }, [fileSections, searchTerm, fileTypeFilter])
   
   // Calculate total stats
   const stats = useMemo(() => {
@@ -458,14 +483,14 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
     const matchingLines = searchResults.find(r => r.path === path)?.lineNumbers || []
     
     return (
-      <div className="text-gray-500 text-xs font-mono pr-2 select-none">
+      <div className="text-gray-600 text-xs font-mono pr-4 select-none border-r border-gray-800">
         {lines.map((_, index) => {
           const lineNumber = startLine + index
           const isMatch = matchingLines.includes(lineNumber)
           return (
             <div 
               key={index} 
-              className={`text-right ${isMatch ? 'bg-yellow-400/20 text-yellow-400' : ''}`}
+              className={`text-right pr-2 ${isMatch ? 'bg-yellow-400/20 text-yellow-400 font-bold' : ''}`}
             >
               {lineNumber}
             </div>
@@ -482,7 +507,7 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
     
     return (
       <pre className="overflow-x-auto flex-1">
-        <code className={`text-xs ${langColor} font-mono leading-relaxed`}>
+        <code className={`text-sm ${langColor} font-mono leading-relaxed`}>
           {lines.map((line, index) => {
             const lineNumber = index + 1
             const isMatch = matchingLines.includes(lineNumber)
@@ -501,91 +526,153 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
   }
   
   return (
-    <div className="rounded-lg bg-black/90 overflow-hidden">
+    <div className="rounded-lg bg-gray-900 border border-gray-800 overflow-hidden">
       {/* Header */}
-      <div className="bg-black/60 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold text-green-400">{title}</h2>
+      <div className="bg-gray-900 border-b border-gray-800 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-100">{title}</h2>
           <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span>{stats.fileCount} files</span>
-            <span>{stats.totalLines} lines</span>
+            <span className="flex items-center gap-1">
+              <DocumentIcon className="h-4 w-4" />
+              {stats.fileCount} files
+            </span>
+            <span>{stats.totalLines.toLocaleString()} lines</span>
             <span>{stats.totalSize}</span>
           </div>
         </div>
         
-        {/* Search Bar */}
+        {/* Search and Filters */}
         {showSearch && (
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search in code content..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-black/60 border border-green-500/20 rounded-lg 
-                       text-green-400 placeholder-gray-500 text-sm
-                       focus:outline-none focus:border-green-400"
-            />
-            {searchResults.length > 0 && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                {searchResults.length} files, {searchResults.reduce((sum, r) => sum + r.lineNumbers.length, 0)} matches
+          <div className="space-y-2">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search code content..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg 
+                         text-gray-100 placeholder-gray-500 text-sm
+                         focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              {searchResults.length > 0 && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                  {searchResults.length} files • {searchResults.reduce((sum, r) => sum + r.lineNumbers.length, 0)} matches
+                </div>
+              )}
+            </div>
+            
+            {/* Filter Toggle */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                <FunnelIcon className="h-4 w-4" />
+                Filters
+                {fileTypeFilter !== 'all' && (
+                  <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                    {fileTypeFilter}
+                  </span>
+                )}
+              </button>
+            </div>
+            
+            {/* Filter Options */}
+            {showFilters && (
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-800/50 rounded-lg">
+                <button
+                  onClick={() => setFileTypeFilter('all')}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    fileTypeFilter === 'all'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  All Files
+                </button>
+                {fileTypes.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setFileTypeFilter(type)}
+                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                      fileTypeFilter === type
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    .{type}
+                  </button>
+                ))}
               </div>
             )}
           </div>
         )}
       </div>
       
-      {/* File Tree Sidebar (optional) */}
-      <div className="flex">
+      {/* File Tree Sidebar and Code View */}
+      <div className="flex h-[600px]">
         {showFileTree && (
-          <div className="w-64 bg-black/40 p-4 max-h-[600px] overflow-y-auto">
-            <div className="mb-3">
-              <h3 className="text-sm font-medium text-green-400 mb-2">File Explorer</h3>
+          <div className="w-80 bg-gray-950 border-r border-gray-800 flex flex-col">
+            {/* File Tree Header */}
+            <div className="p-3 border-b border-gray-800">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-200">Files</h3>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      const allFolders = new Set<string>()
+                      const collectFolders = (nodes: FileNode[]) => {
+                        nodes.forEach(node => {
+                          if (node.type === 'folder') {
+                            allFolders.add(node.path)
+                            if (node.children) collectFolders(node.children)
+                          }
+                        })
+                      }
+                      collectFolders(fileTree)
+                      setExpandedFolders(allFolders)
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded"
+                    title="Expand all"
+                  >
+                    <ChevronDownIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setExpandedFolders(new Set())}
+                    className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded"
+                    title="Collapse all"
+                  >
+                    <ChevronRightIcon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
               
               {/* File Search */}
               <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
                 <input
                   type="text"
                   placeholder="Filter files..."
                   value={fileSearchTerm}
                   onChange={(e) => setFileSearchTerm(e.target.value)}
-                  className="w-full pl-7 pr-2 py-1 bg-black/40 border border-gray-700 rounded text-xs
+                  className="w-full pl-7 pr-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs
                            text-gray-300 placeholder-gray-500
-                           focus:outline-none focus:border-green-400"
+                           focus:outline-none focus:border-blue-500"
                 />
-              </div>
-              
-              <div className="flex gap-1 mt-2">
-                <button
-                  onClick={() => {
-                    const allFolders = new Set<string>()
-                    const collectFolders = (nodes: FileNode[]) => {
-                      nodes.forEach(node => {
-                        if (node.type === 'folder') {
-                          allFolders.add(node.path)
-                          if (node.children) collectFolders(node.children)
-                        }
-                      })
-                    }
-                    collectFolders(fileTree)
-                    setExpandedFolders(allFolders)
-                  }}
-                  className="text-xs text-green-400 hover:text-green-300"
-                  title="Expand all folders"
-                >
-                  <ChevronDownIcon className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => setExpandedFolders(new Set())}
-                  className="text-xs text-green-400 hover:text-green-300"
-                  title="Collapse all folders"
-                >
-                  <ChevronRightIcon className="h-3 w-3" />
-                </button>
+                {fileSearchTerm && (
+                  <button
+                    onClick={() => setFileSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  >
+                    <XMarkIcon className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="space-y-0">
+            
+            {/* File Tree */}
+            <div className="flex-1 overflow-y-auto p-2">
               {fileTree.map((node) => (
                 <FileTreeItem
                   key={node.path}
@@ -603,8 +690,8 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
           </div>
         )}
         
-        {/* Compressed Code View */}
-        <div className="flex-1 max-h-[600px] overflow-y-auto">
+        {/* Code View */}
+        <div className="flex-1 overflow-y-auto bg-gray-950">
           {filteredSections.map((section, index) => {
             const isCollapsed = collapsedFiles.has(section.path)
             const isSelected = selectedFile === section.path
@@ -620,45 +707,39 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
               <div 
                 key={section.path} 
                 ref={el => { if (el) codeRefs.current[section.path] = el }}
-                className={`${
-                  isSelected ? 'bg-green-900/10' : ''
-                } ${hasSearchMatch ? 'ring-1 ring-yellow-400/30' : ''}`}
+                className={`border-b border-gray-800 ${
+                  isSelected ? 'ring-2 ring-blue-500' : ''
+                } ${hasSearchMatch ? 'bg-yellow-400/5' : ''}`}
               >
                 {/* File Header */}
                 <div 
-                  className="flex items-center justify-between p-3 bg-black/40 hover:bg-black/60 cursor-pointer"
+                  className="flex items-center justify-between px-4 py-3 bg-gray-900 hover:bg-gray-850 cursor-pointer sticky top-0 z-10"
                   onClick={() => toggleFile(section.path)}
                 >
                   <div className="flex items-center gap-2">
                     {isCollapsed ? (
-                      <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                      <ChevronRightIcon className="h-4 w-4 text-gray-500" />
                     ) : (
-                      <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                      <ChevronDownIcon className="h-4 w-4 text-gray-500" />
                     )}
                     <FileIcon className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-mono text-green-400">
+                    <span className="text-sm font-mono text-gray-200">
                       {searchTerm && section.path.toLowerCase().includes(searchTerm.toLowerCase()) 
                         ? highlightSearchTerm(section.path, searchTerm)
                         : section.path}
                     </span>
-                    <span className={`text-xs ${languageColors[section.language]}`}>
-                      {section.language.toUpperCase()}
+                    <span className={`text-xs px-2 py-0.5 rounded ${languageColors[section.language]} bg-gray-800`}>
+                      {section.language}
                     </span>
                     {hasSearchMatch && (
-                      <span className="text-xs text-yellow-400">
+                      <span className="text-xs text-yellow-400 bg-yellow-400/20 px-2 py-0.5 rounded">
                         {searchResults.find(r => r.path === section.path)?.lineNumbers.length} matches
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">
-                      {section.size}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {section.lineCount} lines
-                    </span>
-                    <span className="text-xs font-mono text-green-400">
-                      #{section.hash}
+                    <span className="text-xs text-gray-500">
+                      {section.lineCount} lines • {section.size}
                     </span>
                     <CopyButton code={section.content} />
                   </div>
@@ -666,9 +747,9 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
                 
                 {/* File Content */}
                 {!isCollapsed && (
-                  <div className="flex bg-gray-950/50">
+                  <div className="flex bg-gray-950">
                     {!compactMode && renderLineNumbers(section.content, 1, section.path)}
-                    <div className="flex-1 p-3 overflow-x-auto">
+                    <div className="flex-1 p-4 overflow-x-auto">
                       {renderCode(section.content, section.language, section.path)}
                     </div>
                   </div>
@@ -676,12 +757,20 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
               </div>
             )
           })}
+          
+          {/* Empty State */}
+          {filteredSections.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <DocumentIcon className="h-12 w-12 mb-3" />
+              <p className="text-sm">No files match your filters</p>
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Footer with quick actions */}
+      {/* Footer */}
       {!compactMode && (
-        <div className="bg-black/60 p-3">
+        <div className="bg-gray-900 border-t border-gray-800 px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-400">
               {searchTerm && searchResults.length > 0 && (
@@ -693,9 +782,9 @@ export const ModuleCode: React.FC<ModuleCodeProps> = ({
                 const allCode = filteredSections.map(s => `// ${s.path}\n${s.content}`).join('\n\n')
                 navigator.clipboard.writeText(allCode)
               }}
-              className="flex items-center gap-2 text-xs text-green-400 hover:text-green-300 transition-colors"
+              className="flex items-center gap-2 text-xs text-gray-400 hover:text-blue-400 transition-colors"
             >
-              <DocumentIcon className="h-3 w-3" />
+              <ClipboardDocumentIcon className="h-3.5 w-3.5" />
               Copy All Code
             </button>
           </div>

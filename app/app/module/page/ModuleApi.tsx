@@ -16,7 +16,7 @@ type SchemaType = {
   hash?: string
 }
 
-export const ModuleSchema = ({mod}: Record<string, any>) => {
+export const ModuleApi = ({mod}: Record<string, any>) => {
   const [selectedFunction, setSelectedFunction] = useState<string>('')
   const [params, setParams] = useState<Record<string, any>>({})
   const [response, setResponse] = useState<any>(null)
@@ -24,7 +24,7 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
   const [error, setError] = useState<string>('')
   const [showDescription, setShowDescription] = useState<boolean>(false)
   
-  console.log('ModuleSchema props:', mod)
+  console.log('ModuleApi props:', mod)
   let schema: Record<string, SchemaType> = mod.schema || {}
   
   // Filter out 'self' method
@@ -241,4 +241,4 @@ export const ModuleSchema = ({mod}: Record<string, any>) => {
   )
 }
 
-export default ModuleSchema
+export default ModuleApi

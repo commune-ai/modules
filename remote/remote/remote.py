@@ -2,14 +2,13 @@ import commune as c
 import streamlit as st
 from typing import *
 import os
+import re
 import json
 import paramiko
     
 class Remote:
-    def __init__(self, path = 'hosts'):
-        path = path or 'hosts.yaml'
-        self.host_data_path = path
-        return {'status': 'success', 'msg': f'Host data path set to {path}'}
+    def __init__(self, path = c.abspath('~/.commune/remote/hosts.yaml')):
+        self.path = path
 
     def ssh_cmd(self, *cmd_args, 
                 cmd : str = None,
@@ -160,23 +159,29 @@ class Remote:
     
     def save_hosts(self, hosts=None, path = None):
         if path == None:
-            path = self.host_data_path
+            path = self.path
         
         c.print(f'Saving hosts to {path}')
         if hosts == None:
             hosts = self.hosts()
-        self.put_yaml(path, hosts)
+        c.put_yaml(path, hosts)
 
         return {
                 'status': 'success', 
                 'msg': f'Hosts saved', 
                 'hosts': hosts, 
-                'path': self.host_data_path, 
+                'path': self.path, 
                 }
     def load_hosts(self, path = None):
         if path == None:
-            path = self.host_data_path
-        return c.get_yaml(path)
+            path = self.path
+        if not os.path.exists(path):
+            c.print(f'Hosts file {path} does not exist, creating a new one')
+            self.save_hosts(hosts={})
+        hosts =  c.get_yaml(path)
+        if not isinstance(hosts, dict):
+            return {}
+        return hosts
     
     def switch_hosts(self, path):
         hosts = c.get_json(path)
@@ -193,6 +198,16 @@ class Remote:
             return {'status': 'success', 'msg': f'Host {name} removed'}
         else:
             return {'status': 'error', 'msg': f'Host {name} not found'}
+
+    def rm_hosts(self, *hosts):
+        """
+        Remove multiple hosts by name.
+        """
+        og_hosts = self.hosts()
+        for host in hosts:
+            og_hosts.pop(host, None)
+        self.save_hosts(hosts)
+        return {'status': 'success', 'msg': f'Hosts {hosts} removed'}
 
     def hosts(self, search=None, enable_search_terms: bool = False, path=None):
         hosts = self.load_hosts(path=path)
@@ -324,7 +339,6 @@ class Remote:
         
     def pull(self, stash=True, hosts=None):
         return c.rcmd(f'c pull stash={stash}', hosts=hosts)
-    
 
 
     def push(self):
@@ -332,9 +346,6 @@ class Remote:
         c.rcmd('c pull', verbose=True)
         c.rcmd('c serve', verbose=True)
         c.add_peers()
-
-
-    
 
     def setup(self,**kwargs):
         repo_url = c.repo_name_url()
@@ -520,27 +531,28 @@ class Remote:
         
         return toml_text
 
-    def add_host_from_ssh(self, ssh: str, name: str = None):
+
+    def add_host_from_ssh(self, ssh: str, name: str):
         """
         Adds a host using an SSH connection string format that includes the password using the -pwd flag.
 
-        :param ssh: SSH connection string, e.g., "user@host:port -p ssh_port -pwd password"
+        :param ssh: SSH connection string, e.g., "user@host -p {port} -pwd password"
         :param name: Optional name for the host; if not provided, a name will be generated
         """
         # Regular expression to parse the SSH connection string including the password specified by -pwd flag
-        pattern = r'(?P<user>[^@]+)@(?P<host>[^:]+):(?P<port>\d+).*?-p\s*(?P<ssh_port>\d+).*?-pwd\s*(?P<pwd>[^\s]+)'
+        pattern = r'(?P<user>[^@]+)@(?P<host>[^\s]+)(?:\s+-p\s+(?P<port>\d+))?.*?\s+-pwd\s+(?P<pwd>[^\s]+)'
         match = re.match(pattern, ssh)
         if not match:
-            raise ValueError("SSH string format is invalid. Expected format: 'user@host:port -p ssh_port -pwd password'")
+            raise ValueError("SSH string format is invalid. Expected format: 'user@host -p {port} -pwd password'")
 
         user = match.group('user')
         pwd = match.group('pwd')
         host = match.group('host')
-        # The port in the SSH string is not used for SSH connections in this context, so it's ignored
-        ssh_port = int(match.group('ssh_port'))
+        # Default port to 22 if not specified
+        port = int(match.group('port')) if match.group('port') else 22
 
         # Use the existing add_host method to add the host
-        return self.add_host(host=host, port=ssh_port, user=user, pwd=pwd, name=name)
+        return self.add_host(host=host, port=port, user=user, pwd=pwd, name=name)
     
     def pwd(self, host):
         hosts = self.hosts(search=host)

@@ -16,7 +16,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { CopyButton } from '@/app/components/CopyButton'
 import { ModuleCode } from '../page/ModuleCode'
-import ModuleSchema from './ModuleSchema'
+import ModuleApi from './ModuleApi'
 import Link from 'next/link'
 
 type TabType = 'code' | 'api'
@@ -256,7 +256,7 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
                 compactMode={false}
               />
             )}
-            {activeTab === 'api' && <ModuleSchema mod={module} />}
+            {activeTab === 'api' && <ModuleApi mod={module} />}
           </div>
         </div>
 

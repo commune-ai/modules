@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { CopyButton } from '@/app/components/CopyButton'
 import { ModuleCode } from './ModuleCode'
-import ModuleSchema from './ModuleSchema'
+import ModuleSchema from './ModuleApi'
 import Link from 'next/link'
 
 type TabType = 'code' | 'api'
@@ -35,9 +35,20 @@ const time2str = (time: number): string => {
   return d.toLocaleString()
 }
 
-// Text to color function - generates unique color based on module name
+// Retro gaming color palette
+const retroColors = [
+  '#00ff00', // Matrix green
+  '#ff00ff', // Hot magenta
+  '#00ffff', // Cyan
+  '#ffff00', // Yellow
+  '#ff6600', // Orange
+  '#0099ff', // Sky blue
+  '#ff0099', // Pink
+]
+
+// Text to color function - generates retro color based on module name
 const text2color = (text: string): string => {
-  if (!text) return '#00ff00' // Default green
+  if (!text) return '#00ff00' // Default matrix green
   
   // Create a hash from the text
   let hash = 0
@@ -45,12 +56,8 @@ const text2color = (text: string): string => {
     hash = text.charCodeAt(i) + ((hash << 5) - hash)
   }
   
-  // Convert hash to HSL color (keeping saturation and lightness consistent for readability)
-  const hue = Math.abs(hash) % 360
-  const saturation = 70 + (Math.abs(hash >> 8) % 30) // 70-100% saturation
-  const lightness = 45 + (Math.abs(hash >> 16) % 15) // 45-60% lightness
-  
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+  // Pick from retro color palette
+  return retroColors[Math.abs(hash) % retroColors.length]
 }
 
 export default function ModuleClient({ module_name, code, api }: ModuleClientProps) {
@@ -113,16 +120,17 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
   if (error || !module) {
     return (
       <div className='flex min-h-screen items-center justify-center bg-black'>
-        <div className='max-w-md text-center'>
-          <ExclamationTriangleIcon className='mx-auto h-12 w-12 text-red-500 mb-4' />
-          <h2 className='text-xl font-semibold text-red-500 mb-2'>Error Loading Module</h2>
-          <p className='text-gray-400 mb-6'>{error}</p>
+        <div className='max-w-md text-center font-mono'>
+          <div className='mb-6 text-6xl text-red-500 animate-pulse'>ERROR</div>
+          <ExclamationTriangleIcon className='mx-auto h-16 w-16 text-red-500 mb-4' />
+          <h2 className='text-2xl font-bold text-red-500 mb-2 uppercase tracking-wider'>System Failure</h2>
+          <p className='text-green-400 mb-6 font-mono text-lg'>{error}</p>
           <Link
             href='/'
-            className='inline-flex items-center gap-2 rounded-lg border border-green-500/30 bg-black/90 px-4 py-2 text-green-400 hover:bg-green-900/20'
+            className='inline-flex items-center gap-2 border-2 border-green-500 bg-black px-6 py-3 text-green-500 hover:bg-green-500 hover:text-black font-mono uppercase tracking-wider transition-none'
           >
-            <ArrowLeftIcon className='h-4 w-4' />
-            Back to Modules
+            <ArrowLeftIcon className='h-5 w-5' />
+            <span>[RETURN]</span>
           </Link>
         </div>
       </div>
@@ -138,120 +146,143 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
   ]
 
   return (
-    <div className='min-h-screen bg-gradient-to-b from-black to-gray-950 p-6 font-mono'>
-      <div className='mx-auto max-w-7xl space-y-6'>
-        {/* Header with key info */}
-        <div className='space-y-4'>
-          {/* Module name with sync */}
-          <div className='flex items-center justify-between'>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className='group flex items-center space-x-3 text-left transition-all duration-300'
-              style={{ color: moduleColor }}
-            >
-              <h1 className='text-3xl font-bold group-hover:underline'>
-                {module.name}
-              </h1>
-              <ArrowPathIcon className={`h-6 w-6 opacity-0 group-hover:opacity-100 ${syncing ? 'animate-spin' : ''}`} />
-            </button>
-            <Link
-              href='/'
-              className='flex items-center gap-2 rounded-lg border bg-black/90 px-4 py-2 transition-all hover:bg-black/20'
-              style={{ 
-                borderColor: `${moduleColor}4D`,
-                color: moduleColor
-              }}
-            >
-              <ArrowLeftIcon className='h-4 w-4' />
-              <span>Back</span>
-            </Link>
-          </div>
-
-          {/* Key info row */}
-          <div className='flex flex-wrap gap-4 text-sm'>
-            {module.key && (
+    <div className='min-h-screen bg-black font-mono'>
+      {/* Retro scanlines effect */}
+      <div className='fixed inset-0 pointer-events-none opacity-10' style={{
+        background: `repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          ${moduleColor}33 2px,
+          ${moduleColor}33 4px
+        )`
+      }} />
+      
+      <div className='relative z-10 mx-auto max-w-7xl p-4'>
+        {/* Header with retro terminal style */}
+        <div className='mb-6'>
+          {/* Terminal header bar */}
+          <div className='border-2 bg-black' style={{ borderColor: moduleColor }}>
+            <div className='flex items-center justify-between border-b-2 p-2' style={{ borderColor: moduleColor }}>
               <div className='flex items-center gap-2'>
-                <span className='text-gray-400'>key:</span>
-                <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
-                  {shorten(module.key)}
-                </span>
-                <CopyButton code={module.key} />
+                <div className='h-3 w-3 rounded-full bg-red-500' />
+                <div className='h-3 w-3 rounded-full bg-yellow-500' />
+                <div className='h-3 w-3 rounded-full bg-green-500' />
               </div>
-            )}
-            {module.cid && (
-              <div className='flex items-center gap-2'>
-                <span className='text-gray-400'>cid:</span>
-                <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
-                  {shorten(module.cid)}
-                </span>
-                <CopyButton code={module.cid} />
-              </div>
-            )}
-            <div className='flex items-center gap-2'>
-              <span className='text-gray-400'>created:</span>
-              <span className='font-mono' style={{ color: `${moduleColor}CC` }}>
-                {time2str(module.time)}
-              </span>
+              <div className='text-xs uppercase' style={{ color: moduleColor }}>MODULE://SYSTEM//{module.name}</div>
+              <Link
+                href='/'
+                className='text-xs uppercase hover:underline' 
+                style={{ color: moduleColor }}
+              >
+                [EXIT]
+              </Link>
             </div>
-          </div>
-
-          {/* Description and tags */}
-          {module.desc && (
-            <p className='max-w-3xl text-gray-400'>
-              {module.desc}
-            </p>
-          )}
-          {module.tags?.length > 0 && (
-            <div className='flex flex-wrap gap-2'>
-              {module.tags.map((tag, i) => (
-                <span
-                  key={i}
-                  className='rounded-full border px-3 py-1 text-sm'
+            
+            {/* Module info section */}
+            <div className='p-6'>
+              <div className='mb-4 flex items-center justify-between'>
+                <h1 className='text-4xl font-bold uppercase tracking-wider animate-pulse' style={{ color: moduleColor }}>
+                  {module.name}
+                </h1>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className='group flex items-center gap-2 border-2 px-4 py-2 uppercase transition-none hover:bg-opacity-20'
                   style={{ 
-                    borderColor: `${moduleColor}33`,
-                    backgroundColor: `${moduleColor}0D`,
-                    color: `${moduleColor}CC`
+                    borderColor: moduleColor,
+                    color: moduleColor,
+                    backgroundColor: syncing ? `${moduleColor}20` : 'transparent'
                   }}
                 >
-                  #{tag}
-                </span>
-              ))}
+                  <ArrowPathIcon className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>{syncing ? 'SYNCING...' : '[SYNC]'}</span>
+                </button>
+              </div>
+
+              {/* Key info in retro style */}
+              <div className='grid grid-cols-1 gap-2 text-sm md:grid-cols-3'>
+                {module.key && (
+                  <div className='flex items-center gap-2'>
+                    <span className='text-green-500'>KEY:</span>
+                    <span className='font-mono' style={{ color: moduleColor }}>
+                      {shorten(module.key)}
+                    </span>
+                    <CopyButton code={module.key} />
+                  </div>
+                )}
+                {module.cid && (
+                  <div className='flex items-center gap-2'>
+                    <span className='text-green-500'>CID:</span>
+                    <span className='font-mono' style={{ color: moduleColor }}>
+                      {shorten(module.cid)}
+                    </span>
+                    <CopyButton code={module.cid} />
+                  </div>
+                )}
+                <div className='flex items-center gap-2'>
+                  <span className='text-green-500'>CREATED:</span>
+                  <span className='font-mono' style={{ color: moduleColor }}>
+                    {time2str(module.time)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Description */}
+              {module.desc && (
+                <div className='mt-4 border-l-4 pl-4' style={{ borderColor: moduleColor }}>
+                  <p className='text-green-400'>{module.desc}</p>
+                </div>
+              )}
+              
+              {/* Tags in retro style */}
+              {module.tags?.length > 0 && (
+                <div className='mt-4 flex flex-wrap gap-2'>
+                  {module.tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      className='border-2 px-3 py-1 text-xs uppercase'
+                      style={{ 
+                        borderColor: moduleColor,
+                        color: moduleColor
+                      }}
+                    >
+                      [{tag}]
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Main content card */}
-        <div className='overflow-hidden rounded-2xl border bg-black/90 shadow-xl backdrop-blur-sm'
-             style={{ 
-               borderColor: `${moduleColor}4D`,
-               boxShadow: `0 4px 20px ${moduleColor}1A`
-             }}>
-          {/* Tabs */}
-          <div className='flex border-b' style={{ borderColor: `${moduleColor}33` }}>
+        {/* Main content with retro terminal style */}
+        <div className='border-2 bg-black' style={{ borderColor: moduleColor }}>
+          {/* Retro tab navigation */}
+          <div className='flex border-b-2' style={{ borderColor: moduleColor }}>
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as TabType)}
-                className={`flex items-center space-x-2 px-8 py-4 transition-all ${
+                className={`flex items-center gap-2 px-6 py-3 uppercase transition-none ${
                   activeTab === id
-                    ? 'border-b-2'
-                    : 'hover:bg-black/10'
+                    ? 'border-b-4'
+                    : 'hover:bg-opacity-10'
                 }`}
                 style={{
                   borderColor: activeTab === id ? moduleColor : 'transparent',
-                  backgroundColor: activeTab === id ? `${moduleColor}0D` : 'transparent',
-                  color: activeTab === id ? moduleColor : `${moduleColor}80`
+                  backgroundColor: activeTab === id ? `${moduleColor}20` : 'transparent',
+                  color: activeTab === id ? moduleColor : '#00ff00'
                 }}
               >
                 <Icon className='h-5 w-5' />
-                <span>{label}</span>
+                <span>[{label}]</span>
               </button>
             ))}
           </div>
 
-          {/* Content */}
-          <div className='p-8'>
+          {/* Content area */}
+          <div className='p-6'>
             {activeTab === 'code' && (
               <ModuleCode
                 files={codeMap}
@@ -265,38 +296,44 @@ export default function ModuleClient({ module_name, code, api }: ModuleClientPro
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className='flex flex-wrap items-center justify-center gap-4'>
+        {/* Footer Actions in retro style */}
+        <div className='mt-6 flex flex-wrap items-center justify-center gap-4'>
           {module.url && (
             <a
               href={module.url}
               target='_blank'
               rel='noopener noreferrer'
-              className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+              className='flex items-center gap-2 border-2 px-6 py-3 uppercase transition-none hover:bg-opacity-20'
               style={{ 
-                borderColor: `${moduleColor}4D`,
-                color: moduleColor
+                borderColor: moduleColor,
+                color: moduleColor,
+                backgroundColor: 'transparent'
               }}
             >
-              <span>Visit App</span>
+              <span>[LAUNCH APP]</span>
             </a>
           )}
-          <button className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+          <button className='flex items-center gap-2 border-2 px-6 py-3 uppercase transition-none hover:bg-opacity-20'
                   style={{ 
-                    borderColor: `${moduleColor}4D`,
+                    borderColor: moduleColor,
                     color: moduleColor
                   }}>
             <DocumentTextIcon className='h-5 w-5' />
-            <span>Documentation</span>
+            <span>[DOCS]</span>
           </button>
-          <button className='flex items-center gap-2 rounded-xl border bg-black/90 px-6 py-3 transition-all hover:bg-black/20'
+          <button className='flex items-center gap-2 border-2 px-6 py-3 uppercase transition-none hover:bg-opacity-20'
                   style={{ 
-                    borderColor: `${moduleColor}4D`,
+                    borderColor: moduleColor,
                     color: moduleColor
                   }}>
             <ExclamationTriangleIcon className='h-5 w-5' />
-            <span>Report Issue</span>
+            <span>[REPORT]</span>
           </button>
+        </div>
+        
+        {/* Retro footer text */}
+        <div className='mt-8 text-center text-xs uppercase' style={{ color: moduleColor }}>
+          <p>SYSTEM READY // MODULE LOADED // {new Date().getFullYear()}</p>
         </div>
       </div>
     </div>
