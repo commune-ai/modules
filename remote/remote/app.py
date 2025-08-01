@@ -3,7 +3,7 @@ import streamlit as st
 from typing import *
 import json 
 Remote = c.module('remote')
-class App(c.Module):
+class App:
     def __init__(self, **kwargs):
         remote = Remote()
         for fn in dir(remote):
@@ -179,7 +179,7 @@ class App(c.Module):
         stop_button = cols[1].button('Stop', use_container_width=True)
 
 
-        host2stats = self.get('host2stats', {})
+        host2stats = c.get('host2stats', {})
         future2host = {}
         host_names = list(host_map.keys())
         if run_button and not stop_button:

@@ -217,6 +217,9 @@ class Remote:
         
         if search != None:
             hosts = {k:v for k,v in hosts.items() if search in k}
+        host2ssh = self.host2ssh(host_map=hosts)
+        for host, ssh in host2ssh.items():
+             hosts[host]['ssh'] = ssh
         if enable_search_terms:
             return self.filter_hosts(hosts=hosts)
         return hosts
@@ -381,12 +384,12 @@ class Remote:
 
     def set_search_terms(self, search_terms):
         path = self.search_terms_path
-        self.put(path, search_terms)
+        c.put(path, search_terms)
         return {'status': 'success', 'msg': f'Search terms set', 'search_terms': search_terms}
 
     def clear_terms(self):
         path = self.search_terms_path
-        return  self.put(path, {'include': '', 'avoid': ''})
+        return  c.put(path, {'include': '', 'avoid': ''})
 
     def avoid(self, *terms):
         terms = ','.join(terms)
@@ -404,7 +407,7 @@ class Remote:
 
     def get_search_terms(self):
         path = self.search_terms_path
-        return self.get(path, {'include': '', 'avoid': ''})
+        return c.get(path, {'include': '', 'avoid': ''})
     search_terms = get_search_terms
 
     def filter_hosts(self, include=None, avoid=None, hosts=None):
@@ -559,4 +562,9 @@ class Remote:
         if host not in hosts:
             return {k:v['pwd'] for k,v in hosts.items()}
         return self.hosts()[host]['pwd']
+    def app(self):
+        app_path = c.filepath('remote.app')
+        return c.cmd(f'streamlit run {app_path}')
     
+
+
