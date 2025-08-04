@@ -1,7 +1,16 @@
-REPO_NAME=$(basename $(pwd))
-if [ -z $1 ]; then
-  NAME=$REPO_NAME
-else
-  NAME=$1
+#!/bin/bash
+# Build the Next.js application before starting
+
+echo "Building Next.js application..."
+cd /app
+
+# Install dependencies if node_modules doesn't exist
+if [ ! -d "node_modules" ]; then
+    echo "Installing dependencies..."
+    npm install
 fi
-docker build -t $NAME $(pwd)
+
+# Build the application
+npm run build
+
+echo "Build complete!"
