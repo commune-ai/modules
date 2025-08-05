@@ -4,40 +4,39 @@ import commune as c
 
 class ContentTool:
 
-    def forward(self, path: str = './', max_size=10000) -> List[str]:
+    def forward(self, 
+                path: str = './', 
+                query=None, 
+                max_size=100000, 
+                threads = 4,
+                
+                timeout=20) -> List[str]:
         """
         Find files in a directory matching a specific pattern.
-        
-        Args:
-            path (str): The directory to search in.
-            pattern (str): The file pattern to match.
-            
-        Returns:
-            List[str]: A list of file paths matching the pattern.
         """
-        result = c.fn('dev.tool.select_files/forward')(path)
+        result = c.fn('dev.tool.select.files/')(path=path, query=query, trials=4)
         content = str(result)
         size = len(content)
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
-
         if size > max_size:
-            summarize = c.fn('dev.tool.summary.file/forward')
-            new_results = {}
-            f2k = {}
-            for k, v in result.items():
-                future = c.submit(summarize, {'content': v})
-                f2k[future] = k
-            try:
-                results = {}
-                for future in c.as_completed(f2k, timeout=30):
-                    k = f2k[future]
-                    print(f"Processing {k}")
-                    v = future.result()
-                    results[k] = v
-            except TimeoutError as e:
-                c.print(f"Timeout while processing content: {e}", color='red')
+            if threads > 1:
+                c.print(f"Using {threads} threads for summarization", color='yellow')
+                from concurrent.futures import ThreadPoolExecutor
+                summarize = c.fn('dev.tool.summary.file/')
+                future2name = {}
+                for k, v in result.items():
+                    params = {'content': v, "query": query}
+                    future =  c.submit(summarize, **params, timeout=timeout)
+                    future2name[future] = k
+                
+                for future in c.as_completed(future2name, timeout=timeout):
+                    k = future2name[future]
+                    result[k] = future.result()
 
-            return results
+            else:
+                c.print(f"Using single thread for summarization", color='yellow')
+                for k, v in result.items():
+                    result[k] = c.mod('dev.tool.summary.file').forward({'content': v, "query": query}, timeout=timeout)
         else:
             result = content
         c.print(f"Content found: {len(result)} items", color='green')

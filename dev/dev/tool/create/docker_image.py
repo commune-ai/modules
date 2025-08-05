@@ -16,38 +16,18 @@ class CreateFile:
     """
     
     def __init__(self, **kwargs):
-        """
-        Initialize the CreateFile tool.
-        
-        Args:
-            **kwargs: Additional configuration parameters
-        """
-        pass
-    
+        self.model = c.mod('model.openrouter')()    
+        self.tool
     def forward(self, 
-                query, 
-                file_path: str, 
-                content: str = "",
-                create_parent_dirs: bool = True,
+                path: str, 
+                query = "make a docker container",
                 overwrite: bool = False,
                 verbose: bool = True) -> Dict[str, Any]:
-        """
-        Create a new file at the specified path with the given content.
-        
-        Args:
-            file_path: Path where the file should be created
-            content: Content to write to the file
-            create_parent_dirs: Whether to create parent directories if they don't exist
-            overwrite: Whether to overwrite the file if it already exists
-            verbose: Print detailed information about the operation
-            
-        Returns:
-            Dictionary with operation results including:
-            - success: Whether the operation was successful
-            - file_path: Path to the created file
-            - message: Description of the operation result
-        """
-        file_path = abspath(file_path)
+
+        prompt = {
+            'system': "create a docker image based on the following path",
+            'content': 
+        }
         # Check if file already exists
         content = self.model.forward(query)
         

@@ -54,7 +54,7 @@ class SelectFiles:
             List of the most relevant options
         """
         
-        idx2options = {i: option.replace(home_path, '~') for i, option in enumerate(options)}
+        idx2options = {i: option for i, option in enumerate(options)}
         if not idx2options:
             return []
            
@@ -133,9 +133,7 @@ class SelectFiles:
         if verbose:
             print(f"Found {filtered_options} relevant options", color="green")
         # Allow user to select files by index if requested
-        results =  [os.path.expanduser(option[1]) for option in filtered_options]
-        if content:
-            results = {f:self.get_text(f) for f in results}
+        results =  [option for option in filtered_options]
         return results
 
     def files(self, path: str) -> List[str]:
@@ -147,5 +145,20 @@ class SelectFiles:
             text = f.read()
         return text
 
+    def test(self):
+        """
+        Test the SelectFiles module with a sample query and options.
+        """
+        options = ['a cat', 'a dog', 'a bird']
+        target_option = 'a cat'
+        query = "I want to find a cat"
+        results = self.forward(query=query, options=options, n=1)
+        assert isinstance(results, list), "Results should be a list"
+        assert target_option == results[0][1], f"Expected '{target_option}' in results, got {results}"
+        print(f"Test results: {results}", color="green")
+        return {
+            "success": True,
+            "message": f"Test passed with results: {results}"
+        }
 
     
