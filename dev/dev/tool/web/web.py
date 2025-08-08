@@ -798,7 +798,7 @@ class WebScraper:
             Based on the following search results for the query "{query}", provide a comprehensive, 
             informative summary of the key information. Focus on factual information and 
             include the most important points from multiple sources. If specific data was extracted,
-            incorporate it into your summary.
+            incorporate it into your sum.
             
             SEARCH RESULTS:
             {context}

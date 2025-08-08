@@ -44,21 +44,22 @@ class Tool:
                 history.append(str(e))
         raise ValueError("Failed to process JSON after multiple attempts.")
 
-
-
     def process(self, result) -> Any:
-        """
-        Process the response from the model, extracting the relevant JSON data.
-        """
         output = ''
         for ch in result: 
             print(ch, end='')
             output += ch
-        output = self.anchors[0].join(output.split(self.anchors[0])[1:])
-        output = self.anchors[1].join(output.split(self.anchors[1])[:-1])
-        result =   json.loads(output)
-        # verify if the result is a list of dicts
-        return result
+
+        # Trim based on anchors
+        start = output.find(self.anchors[0])
+        end = output.find(self.anchors[1], start)
+        if start == -1 or end == -1:
+            raise ValueError("Anchors not found in output.")
+
+        json_str = output[start + len(self.anchors[0]): end]
+        
+        # Return the dict with the stringified json under 'data'
+        return json.loads(json_str)
 
     def test(self, content: str = {'fam': 1, 'daweg': ['fam', 1]}, query: str = 'most relevant', model: str = None, **kwargs) -> List[str]:
         """

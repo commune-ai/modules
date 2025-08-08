@@ -21,9 +21,13 @@ class SelectFiles:
     def forward(self,  
               path: Union[List[str], Dict[Any, str]] = './',  
               query: str = 'most relevant', 
-              n: int = 6, 
+              n: int = 3, 
+              mod=None,
               content: bool = True,
                **kwargs) -> List[str]:
+
+        if mod:
+            path = c.dirpath(mod)
         results = c.fn('dev.tool.select/')(
             query=query,
             options= c.files(path),

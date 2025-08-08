@@ -199,9 +199,8 @@ class Agent:
         content = str(result)
         size = len(content)
         c.print(f"path={path} max_size={max_size} size={size}", color='cyan')
-
         if size > max_size:
-            summarize  = self.tool('summary.file')
+            summarize  = self.tool('sum.file')
             new_results = {}
             print(f"Content size {size} exceeds max_size {max_size}, summarizing...", color='red')
             futures = [c.submit(summarize, {'content': v, "query": query}, timeout=timeout) for k, v in result.items()]
@@ -226,7 +225,7 @@ class Agent:
         toolbelt = {}
         for t in self.tools():
             try:
-                toolbelt[t] = self.schema(t)
+                toolbelt[t.replace('.', '/')] = self.schema(t)
             except Exception as e:
                 c.print(f"Error getting schema for tool {t}: {e}", color='red')
                 continue
@@ -236,10 +235,11 @@ class Agent:
         """
         Get the schema for a specific tool.
         """
-        return  c.schema(self.tool_prefix + '.' +tool)[fn]
+        return  c.schema(self.tool_prefix + '.' +tool.replace('/', '.'))[fn]
 
     def tool(self, tool_name: str='cmd', prefix='dev.tool', *args, **kwargs) -> Any:
         """
         Execute a specific tool by name with provided arguments.
         """
-        return c.module(prefix + '.'+tool_name)(*args, **kwargs).forward
+        tool_name = tool_name.replace('/', '.')
+        return c.mod(prefix + '.' + tool_name)(*args, **kwargs).forward

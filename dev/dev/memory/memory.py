@@ -552,7 +552,7 @@ class Memory:
         ]
         
         prompt = str({
-            "task": "Summarize these memory items into a coherent summary.",
+            "task": "Summarize these memory items into a coherent sum.",
             "memory_items": memory_texts,
             "query": query if query else "Summarize recent important information",
             "format": "Return a concise summary that captures the key information."

@@ -1,0 +1,139 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{microtype}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=cyan,
+    urlcolor=magenta,
+    citecolor=cyan
+}
+
+\title{\huge\bfseries LENDY:\\Any-to-Any Asset Loan System with Vault Streaming and Vector Vesting}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{verbatim}
+ _      ____  _  _  ____  __   __  ____ 
+/ \  /|/  _ \/ \/ \/  _ \/  \ /  \/_   \
+| |\ ||| / \|| || || | \||  | ||  | /   /
+| | \||| \_/|| || || |_/||  \_/|  |/   /_
+\_/  \|\____/\_/\_/\____/\____/\_/\____/
+     L E N D Y   P R O T O C O L
+\end{verbatim}
+
+\section*{Abstract}
+Lendy is a decentralized, cyberpunk-inspired lending protocol that allows lenders and borrowers to form mutual contracts for any asset pair across any chain. Using programmable \textbf{vaults}, parties can lock collateral, define vesting schedules as \emph{time-amount vectors}, and stream token emissions over time to any address, anywhere. The protocol is designed for compatibility with \emph{any Inter-Blockchain Protocol (IBC)} or equivalent interoperability layer, enabling global liquidity connections.
+
+\section{Vaults}
+A \textbf{Vault} is a programmable lockbox:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Owner Key}: Primary control key (arbitrary-length byte vector).
+    \item \textbf{Key Set}: Sub-keys for streaming and asset-specific ops.
+    \item \textbf{Streaming Engine}: Emits tokens over time to any target address (vector of bytes) on any chain.
+\end{itemize}
+
+Formally:
+\begin{verbatim}
+Vault := (owner_key, {sub_keys}, {streams})
+Stream := (token_id, amt_schedule, dest_chain, dest_addr_vec)
+\end{verbatim}
+
+\section{Vector Vesting Schedules}
+We define a vesting schedule as a set of $(t_i, a_i)$ points:
+\begin{equation}
+\mathcal{V} = \{ (t_0, a_0), (t_1, a_1), \dots, (t_n, a_n) \}
+\end{equation}
+where $t_i$ is the timestamp (in days from start) and $a_i$ is the cumulative amount vested by time $t_i$.
+
+\subsection{Linear Vesting}
+If $n=1$ (two points), vesting is linear:
+\begin{equation}
+a(t) = a_0 + \frac{a_1 - a_0}{t_1 - t_0} (t - t_0)
+\end{equation}
+
+\subsection{Non-Linear Vesting}
+If $n>1$, vesting follows piecewise-linear interpolation between each $(t_i, a_i)$ pair:
+\begin{equation}
+a(t) = a_i + \frac{a_{i+1} - a_i}{t_{i+1} - t_i} (t - t_i), \quad t \in [t_i, t_{i+1}]
+\end{equation}
+
+\subsection{Example: Alice and Bob}
+\textbf{Scenario:} Alice lends Bob 10 ETH. Bob offers 12 ETH total repayment over 6 months.
+
+Bob defines a vector vesting schedule:
+\begin{equation}
+\mathcal{V} = \{ (0, 0), (90, 4), (180, 12) \}
+\end{equation}
+This means:
+\begin{itemize}
+    \item 0 ETH at day 0
+    \item 4 ETH vested by day 90
+    \item 12 ETH vested by day 180
+\end{itemize}
+The vault streams repayments to Alice's Ethereum address according to this schedule.
+
+\section{Cross-Chain Compatibility}
+Lendy stores addresses as arbitrary byte vectors:
+\begin{verbatim}
+address_vec ∈ {0,1}*
+\end{verbatim}
+This supports EVM, Solana, Bitcoin, Cosmos, and future formats without re-deployment.
+
+The protocol is designed for integration with:
+\begin{itemize}
+    \item IBC (Inter-Blockchain Communication)
+    \item LayerZero, Wormhole, Axelar, or similar bridges
+    \item Custom rollup and L2 messaging
+\end{itemize}
+This allows vault streams to target addresses on any connected chain.
+
+\section{Protocol Flow}
+\begin{enumerate}[leftmargin=1.5em]
+    \item Lender publishes offer: asset, amount, accepted collateral, vesting schedule.
+    \item Borrower publishes request: desired asset, offered collateral, repayment schedule.
+    \item Agreement reached $\Rightarrow$ Vault locks collateral.
+    \item Vault initiates repayment stream.
+    \item Cross-chain relayers deliver funds according to vesting vector.
+\end{enumerate}
+
+\section{Streaming Logic}
+\begin{lstlisting}[language=Python]
+def create_stream(token, vesting_vector, dest_chain, dest_addr_vec):
+    assert sum(amount for _, amount in vesting_vector) <= vault_balance[token]
+    stream_id = hash((token, vesting_vector, dest_chain, dest_addr_vec))
+    vault_streams[stream_id] = {
+        "token": token,
+        "vector": vesting_vector,
+        "dest_chain": dest_chain,
+        "dest_addr_vec": dest_addr_vec
+    }
+\end{lstlisting}
+
+\section{Security and Enforcement}
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Escrow Enforcement}: Collateral locked before stream starts.
+    \item \textbf{Cross-Chain Proofs}: zk/fault proofs validate remote transfers.
+    \item \textbf{Liquidation}: If stream halts, vault redirects collateral to lender.
+\end{itemize}
+
+\section{Economic Model}
+Let $P$ = principal, $R$ = total repayment, $T$ = total vesting duration.
+\begin{equation}
+\text{Interest Rate} = \frac{R - P}{P} \cdot \frac{365}{T_{\text{days}}}
+\end{equation}
+
+\section*{Closing Transmission}
+Lendy is an \emph{autonomous street lender} in the cyberpunk metaverse—capable of any asset, any chain, any vesting curve. With vector vesting and IBC integration, it forms the backbone of a global, composable liquidity network.
+
+\end{document}

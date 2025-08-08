@@ -22,7 +22,7 @@ class ContentTool:
             if threads > 1:
                 c.print(f"Using {threads} threads for summarization", color='yellow')
                 from concurrent.futures import ThreadPoolExecutor
-                summarize = c.fn('dev.tool.summary.file/')
+                summarize = c.fn('dev.tool.sum.file/')
                 future2name = {}
                 for k, v in result.items():
                     params = {'content': v, "query": query}
@@ -36,7 +36,7 @@ class ContentTool:
             else:
                 c.print(f"Using single thread for summarization", color='yellow')
                 for k, v in result.items():
-                    result[k] = c.mod('dev.tool.summary.file').forward({'content': v, "query": query}, timeout=timeout)
+                    result[k] = c.mod('dev.tool.sum.file').forward({'content': v, "query": query}, timeout=timeout)
         else:
             result = content
         c.print(f"Content found: {len(result)} items", color='green')

@@ -15,7 +15,7 @@ class SumFolder:
     a query, with support for caching and parallel processing.
     """
     def __init__(self, **kwargs):
-        self.sum_file = c.mod('summary.file')(**kwargs)
+        self.sum_file = c.mod('sum.file')(**kwargs)
 
     def forward(self, path: str = './', **kwargs) -> List[str]:
         """

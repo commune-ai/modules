@@ -17,38 +17,35 @@ class CreateFile:
     
     def __init__(self, **kwargs):
         self.model = c.mod('model.openrouter')()    
-        self.tool
     def forward(self, 
-                path: str, 
+                path: str=os.path.dirname(__file__), 
                 query = "make a docker container",
+                mod = None,
                 overwrite: bool = False,
                 verbose: bool = True) -> Dict[str, Any]:
 
+        print(f"Creating file at {path} with query: {query}")
+        if mod is not None:
+            path = c.dirpath(mod)
+        context = c.fn('select.files/')(path)
         prompt = {
-            'system': "create a docker image based on the following path",
-            'content': 
+            'query': query,
+            'system': "create a docker image based on the following context",
+            'context': context,
+            'result_format': 'output between <START_JSON>(dockerfile:str)<END_JSON> tags for JSON output',
         }
         # Check if file already exists
-        content = self.model.forward(query)
-        
-        if os.path.exists(file_path) and not overwrite:
-            return {
-                "success": False,
-                "file_path": file_path,
-                "message": f"File already exists and overwrite is False"
-            }
-        
-        # Create parent directories if needed
-        parent_dir = os.path.dirname(file_path)
-        if create_parent_dirs and parent_dir and not os.path.exists(parent_dir):
-            os.makedirs(parent_dir, exist_ok=True)
-            if verbose:
-                c.print(f"Created parent directory: {parent_dir}", color="green")
-            
-        put_text(file_path, content)
+        content = ''
+
+        response = self.model.forward(str(prompt), stream=1)
+        for chunk in response:
+            print(chunk, end='', flush=True)
+            content += chunk
+
+        path = path + '/Dockerfile'
         return {
-            "success": True,
-            "file_path": file_path,
-            "message": f"File created successfully at {file_path}"
+            'path': path,
+            'content': content,
+            'success': True,
+            'message': f"File created at {path}",
         }
-    
