@@ -10,7 +10,7 @@ import commune as c
 
 print = c.print
 
-class Agent:
+class Mod:
 
     anchors = {
         'plan': ['<PLAN>', '</PLAN>'],
