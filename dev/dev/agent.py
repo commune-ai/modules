@@ -50,7 +50,7 @@ class Agent:
             HARDWARE={hardware} # THE HARDWARE YOU ARE RUNNING ON
             TARGET={target} # (ACTIVE IF NOT NONE) THE TARGET FILES YOU ARE TRYING TO MODIFY DO NOT MODIFY OUTSIDE OF THIS IF IT IS NOT NONE
             STEPS={steps} # THE MAX STEPS YOU ARE ALLOWED TO TAKE
-            TOOLS={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
+            TOOLBELT={toolbelt} # THE TOOLS YOU ARE ALLOWED TO USE 
             HISTORY={history} # THE HISTORY OF THE AGENT
             OUTPUT_FORMAT={output_format} # THE OUTPUT FORMAT YOU MUST FOLLOW STRICTLY NO FLUFF BEEFORE OR AFTER
             
@@ -212,8 +212,16 @@ class Agent:
 
     tool_prefix = 'dev.tool'
 
-    def tools(self, ignore_tools=[], update=False) -> List[str]:
-        return [t.replace(self.tool_prefix + '.','') for t in  c.mods(search=self.tool_prefix, update=update) if t.startswith(self.tool_prefix) and t not in ignore_tools]
+    def tools(self, ignore_terms=['docker_image'], include_terms=[], update=False) -> List[str]:
+        tools =  [t.replace(self.tool_prefix + '.','') for t in  c.mods(search=self.tool_prefix, update=update)]
+        def filter_tool(tool: str) -> bool:
+            if any(ignore in tool for ignore in ignore_terms):
+                return False
+            if any(term in tool for term in include_terms):
+                return True
+            return True
+        return list(filter(filter_tool, tools))
+
         
     def toolbelt(self) -> Dict[str, str]:
         """

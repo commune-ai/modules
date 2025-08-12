@@ -151,11 +151,72 @@ class Web:
                     if self.is_valid_url(absolute_url):
                         links.append(absolute_url)
 
+            # Extract interactive elements (buttons, forms, inputs)
+            interactive_elements = []
+            
+            # Extract buttons
+            for button in soup.find_all(['button', 'input']):
+                elem_type = button.name
+                elem_info = {
+                    'type': elem_type,
+                    'text': button.get_text(strip=True) if elem_type == 'button' else '',
+                    'value': button.get('value', ''),
+                    'id': button.get('id', ''),
+                    'class': ' '.join(button.get('class', [])),
+                    'name': button.get('name', ''),
+                    'onclick': button.get('onclick', ''),
+                    'data_attributes': {k: v for k, v in button.attrs.items() if k.startswith('data-')}
+                }
+                if elem_type == 'input':
+                    elem_info['input_type'] = button.get('type', 'text')
+                    elem_info['placeholder'] = button.get('placeholder', '')
+                interactive_elements.append(elem_info)
+            
+            # Extract forms
+            forms = []
+            for form in soup.find_all('form'):
+                form_info = {
+                    'action': form.get('action', ''),
+                    'method': form.get('method', 'get'),
+                    'id': form.get('id', ''),
+                    'class': ' '.join(form.get('class', [])),
+                    'fields': []
+                }
+                # Extract form fields
+                for field in form.find_all(['input', 'select', 'textarea']):
+                    field_info = {
+                        'type': field.name,
+                        'name': field.get('name', ''),
+                        'id': field.get('id', ''),
+                        'required': field.get('required') is not None,
+                        'placeholder': field.get('placeholder', '')
+                    }
+                    if field.name == 'input':
+                        field_info['input_type'] = field.get('type', 'text')
+                    elif field.name == 'select':
+                        field_info['options'] = [opt.get_text(strip=True) for opt in field.find_all('option')]
+                    form_info['fields'].append(field_info)
+                forms.append(form_info)
+            
+            # Extract clickable elements with JavaScript events
+            clickable_elements = []
+            for elem in soup.find_all(attrs={'onclick': True}):
+                clickable_elements.append({
+                    'tag': elem.name,
+                    'text': elem.get_text(strip=True),
+                    'onclick': elem.get('onclick', ''),
+                    'id': elem.get('id', ''),
+                    'class': ' '.join(elem.get('class', []))
+                })
+
             result = {
                 'url': url,
                 'text': result_text,
                 'images': images,
-                'links': links
+                'links': links,
+                'interactive_elements': interactive_elements,
+                'forms': forms,
+                'clickable_elements': clickable_elements
             }
             
             # If expand is True, fetch full content from all linked pages
@@ -210,13 +271,28 @@ class Web:
                         if any(keyword in classes.lower() for keyword in ['content', 'main', 'article', 'body']):
                             main_content.append(element.get_text(separator="\n", strip=True))
             
+            # Extract interactive elements from expanded pages too
+            interactive_elements = []
+            for button in soup.find_all(['button', 'input']):
+                elem_info = {
+                    'type': button.name,
+                    'text': button.get_text(strip=True) if button.name == 'button' else '',
+                    'value': button.get('value', ''),
+                    'id': button.get('id', ''),
+                    'name': button.get('name', '')
+                }
+                if button.name == 'input':
+                    elem_info['input_type'] = button.get('type', 'text')
+                interactive_elements.append(elem_info)
+            
             return {
                 'url': url,
                 'title': title_text,
                 'description': description,
                 'full_text': full_text,
                 'main_content': main_content[:3],  # Limit to top 3 content areas
-                'word_count': len(full_text.split())
+                'word_count': len(full_text.split()),
+                'interactive_elements': interactive_elements
             }
             
         except Exception as e:
@@ -245,6 +321,30 @@ class Web:
             f.write("\nIMAGES:\n")
             for img in content['images']:
                 f.write(f"URL: {img['url']}\nAlt Text: {img['alt_text']}\n\n")
+            
+            # Save interactive elements
+            if 'interactive_elements' in content and content['interactive_elements']:
+                f.write("\n\nINTERACTIVE ELEMENTS:\n")
+                for elem in content['interactive_elements']:
+                    f.write(f"Type: {elem['type']}\n")
+                    if elem.get('text'):
+                        f.write(f"Text: {elem['text']}\n")
+                    if elem.get('id'):
+                        f.write(f"ID: {elem['id']}\n")
+                    if elem.get('name'):
+                        f.write(f"Name: {elem['name']}\n")
+                    f.write("\n")
+            
+            # Save forms
+            if 'forms' in content and content['forms']:
+                f.write("\n\nFORMS:\n")
+                for form in content['forms']:
+                    f.write(f"Action: {form['action']}\n")
+                    f.write(f"Method: {form['method']}\n")
+                    f.write("Fields:\n")
+                    for field in form['fields']:
+                        f.write(f"  - {field['type']} (name: {field['name']})\n")
+                    f.write("\n")
                 
             # Save expanded content if available
             if 'expanded_content' in content:
@@ -254,6 +354,8 @@ class Web:
                     f.write(f"Title: {page_data.get('title', 'N/A')}\n")
                     f.write(f"Description: {page_data.get('description', 'N/A')}\n")
                     f.write(f"Word Count: {page_data.get('word_count', 0)}\n")
+                    if page_data.get('interactive_elements'):
+                        f.write(f"Interactive Elements: {len(page_data['interactive_elements'])}\n")
                     if page_data.get('main_content'):
                         f.write("Main Content Areas:\n")
                         for i, content_area in enumerate(page_data['main_content']):
@@ -379,6 +481,9 @@ class Web:
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
             
             options = Options()
             options.add_argument('--headless')
@@ -395,9 +500,116 @@ class Web:
             self.driver = None
     
     def _search_with_selenium(self, query: str, num_results: int, safe_search: bool, filter_domains: List[str], expand: bool = False) -> List[Dict]:
-        """Search using Selenium WebDriver"""
-        # This is a placeholder - implement actual Selenium search logic
-        raise NotImplementedError("Selenium search not yet implemented")
+        """Search using Selenium WebDriver with interactive element extraction"""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        
+        url = self.engine2url.get(self.search_engine, self.engine2url['brave']).format(query=query)
+        self.driver.get(url)
+        
+        # Wait for search results to load
+        wait = WebDriverWait(self.driver, 10)
+        
+        results = []
+        try:
+            # Extract search results
+            search_results = wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.result, div.g, div.b_algo"))
+            )
+            
+            for i, result_elem in enumerate(search_results[:num_results]):
+                try:
+                    # Extract link
+                    link_elem = result_elem.find_element(By.CSS_SELECTOR, "a")
+                    link = link_elem.get_attribute("href")
+                    
+                    # Extract title
+                    title = link_elem.text or result_elem.find_element(By.CSS_SELECTOR, "h3, h2").text
+                    
+                    # Extract snippet
+                    try:
+                        snippet = result_elem.find_element(By.CSS_SELECTOR, "p, span.st, div.b_caption").text
+                    except:
+                        snippet = ""
+                    
+                    # Extract interactive elements on the search page
+                    interactive_elements = []
+                    buttons = result_elem.find_elements(By.CSS_SELECTOR, "button, input[type='button']")
+                    for btn in buttons:
+                        interactive_elements.append({
+                            'type': 'button',
+                            'text': btn.text,
+                            'clickable': btn.is_enabled()
+                        })
+                    
+                    results.append({
+                        'title': title,
+                        'snippet': snippet,
+                        'link': link,
+                        'interactive_elements': interactive_elements
+                    })
+                except Exception as e:
+                    print(f"Error extracting result {i}: {e}")
+                    continue
+            
+            # If expand is True, visit each result page and extract more details
+            if expand:
+                for result in results:
+                    if result['link']:
+                        try:
+                            self.driver.get(result['link'])
+                            # Wait for page to load
+                            time.sleep(2)
+                            
+                            # Extract all interactive elements from the page
+                            page_interactive = []
+                            
+                            # Find all buttons
+                            buttons = self.driver.find_elements(By.CSS_SELECTOR, "button, input[type='button'], input[type='submit']")
+                            for btn in buttons:
+                                page_interactive.append({
+                                    'type': 'button',
+                                    'text': btn.text or btn.get_attribute('value'),
+                                    'id': btn.get_attribute('id'),
+                                    'class': btn.get_attribute('class'),
+                                    'clickable': btn.is_enabled(),
+                                    'visible': btn.is_displayed()
+                                })
+                            
+                            # Find all links
+                            links = self.driver.find_elements(By.TAG_NAME, "a")
+                            for link in links[:20]:  # Limit to 20 links
+                                href = link.get_attribute('href')
+                                if href:
+                                    page_interactive.append({
+                                        'type': 'link',
+                                        'text': link.text,
+                                        'href': href,
+                                        'visible': link.is_displayed()
+                                    })
+                            
+                            # Find all form inputs
+                            inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='email'], textarea")
+                            for inp in inputs:
+                                page_interactive.append({
+                                    'type': 'input',
+                                    'input_type': inp.get_attribute('type'),
+                                    'name': inp.get_attribute('name'),
+                                    'placeholder': inp.get_attribute('placeholder'),
+                                    'value': inp.get_attribute('value'),
+                                    'visible': inp.is_displayed()
+                                })
+                            
+                            result['page_interactive_elements'] = page_interactive
+                            
+                        except Exception as e:
+                            print(f"Error expanding result {result['link']}: {e}")
+            
+        except Exception as e:
+            print(f"Error in Selenium search: {e}")
+        
+        return results
     
     def _search_with_requests(self, query: str, num_results: int, safe_search: bool, filter_domains: List[str], expand: bool = False) -> List[Dict]:
         """Search using requests library"""
@@ -418,7 +630,8 @@ class Web:
             results.append({
                 'title': text[:100],
                 'snippet': text,
-                'link': content.get('links', [])[i] if i < len(content.get('links', [])) else None
+                'link': content.get('links', [])[i] if i < len(content.get('links', [])) else None,
+                'interactive_elements': content.get('interactive_elements', [])[i:i+3] if 'interactive_elements' in content else []
             })
         
         # Include expanded content if available
@@ -426,6 +639,7 @@ class Web:
             for i, result in enumerate(results):
                 if result['link'] and result['link'] in content['expanded_content']:
                     result['full_content'] = content['expanded_content'][result['link']]
+                    result['page_interactive_elements'] = content['expanded_content'][result['link']].get('interactive_elements', [])
         
         return results
     
@@ -439,7 +653,10 @@ class Web:
             'url': url,
             'title': content.get('text', [''])[0] if content.get('text') else '',
             'content': ' '.join(content.get('text', [])),
-            'depth_crawled': depth
+            'depth_crawled': depth,
+            'interactive_elements': content.get('interactive_elements', []),
+            'forms': content.get('forms', []),
+            'clickable_elements': content.get('clickable_elements', [])
         }
         
         # Include expanded content if available
@@ -447,10 +664,17 @@ class Web:
             result['expanded_content'] = content['expanded_content']
             # Aggregate all text from expanded content
             full_text_parts = [result['content']]
+            all_interactive = list(result['interactive_elements'])
+            
             for link, page_data in content['expanded_content'].items():
-                if page_data and 'full_text' in page_data:
-                    full_text_parts.append(page_data['full_text'])
+                if page_data:
+                    if 'full_text' in page_data:
+                        full_text_parts.append(page_data['full_text'])
+                    if 'interactive_elements' in page_data:
+                        all_interactive.extend(page_data['interactive_elements'])
+            
             result['full_aggregated_content'] = '\n\n'.join(full_text_parts)
+            result['all_interactive_elements'] = all_interactive
         
         if extract_patterns:
             result['extracted_patterns'] = self._extract_patterns(result.get('full_aggregated_content', result['content']), extract_patterns)
@@ -495,6 +719,10 @@ class Web:
                 context_parts.append(f"Content: {result['content'][:500]}...")
             if 'full_aggregated_content' in result:
                 context_parts.append(f"Full Content Preview: {result['full_aggregated_content'][:1000]}...")
+            if 'interactive_elements' in result and result['interactive_elements']:
+                context_parts.append(f"Interactive Elements Found: {len(result['interactive_elements'])} elements")
+            if 'forms' in result and result['forms']:
+                context_parts.append(f"Forms Found: {len(result['forms'])} forms")
         
         return '\n\n'.join(context_parts)
 
@@ -510,7 +738,9 @@ class Web:
                 use_cache: bool = False,
                 cache_key: Optional[str] = None,
                 expand: bool = True,
-                verbose: bool = True) -> Dict[str, Any]:
+                verbose: bool = True,
+                include_paths: Optional[List[str]] = None,
+                extract_interactive: bool = True) -> Dict[str, Any]:
         """
         Search the web for information with depth crawling capability.
         
@@ -527,6 +757,8 @@ class Web:
             cache_key: Custom key for caching (defaults to query hash)
             expand: Whether to fetch full content from linked pages
             verbose: Whether to print detailed information
+            include_paths: List of specific URL paths to include in results
+            extract_interactive: Whether to extract interactive elements (buttons, forms, inputs)
             
         Returns:
             Dictionary containing:
@@ -536,16 +768,20 @@ class Web:
             - query: Original search query
             - source: Search engine used
             - extracted_data: Any patterns extracted from pages
+            - paths_included: Paths that were included from include_paths
+            - interactive_summary: Summary of all interactive elements found
         """
         if verbose:
-            c.print(f"Searching for: {query} (depth: {page_depth}, expand: {expand})", color="cyan")
+            c.print(f"Searching for: {query} (depth: {page_depth}, expand: {expand}, interactive: {extract_interactive})", color="cyan")
+            if include_paths:
+                c.print(f"Including specific paths: {include_paths}", color="blue")
         
         # Reset visited URLs for new search
         self.visited_urls = set()
         
         # Generate cache key if not provided
         if use_cache and not cache_key:
-            cache_key = hashlib.md5(f"{self.search_engine}_{query}_{num_results}_{page_depth}_{expand}".encode()).hexdigest()
+            cache_key = hashlib.md5(f"{self.search_engine}_{query}_{num_results}_{page_depth}_{expand}_{extract_interactive}".encode()).hexdigest()
         
         # Check cache first if enabled
         if use_cache:
@@ -566,6 +802,31 @@ class Web:
             # Process results with depth crawling if requested
             processed_results = []
             extracted_data = {'emails': set(), 'phones': set(), 'social_media': {}}
+            paths_included = []
+            all_interactive_elements = []
+            
+            # Add specific paths if provided
+            if include_paths:
+                for path in include_paths:
+                    # Ensure path is a full URL
+                    if not path.startswith(('http://', 'https://')):
+                        # Try to construct a URL from the path
+                        if self.url:
+                            path = urljoin(self.url, path)
+                        else:
+                            # Skip if we can't form a valid URL
+                            if verbose:
+                                c.print(f"Skipping invalid path: {path}", color="yellow")
+                            continue
+                    
+                    # Add to results for processing
+                    results.append({
+                        'link': path,
+                        'title': f'Included path: {path}',
+                        'snippet': 'Manually included path',
+                        'from_include_paths': True
+                    })
+                    paths_included.append(path)
             
             if page_depth > 0:
                 # Crawl pages to specified depth
@@ -582,6 +843,13 @@ class Web:
                             # Merge crawled data with original result
                             enhanced_result = {**original_result, **crawl_data}
                             processed_results.append(enhanced_result)
+                            
+                            # Collect all interactive elements
+                            if extract_interactive:
+                                if 'interactive_elements' in crawl_data:
+                                    all_interactive_elements.extend(crawl_data['interactive_elements'])
+                                if 'all_interactive_elements' in crawl_data:
+                                    all_interactive_elements.extend(crawl_data['all_interactive_elements'])
                             
                             # Aggregate extracted patterns
                             if 'extracted_patterns' in crawl_data:
@@ -609,6 +877,14 @@ class Web:
                         processed_result['snippet'] = result['snippet']
                     if 'full_content' in result:
                         processed_result['full_content'] = result['full_content']
+                    if 'from_include_paths' in result:
+                        processed_result['from_include_paths'] = result['from_include_paths']
+                    if extract_interactive and 'interactive_elements' in result:
+                        processed_result['interactive_elements'] = result['interactive_elements']
+                        all_interactive_elements.extend(result['interactive_elements'])
+                    if extract_interactive and 'page_interactive_elements' in result:
+                        processed_result['page_interactive_elements'] = result['page_interactive_elements']
+                        all_interactive_elements.extend(result['page_interactive_elements'])
                     processed_results.append(processed_result)
             
             # Extract context from results
@@ -621,6 +897,17 @@ class Web:
                 'social_media': {k: list(v) for k, v in extracted_data['social_media'].items()}
             }
             
+            # Create interactive elements summary
+            interactive_summary = None
+            if extract_interactive and all_interactive_elements:
+                interactive_summary = {
+                    'total_elements': len(all_interactive_elements),
+                    'buttons': len([e for e in all_interactive_elements if e.get('type') == 'button']),
+                    'inputs': len([e for e in all_interactive_elements if e.get('type') == 'input']),
+                    'forms': len([r.get('forms', []) for r in processed_results]),
+                    'clickable': len([e for e in all_interactive_elements if e.get('clickable', False)])
+                }
+            
             # Prepare response
             response = {
                 "success": True,
@@ -630,7 +917,9 @@ class Web:
                 "source": self.search_engine,
                 "page_depth": page_depth,
                 "expanded": expand,
-                "extracted_data": serializable_extracted if extract_patterns else None
+                "extracted_data": serializable_extracted if extract_patterns else None,
+                "paths_included": paths_included if include_paths else None,
+                "interactive_summary": interactive_summary
             }
             
             # Cache the results if enabled
@@ -645,6 +934,10 @@ class Web:
                     c.print(f"Expanded content fetched", color="cyan")
                 if extract_patterns and any(serializable_extracted.values()):
                     c.print(f"Extracted data: {serializable_extracted}", color="cyan")
+                if paths_included:
+                    c.print(f"Included {len(paths_included)} specific paths", color="green")
+                if interactive_summary:
+                    c.print(f"Interactive elements: {interactive_summary}", color="magenta")
             
             return response
             
