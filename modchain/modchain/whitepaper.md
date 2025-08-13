@@ -6,11 +6,57 @@
 
 ## 🧠 Module
 
-In the **C Protocol**, a module is an autonomous programmable unit—an execution node that owns its memory, exposes logic, and operates independently within a modular network.
+In the **C Protocol**, a module is a **JSON blob** that defines an autonomous programmable unit. This blob acts as a stem cell, setting the initial conditions and configuration for the module's behavior.
 
-Each module maintains internal **state** (a persistent variable store), and defines executable **functions**—which may be deterministic or probabilistic. These functions are triggered through client-signed JSON-RPC calls, interacting securely via public-key cryptography.
+### Module Structure
 
-Every module is cryptographically identified using keys compatible with `sr25519` or `ecdsa`. Modules can sign, verify, encrypt, and decrypt data independently.
+Each module blob contains:
+
+```json
+{
+  "id": "module_identifier",
+  "type": "module_type",
+  "state": {
+    // Persistent variable store
+  },
+  "functions": {
+    // Exposed logic endpoints
+  },
+  "crypto": {
+    "type": "sr25519",
+    "address": "5Gs51y..."
+  },
+  "consensus": {
+    "type": "consensus_0",
+    "params": {}
+  },
+  "forward_interval": 100  // TEMPO blocks
+}
+```
+
+The JSON blob determines:
+- **State structure**: What data the module maintains
+- **Function signatures**: What operations it exposes
+- **Crypto configuration**: Key type and signing preferences
+- **Consensus rules**: How it participates in the network
+- **Processing cadence**: When the forward function executes
+
+### Module Processing
+
+Every module type has:
+1. A **struct** that interprets the JSON blob into runtime state
+2. A **forward function** called every TEMPO blocks for processing
+
+```python
+class ModuleProcessor:
+    def __init__(self, blob: dict):
+        self.state = blob['state']
+        self.config = blob
+    
+    def forward(self, block_height: int):
+        # Process based on module type
+        pass
+```
 
 ---
 
@@ -41,7 +87,19 @@ c module/fn **params      # for nested modules
 
 ## 🧩 Consensus Mechanisms
 
-Each module is governed by a **consensus module**, which handles economic trust, staking, dispute resolution, and transaction verification.
+Each module's consensus is defined in its JSON blob:
+
+```json
+{
+  "consensus": {
+    "type": "consensus_0",
+    "params": {
+      "min_stake": 100,
+      "epoch_length": 1000
+    }
+  }
+}
+```
 
 ### Consensus 0 – Proof of Interaction
 
@@ -55,7 +113,17 @@ Future modules may support zk-proofs or interchain settlement mechanisms, mainta
 
 ## 🧠 Server Layer
 
-A **Server** is an HTTP/WS process that exposes module functions over a JSON-RPC interface. Functions must be explicitly whitelisted.
+A **Server** processes module blobs and exposes their functions over JSON-RPC:
+
+```json
+{
+  "server_config": {
+    "port_range": [50050, 50150],
+    "whitelisted_functions": ["query", "process"],
+    "rate_limits": {}
+  }
+}
+```
 
 Start a server:
 
@@ -68,8 +136,6 @@ Query API:
 ```bash
 c call api
 ```
-
-By default, servers expose ports within `50050-50150`.
 
 ---
 
@@ -209,6 +275,68 @@ This is a **modchain**—a version history where a single actor or multisig grou
 
 ---
 
+## 🧬 Module Types & Processing
+
+### Base Module Type
+
+```json
+{
+  "type": "base",
+  "forward_interval": 100,
+  "state": {
+    "counter": 0
+  },
+  "functions": {
+    "increment": {
+      "params": ["amount"],
+      "cost": 0.01
+    }
+  }
+}
+```
+
+### AI Module Type
+
+```json
+{
+  "type": "ai",
+  "forward_interval": 500,
+  "state": {
+    "model_uri": "ipfs://...",
+    "weights": {}
+  },
+  "functions": {
+    "inference": {
+      "params": ["input"],
+      "cost": 0.1
+    }
+  }
+}
+```
+
+### Storage Module Type
+
+```json
+{
+  "type": "storage",
+  "forward_interval": 1000,
+  "state": {
+    "capacity": "1TB",
+    "used": "0GB"
+  },
+  "functions": {
+    "store": {
+      "params": ["data", "duration"],
+      "cost": 0.001
+    }
+  }
+}
+```
+
+Each module type's processor interprets the blob and executes the forward function according to its specific logic every TEMPO blocks.
+
+---
+
 ## 🧬 System Diagram
 
 ```ascii
@@ -218,7 +346,10 @@ This is a **modchain**—a version history where a single actor or multisig grou
          |  JSON-RPC + Auth  |
          +-------------------+
                   |
-              [ Module ]
+           [ Module Blob ]
+          {type, state, ...}
+                  |
+         [ Module Processor ]
              /     |     \
          [M1]    [M2]    [M3]
           |        |       |

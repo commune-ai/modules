@@ -76,3 +76,72 @@ class Key:
     def get_key(cls, name: str = 'default', **kwargs) -> 'Key':
         """Get or create a key by name"""
         return cls(name=name, **kwargs)
+    
+    def key(self, key: str = None, **kwargs) -> 'Key':
+        """Get a key instance - matches the requested pattern"""
+        return self.get_key(key, **kwargs)
+    
+    def sign(self, message: str) -> str:
+        """Sign a message with the keypair"""
+        if not self.keypair:
+            raise ValueError("Keypair not loaded")
+        if isinstance(message, str):
+            message = message.encode('utf-8')
+        signature = self.keypair.sign_message(message)
+        # convert signature to base58 for easier handling
+
+        return str(signature)
+
+
+    
+    def verify(self, message: str, signature: str, public_key: str = None) -> bool:
+        """Verify a signature against a message"""
+        try:
+            if isinstance(message, str):
+                message = message.encode('utf-8')
+            
+            # Use provided public key or self keypair's public key
+            if public_key:
+                from solders.pubkey import Pubkey
+                pubkey = Pubkey.from_string(public_key)
+            else:
+                if not self.keypair:
+                    raise ValueError("Keypair not loaded")
+                pubkey = self.keypair.pubkey()
+            
+            # Decode the signature
+            sig_bytes = base58.b58decode(signature)
+            
+            # Verify using Solana's ed25519 verification
+            from solders.signature import Signature
+            sig = Signature.from_bytes(sig_bytes)
+            
+            # Reconstruct the signed message format that Solana uses
+            from nacl.signing import VerifyKey
+            import nacl.encoding
+            
+            verify_key = VerifyKey(bytes(pubkey))
+            verify_key.verify(message, sig_bytes[:64])
+            return True
+            
+        except Exception as e:
+            print(f"Verification failed: {e}")
+            return False
+    
+    def sign_message(self, message: str) -> str:
+        """Sign a message with the keypair (alias for sign)"""
+        return self.sign(message)
+    
+    def verify_signature(self, message: str, signature: str) -> bool:
+        """Verify a signature against a message (alias for verify)"""
+        return self.verify(message, signature)
+    
+    def test_signature(self, message: str = 'hey') -> Dict[str, Any]:
+        """Test signing and verification of a message"""
+        signature = self.sign_message(message)
+        is_valid = self.verify_signature(message, signature)
+        return {
+            'message': message,
+            'signature': signature,
+            'is_valid': is_valid
+        }
