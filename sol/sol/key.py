@@ -11,7 +11,7 @@ class Key:
     """
     def __init__(self, name: str = 'default', path: str = None):
         self.name = name
-        self.path = path or os.path.expanduser(f'~/.commune/sol/keys/{name}.json')
+        self.path = path or os.path.expanduser(f'~/.commune/sol/key/{name}.json')
         self.keypair = None
         self._load_or_create()
     
@@ -65,7 +65,7 @@ class Key:
         self.save()
     
     @classmethod
-    def list_keys(cls, path: str = None) -> List[str]:
+    def keys(cls, path: str = None) -> List[str]:
         """List all saved keys"""
         path = path or os.path.expanduser('~/.commune/sol/keys/')
         if not os.path.exists(path):
@@ -76,10 +76,8 @@ class Key:
     def get_key(cls, name: str = 'default', **kwargs) -> 'Key':
         """Get or create a key by name"""
         return cls(name=name, **kwargs)
+    key = get_key  # Alias for convenience
     
-    def key(self, key: str = None, **kwargs) -> 'Key':
-        """Get a key instance - matches the requested pattern"""
-        return self.get_key(key, **kwargs)
     
     def sign(self, message: str) -> str:
         """Sign a message with the keypair"""
@@ -145,3 +143,29 @@ class Key:
             'signature': signature,
             'is_valid': is_valid
         }
+
+
+
+    @property
+    def private_key(self) -> str:
+        """Get the private key as a base58 string"""
+        if not self.keypair:
+            raise ValueError("Keypair not loaded")
+        return base58.b58encode(bytes(self.keypair)).decode('utf-8')
+    def set_private_key(self, private_key: str):
+        """Set the private key from a base58 string"""
+        self.import_key(private_key)
+
+    @property
+    def address(self) -> str:
+        """Get the public address of the keypair"""
+        if not self.keypair:
+            raise ValueError("Keypair not loaded")
+        return str(self.keypair.pubkey())
+
+    def __str__(self):
+        return f"Key(name={self.name}, address={self.address})"
+
+    def get_key(self, name: str = 'default', **kwargs) -> 'Key':
+        """Get or create a key by name"""
+        return self.__class__(name=name, **kwargs)

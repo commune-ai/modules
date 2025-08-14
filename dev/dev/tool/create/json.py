@@ -12,8 +12,6 @@ class Tool:
         based on the query
         """
     anchors = ["<START_JSON>", "</END_JSON>"]
-    output_format = 'DICT(data:str)'
-    cache_dir: str = '~/.fix/cache'
 
     def __init__(self, provider ='model.openrouter'):
         self.model = c.mod(model)()
@@ -22,6 +20,7 @@ class Tool:
               query = 'anything maximally imaginative',
               history = [],
               trials = 4,
+              output_format: str = 'DICT(data:str)',
               **kwargs) -> List[str]:
         # hash
         try:
