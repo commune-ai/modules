@@ -10,6 +10,7 @@ import random
 
 class OpenRouter:
     api_key_path = 'apikeys' # path to store api keys (relative to storage_path)
+    env_varname = 'OPENROUTER_API_KEY' # environment variable name for api key
     def __init__(
         self,
         api_key = None,
@@ -18,7 +19,7 @@ class OpenRouter:
         prompt:str=None,
         model = 'anthropic/claude-opus-4',
         max_retries: int = 10,
-        storage_path = '~/.commune/openrouter',
+        path = '~/.commune/openrouter',
         key = None,
         **kwargs
     ):
@@ -32,11 +33,11 @@ class OpenRouter:
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
         """
-        self.storage = Store(storage_path)
+        self.store = c.mod('store')(path)
         self.url = url
         self.client = openai.OpenAI(
             base_url=self.url,
-            api_key=api_key or self.get_key(),
+            api_key=self.api_key(api_key),
             timeout=timeout,
             max_retries=max_retries,
         )
@@ -103,11 +104,11 @@ class OpenRouter:
                     token = token.choices[0].delta.content
                     item['result'] += token
                     yield token
-                self.storage.put(path, item)
+                self.store.put(path, item)
             return stream_generator(result)
         else:
             item['result'] = result.choices[0].message.content
-            self.storage.put(path, item)
+            self.store.put(path, item)
             return item['result']
         
     generate = forward
@@ -116,7 +117,7 @@ class OpenRouter:
         """
         Get the history of the last requests
         """
-        history = self.storage.items('history', max_age=max_age, update=update)
+        history = self.store.items('history', max_age=max_age, update=update)
         return history
 
     def resolve_model(self, model=None):
@@ -135,37 +136,49 @@ class OpenRouter:
 
         return model
 
-    def get_key(self):
+    def api_key(self, api_key: str = None):
         """
         get the api keys
         """
-        keys = self.storage.get(self.api_key_path, [])
+        api_key = api_key or 'OPENROUTER_API_KEY'
+        env_varname = self.env_varname
+        # first check environment variable
+        if env_varname in os.environ:
+            return os.environ[env_varname]
+
+        keys = self.store.get(self.api_key_path, [])
         if len(keys) > 0:
             return random.choice(keys)
         else:
-            return 'password'
+            raise ValueError(f"No API key found. Please set the {env_varname} environment variable or add a key using add_key method.")
 
     def keys(self):
         """
         Get the list of API keys
         """
-        return self.storage.get(self.api_key_path, [])
+        return self.store.get(self.api_key_path, [])
 
     def add_key(self, key):
-        keys = self.storage.get(self.api_key_path, [])
+        keys = self.store.get(self.api_key_path, [])
         keys.append(key)
         keys = list(set(keys))
-        self.storage.put(self.api_key_path, keys)
+        self.store.put(self.api_key_path, keys)
+        return keys
+
+    def rm_key(self, key):
+        keys = self.store.get(self.api_key_path, [])
+        keys = [k for k in keys if k != key]
+        self.store.put(self.api_key_path, keys)
         return keys
 
 
     def model2info(self, search: str = None, path='models', max_age=100, update=False):
-        models = self.storage.get(path, default={}, max_age=max_age, update=update)
+        models = self.store.get(path, default={}, max_age=max_age, update=update)
         if len(models) == 0:
             print('Updating models...')
             response = requests.get(self.url + '/models')
             models = json.loads(response.text)['data']
-            self.storage.put(path, models)
+            self.store.put(path, models)
         models = self.filter_models(models, search=search)
         return {m['id']:m for m in models}
     

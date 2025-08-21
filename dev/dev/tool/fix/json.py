@@ -13,6 +13,7 @@ class Tool:
         - make sure the content is the same inside the data field
         - the purpose is to fix the json content while not changing the data
         - make sure to not return anything other than what the output format specifiees
+        - DO NOT RETURN EMPTY FIELDS IF IT DOESNT MATCH THE OUTPUT FORMAT
         """
     anchors = ["<START_JSON>", "</END_JSON>"]
     output_format = 'DICT(data:str)'

@@ -150,3 +150,256 @@ class Curve:
 
 
     
+
+    def curve3(self, years=50, filename=None):
+        """Create exponential approximation curve without halvings"""
+        fig = go.Figure()
+
+        days = years * 365
+        time_points = np.linspace(0, days, 1000)
+        dates = [self.start_date + timedelta(days=int(day)) for day in time_points]
+
+        # Calculate exponential approximation
+        exponential_supply = [self.exponential_approximation(day) for day in time_points]
+
+        # Add exponential approximation
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=exponential_supply,
+            mode='lines',
+            name='Exponential Approximation (no halvings)',
+            line=dict(color='green', width=3),
+            hovertemplate='Date: %{x}<br>Supply: %{y:,.0f} BTC<extra></extra>'
+        ))
+
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': 'Exponential Approximation Curve',
+                'font': {'size': 24}
+            },
+            xaxis_title='Date',
+            yaxis_title='Total Supply',
+            hovermode='x unified',
+            template='plotly_white',
+            width=1200,
+            height=700,
+            yaxis=dict(
+                tickformat=',.0f',
+                gridcolor='lightgray'
+            ),
+            xaxis=dict(
+                gridcolor='lightgray'
+            )
+        )
+
+        # Add horizontal line at max supply
+        fig.add_hline(
+            y=self.max_supply, 
+            line_dash="dot", 
+            line_color="red",
+            annotation_text=f"Max Supply: {self.max_supply:,.0f}",
+            annotation_position="right"
+        )
+
+        fig.show()
+        if filename:
+            pio.write_html(fig, filename)
+
+        return fig
+
+    def show_plot(self, years=50, filename=None):
+        """Create exponential curve representing 2^n where n is years, assuming 8 block runtime"""
+        import plotly.graph_objects as go
+        import numpy as np
+        from datetime import datetime, timedelta
+        import plotly.io as pio
+
+        # Create time points for n years
+        days = years * 365
+        time_points = np.linspace(0, days, 1000)
+        dates = [self.start_date + timedelta(days=int(day)) for day in time_points]
+
+        # Calculate 2^n where n is years (convert days to years)
+        years_array = time_points / 365
+        exponential_values = 2 ** years_array
+
+        # Scale to reasonable token values (multiply by base amount)
+        base_tokens = 1_000_000  # Base amount of tokens
+        token_values = exponential_values * base_tokens
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add exponential curve
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=token_values,
+            mode='lines',
+            name='Exponential Growth (2^n)',
+            line=dict(color='purple', width=3),
+            hovertemplate='Date: %{x}<br>Tokens: %{y:,.0f}<br>Years: %{customdata:.2f}<extra></extra>',
+            customdata=years_array
+        ))
+
+        # Add markers at key years
+        key_years = [1, 2, 5, 10, 20, 30, 40, 50]
+        for year in key_years:
+            if year <= years:
+                idx = int((year * 365 / days) * len(time_points))
+                if idx < len(dates):
+                    fig.add_trace(go.Scatter(
+                        x=[dates[idx]],
+                        y=[token_values[idx]],
+                        mode='markers+text',
+                        marker=dict(size=8, color='red'),
+                        text=[f'{year}y: {2**year:.0f}x'],
+                        textposition='top center',
+                        showlegend=False
+                    ))
+
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': f'Exponential Token Growth: 2^n (n=years, 8 block runtime)',
+                'font': {'size': 24}
+            },
+            xaxis_title='Date',
+            yaxis_title='Total Tokens',
+            hovermode='x unified',
+            template='plotly_white',
+            width=1200,
+            height=700,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            ),
+            yaxis=dict(
+                type='log',  # Use log scale for exponential growth
+                tickformat='.0e',
+                gridcolor='lightgray'
+            ),
+            xaxis=dict(
+                gridcolor='lightgray'
+            )
+        )
+
+        # Add annotation explaining the curve
+        fig.add_annotation(
+            x=0.5,
+            y=0.95,
+            xref='paper',
+            yref='paper',
+            text='Growth Rate: 2^n where n = years<br>Assumes 8 block runtime',
+            showarrow=False,
+            font=dict(size=14),
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='black',
+            borderwidth=1
+        )
+
+        fig.show()
+        if filename:
+            pio.write_html(fig, filename)
+
+        return fig
+
+    def show_plot(self, years=50, filename=None):
+        """Create exponential curve representing 2^n where n is years, assuming 8 block runtime"""
+        import plotly.graph_objects as go
+        import numpy as np
+        from datetime import datetime, timedelta
+        import plotly.io as pio
+
+        # Create time points for n years
+        days = years * 365
+        time_points = np.linspace(0, days, 1000)
+        dates = [self.start_date + timedelta(days=int(day)) for day in time_points]
+
+        # Calculate 2^n where n is years (convert days to years)
+        years_array = time_points / 365
+        exponential_values = 2 ** years_array
+
+        # Scale to reasonable token values (multiply by base amount)
+        base_tokens = 1_000_000  # Base amount of tokens
+        token_values = exponential_values * base_tokens
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add exponential curve
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=token_values,
+            mode='lines',
+            name='Exponential Growth (2^n)',
+            line=dict(color='purple', width=3),
+            hovertemplate='Date: %{x}<br>Tokens: %{y:,.0f}<br>Years: %{customdata:.2f}<extra></extra>',
+            customdata=years_array
+        ))
+
+        # Add markers at key years
+        key_years = [1, 2, 5, 10, 20, 30, 40, 50]
+        for year in key_years:
+            if year <= years:
+                idx = int((year * 365 / days) * len(time_points))
+                if idx < len(dates):
+                    fig.add_trace(go.Scatter(
+                        x=[dates[idx]],
+                        y=[token_values[idx]],
+                        mode='markers+text',
+                        marker=dict(size=8, color='red'),
+                        text=[f'{year}y: {2**year:.0f}x'],
+                        textposition='top center',
+                        showlegend=False
+                    ))
+
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': f'Exponential Token Growth: 2^n (n=years, 8 block runtime)',
+                'font': {'size': 24}
+            },
+            xaxis_title='Date',
+            yaxis_title='Total Tokens',
+            hovermode='x unified',
+            template='plotly_white',
+            width=1200,
+            height=700,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            ),
+            yaxis=dict(
+                type='log',  # Use log scale for exponential growth
+                tickformat='.0e',
+                gridcolor='lightgray'
+            ),
+            xaxis=dict(
+                gridcolor='lightgray'
+            )
+        )
+
+        # Add annotation explaining the curve
+        fig.add_annotation(
+            x=0.5,
+            y=0.95,
+            xref='paper',
+            yref='paper',
+            text='Growth Rate: 2^n where n = years<br>Assumes 8 block runtime',
+            showarrow=False,
+            font=dict(size=14),
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='black',
+            borderwidth=1
+        )
+
+        fig.show()
+        if filename:
+            pio.write_html(fig, filename)
+
+        return fig

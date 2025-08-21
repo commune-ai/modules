@@ -20,548 +20,247 @@ class Memory:
     
     def __init__(
         self,
-        long_term_path: str = "~/.commune/memory/long_term",
-        short_term_capacity: int = 100,
-        default_ttl: int = 3600,  # 1 hour default TTL for short-term memory
+        path: str = "~/.commune/agent/memory",
+        short_term_chars: int = 100000,
         model: str = 'model.openrouter',
+        item_size = 1000,  # Size of each memory item in characters
         **kwargs
     ):
         """
         Initialize the Memory module.
         
         Args:
-            long_term_path: Path to store long-term memories
-            short_term_capacity: Maximum number of items in short-term memory
-            default_ttl: Default time-to-live for short-term memories (in seconds)
+            path: Path to store memories
+            short_term_chars: Maximum characters in short-term memory
             model: Model to use for relevance scoring
+            item_size: Size of each memory item in characters
             **kwargs: Additional arguments to pass to the model
         """
-        self.model = c.module(model)(**kwargs)
-        self.long_term_path = os.path.expanduser(long_term_path)
-        self.short_term_capacity = short_term_capacity
-        self.default_ttl = default_ttl
+        self.store = c.mod('store')(path)
+        self.short_term_chars = short_term_chars
+        self.item_size = item_size
+        self.model = c.mod(model)(**kwargs)
+        self.short_term_memory = {}  # In-memory storage
+        self.memory_timestamps = {}  # Track when memories were added
         
-        # Initialize memory stores
-        self.short_term = {}  # {key: {'data': Any, 'timestamp': float, 'ttl': int}}
-        
-        # Ensure long-term storage directory exists
-        os.makedirs(self.long_term_path, exist_ok=True)
-        
-    def add_short_term(
-        self, 
-        key: str, 
-        data: Any, 
-        ttl: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def add_memory(self, key: str, content: Any, memory_type: str = 'short') -> Dict[str, Any]:
         """
-        Add an item to short-term memory.
+        Add a memory item.
         
         Args:
             key: Unique identifier for the memory
-            data: Data to store
-            ttl: Time-to-live in seconds (None for default)
-            
-        Returns:
-            Dictionary with status and info about the stored memory
+            content: Content to store
+            memory_type: 'short' or 'long' term memory
         """
-        # Clean expired items first
-        self._clean_expired_short_term()
-        
-        # Check capacity
-        if len(self.short_term) >= self.short_term_capacity:
-            self._evict_short_term()
-            
-        # Store with timestamp
-        self.short_term[key] = {
-            'data': data,
-            'timestamp': time.time(),
-            'ttl': ttl if ttl is not None else self.default_ttl
-        }
-        
-        return {
-            'status': 'success',
+        timestamp = time.time()
+        memory_item = {
             'key': key,
-            'ttl': ttl if ttl is not None else self.default_ttl,
-            'expires_at': time.time() + (ttl if ttl is not None else self.default_ttl)
-        }
-    
-    def get_short_term(self, key: str) -> Optional[Any]:
-        """
-        Retrieve an item from short-term memory.
-        
-        Args:
-            key: Key of the memory to retrieve
-            
-        Returns:
-            The stored data or None if not found or expired
-        """
-        # Clean expired items first
-        self._clean_expired_short_term()
-        
-        if key in self.short_term:
-            # Update access timestamp (keeps frequently accessed items alive)
-            self.short_term[key]['timestamp'] = time.time()
-            return self.short_term[key]['data']
-        
-        return None
-    
-    def add_long_term(self, key: str, data: Any) -> Dict[str, Any]:
-        """
-        Add an item to long-term memory.
-        
-        Args:
-            key: Unique identifier for the memory
-            data: Data to store
-            
-        Returns:
-            Dictionary with status and info about the stored memory
-        """
-        # Sanitize key for filename
-        safe_key = self._sanitize_key(key)
-        file_path = os.path.join(self.long_term_path, f"{safe_key}.json")
-        
-        memory_data = {
-            'data': data,
-            'timestamp': time.time(),
-            'metadata': {
-                'created_at': time.time(),
-                'key': key,
-                'type': type(data).__name__
-            }
+            'content': content,
+            'timestamp': timestamp,
+            'type': memory_type,
+            'access_count': 0
         }
         
-        try:
-            with open(file_path, 'w') as f:
-                json.dump(memory_data, f, indent=2)
-                
-            return {
-                'status': 'success',
-                'key': key,
-                'path': file_path
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'key': key,
-                'error': str(e)
-            }
-    
-    def get_long_term(self, key: str) -> Optional[Any]:
-        """
-        Retrieve an item from long-term memory.
-        
-        Args:
-            key: Key of the memory to retrieve
+        if memory_type == 'short':
+            self.short_term_memory[key] = memory_item
+            self.memory_timestamps[key] = timestamp
+            self._manage_short_term_capacity()
+        else:
+            # Store in long-term memory
+            self.store.put(f'long_term/{key}', memory_item)
             
-        Returns:
-            The stored data or None if not found
+        return {'success': True, 'key': key, 'type': memory_type}
+    
+    def _manage_short_term_capacity(self):
         """
-        safe_key = self._sanitize_key(key)
-        file_path = os.path.join(self.long_term_path, f"{safe_key}.json")
+        Manage short-term memory capacity using LRU eviction.
+        """
+        total_chars = sum(len(str(m['content'])) for m in self.short_term_memory.values())
         
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r') as f:
-                    memory_data = json.load(f)
-                return memory_data['data']
-            except Exception:
-                return None
-        
+        if total_chars > self.short_term_chars:
+            # Sort by timestamp (oldest first)
+            sorted_keys = sorted(self.memory_timestamps.keys(), 
+                               key=lambda k: self.memory_timestamps[k])
+            
+            while total_chars > self.short_term_chars and sorted_keys:
+                key_to_remove = sorted_keys.pop(0)
+                if key_to_remove in self.short_term_memory:
+                    del self.short_term_memory[key_to_remove]
+                    del self.memory_timestamps[key_to_remove]
+                    total_chars = sum(len(str(m['content'])) 
+                                    for m in self.short_term_memory.values())
+    
+    def get_memory(self, key: str, memory_type: str = 'short') -> Optional[Any]:
+        """
+        Retrieve a specific memory by key.
+        """
+        if memory_type == 'short':
+            memory = self.short_term_memory.get(key)
+            if memory:
+                memory['access_count'] += 1
+                return memory['content']
+        else:
+            memory = self.store.get(f'long_term/{key}')
+            if memory:
+                memory['access_count'] += 1
+                self.store.put(f'long_term/{key}', memory)
+                return memory['content']
         return None
     
-    def list_memories(
-        self, 
-        memory_type: str = 'all'
-    ) -> Dict[str, List[str]]:
+    def search_memories(self, query: str, n: int = 5, memory_type: str = 'all') -> List[Dict[str, Any]]:
         """
-        List available memories.
-        
-        Args:
-            memory_type: Type of memories to list ('short', 'long', or 'all')
-            
-        Returns:
-            Dictionary with lists of memory keys
-        """
-        result = {'short_term': [], 'long_term': []}
-        
-        # Clean expired items first
-        self._clean_expired_short_term()
-        
-        if memory_type in ['short', 'all']:
-            result['short_term'] = list(self.short_term.keys())
-            
-        if memory_type in ['long', 'all']:
-            try:
-                files = os.listdir(self.long_term_path)
-                result['long_term'] = [
-                    os.path.splitext(f)[0] for f in files 
-                    if f.endswith('.json')
-                ]
-            except Exception:
-                result['long_term'] = []
-                
-        return result
-    
-    def delete_memory(
-        self, 
-        key: str, 
-        memory_type: str = 'all'
-    ) -> Dict[str, Any]:
-        """
-        Delete a memory.
-        
-        Args:
-            key: Key of the memory to delete
-            memory_type: Type of memory to delete ('short', 'long', or 'all')
-            
-        Returns:
-            Dictionary with deletion status
-        """
-        result = {'status': 'success', 'deleted': []}
-        
-        if memory_type in ['short', 'all']:
-            if key in self.short_term:
-                del self.short_term[key]
-                result['deleted'].append('short_term')
-                
-        if memory_type in ['long', 'all']:
-            safe_key = self._sanitize_key(key)
-            file_path = os.path.join(self.long_term_path, f"{safe_key}.json")
-            
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                    result['deleted'].append('long_term')
-                except Exception as e:
-                    result['status'] = 'partial'
-                    result['error'] = str(e)
-        
-        if not result['deleted']:
-            result['status'] = 'not_found'
-            
-        return result
-    
-    def forward(
-        self, 
-        data: Union[List[str], Dict[str, Any], str],
-        query: str = None,
-        n: int = 5,
-        memory_type: str = 'short',
-        store: bool = True,
-        key: str = None,
-        **kwargs
-    ) -> Union[List[str], Dict[str, Any], str]:
-        """
-        Process data through memory, optionally storing it and retrieving
-        relevant items based on a query.
-        
-        Args:
-            data: Data to process (can be a list, dict, or string)
-            query: Optional query to filter/retrieve relevant memories
-            n: Number of items to return when filtering
-            memory_type: Where to store/retrieve from ('short' or 'long')
-            store: Whether to store the data in memory
-            key: Optional key for storing (generated if not provided)
-            **kwargs: Additional arguments for the model
-            
-        Returns:
-            Processed data, potentially filtered by relevance to query
-        """
-        # Generate a key if not provided
-        if store and key is None:
-            if isinstance(data, str):
-                key = f"mem_{hash(data) & 0xffffffff}"
-            else:
-                key = f"mem_{int(time.time())}_{hash(str(data)) & 0xffffffff}"
-        
-        # Store the data if requested
-        if store:
-            if memory_type == 'short':
-                self.add_short_term(key, data)
-            else:
-                self.add_long_term(key, data)
-        
-        # If there's a query, filter the data by relevance
-        if query and isinstance(data, list):
-            return self._filter_by_relevance(data, query, n, **kwargs)
-        
-        return data
-    
-    def _filter_by_relevance(
-        self, 
-        items: List[Any], 
-        query: str, 
-        n: int = 5,
-        **kwargs
-    ) -> List[Any]:
-        """
-        Filter a list of items by relevance to a query.
-        
-        Args:
-            items: List of items to filter
-            query: Query to compare against
-            n: Maximum number of items to return
-            **kwargs: Additional arguments for the model
-            
-        Returns:
-            List of most relevant items
-        """
-        if not items:
-            return []
-        
-        # For simple string items, we can use the model to score relevance
-        if all(isinstance(item, str) for item in items):
-            # Prepare the prompt for relevance scoring
-            prompt = str({
-                "task": "Rank these items by relevance to the query and return the top N most relevant items.",
-                "query": query,
-                "items": items,
-                "n": n,
-                "format": "Return a JSON array of the most relevant items in order of relevance."
-            })
-            
-            try:
-                # Get relevance scores from model
-                result = self.model.forward(prompt, **kwargs)
-                
-                # Parse the result - expecting a JSON array
-                import re
-                json_match = re.search(r'\[.*\]', result, re.DOTALL)
-                if json_match:
-                    try:
-                        relevant_items = json.loads(json_match.group(0))
-                        # Ensure we only return items that were in the original list
-                        return [item for item in relevant_items if item in items][:n]
-                    except json.JSONDecodeError:
-                        pass
-            except Exception as e:
-                c.print(f"Error in relevance filtering: {e}", color="red")
-        
-        # Fallback: return first n items
-        return items[:n]
-    
-    def _clean_expired_short_term(self) -> int:
-        """
-        Remove expired items from short-term memory.
-        
-        Returns:
-            Number of items removed
-        """
-        now = time.time()
-        expired_keys = [
-            key for key, value in self.short_term.items()
-            if now > value['timestamp'] + value['ttl']
-        ]
-        
-        for key in expired_keys:
-            del self.short_term[key]
-            
-        return len(expired_keys)
-    
-    def _evict_short_term(self) -> None:
-        """
-        Evict items from short-term memory when capacity is reached.
-        Uses LRU (Least Recently Used) strategy.
-        """
-        if not self.short_term:
-            return
-            
-        # Find oldest item by timestamp
-        oldest_key = min(
-            self.short_term.keys(),
-            key=lambda k: self.short_term[k]['timestamp']
-        )
-        
-        # Remove it
-        del self.short_term[oldest_key]
-    
-    def _sanitize_key(self, key: str) -> str:
-        """
-        Sanitize a key for use as a filename.
-        
-        Args:
-            key: Key to sanitize
-            
-        Returns:
-            Sanitized key
-        """
-        # Replace invalid filename characters
-        import re
-        return re.sub(r'[^\w\-\.]', '_', str(key))
-    
-    def search_long_term(
-        self, 
-        query: str, 
-        n: int = 5,
-        **kwargs
-    ) -> List[Dict[str, Any]]:
-        """
-        Search long-term memory for relevant items.
+        Search memories using hierarchical search with the model.
         
         Args:
             query: Search query
-            n: Maximum number of items to return
-            **kwargs: Additional arguments for the model
-            
-        Returns:
-            List of relevant memory items with metadata
-        """
-        # Get all long-term memories
-        memories = []
-        try:
-            files = os.listdir(self.long_term_path)
-            for filename in files:
-                if filename.endswith('.json'):
-                    file_path = os.path.join(self.long_term_path, filename)
-                    try:
-                        with open(file_path, 'r') as f:
-                            memory_data = json.load(f)
-                            memories.append({
-                                'key': os.path.splitext(filename)[0],
-                                'data': memory_data['data'],
-                                'timestamp': memory_data['timestamp'],
-                                'metadata': memory_data.get('metadata', {})
-                            })
-                    except Exception:
-                        continue
-        except Exception as e:
-            c.print(f"Error searching long-term memory: {e}", color="red")
-            return []
-        
-        if not memories:
-            return []
-            
-        # Use the model to rank memories by relevance
-        memory_texts = [
-            f"Memory {i}: {str(mem['data'])[:500]}" 
-            for i, mem in enumerate(memories)
-        ]
-        
-        prompt = str({
-            "task": "Rank these memory items by relevance to the query and return the indices of the top N most relevant items in order.",
-            "query": query,
-            "memory_items": memory_texts,
-            "n": n,
-            "format": "Return a JSON array of indices, e.g. [2, 5, 0]"
-        })
-        
-        try:
-            result = self.model.forward(prompt, **kwargs)
-            
-            # Parse the result - expecting a JSON array of indices
-            import re
-            json_match = re.search(r'\[.*\]', result, re.DOTALL)
-            if json_match:
-                try:
-                    indices = json.loads(json_match.group(0))
-                    # Return the memories in order of relevance
-                    return [memories[i] for i in indices if i < len(memories)]
-                except (json.JSONDecodeError, TypeError, IndexError):
-                    pass
-        except Exception as e:
-            c.print(f"Error in relevance ranking: {e}", color="red")
-        
-        # Fallback: return most recent memories
-        memories.sort(key=lambda x: x['timestamp'], reverse=True)
-        return memories[:n]
-    
-    def summarize_memories(
-        self, 
-        query: Optional[str] = None, 
-        memory_type: str = 'all',
-        **kwargs
-    ) -> str:
-        """
-        Generate a summary of relevant memories.
-        
-        Args:
-            query: Optional query to filter relevant memories
-            memory_type: Type of memories to summarize ('short', 'long', or 'all')
-            **kwargs: Additional arguments for the model
-            
-        Returns:
-            Summary text
+            n: Number of results to return
+            memory_type: 'short', 'long', or 'all'
         """
         memories = []
         
-        # Collect short-term memories if requested
+        # Collect memories based on type
         if memory_type in ['short', 'all']:
-            self._clean_expired_short_term()
-            for key, value in self.short_term.items():
+            for key, memory in self.short_term_memory.items():
                 memories.append({
                     'key': key,
-                    'data': value['data'],
-                    'source': 'short_term',
-                    'timestamp': value['timestamp']
+                    'content': memory['content'],
+                    'type': 'short',
+                    'timestamp': memory['timestamp']
                 })
         
-        # Collect long-term memories if requested
         if memory_type in ['long', 'all']:
-            long_term_memories = self.search_long_term(
-                query if query else "recent important information", 
-                n=10,
-                **kwargs
-            )
-            for mem in long_term_memories:
-                memories.append({
-                    'key': mem['key'],
-                    'data': mem['data'],
-                    'source': 'long_term',
-                    'timestamp': mem['timestamp']
-                })
+            long_term_keys = self.store.ls('long_term/')
+            for key in long_term_keys:
+                memory = self.store.get(key)
+                if memory:
+                    memories.append({
+                        'key': key.replace('long_term/', ''),
+                        'content': memory['content'],
+                        'type': 'long',
+                        'timestamp': memory['timestamp']
+                    })
         
         if not memories:
-            return "No memories available."
+            return []
         
-        # Sort by timestamp (newest first)
-        memories.sort(key=lambda x: x['timestamp'], reverse=True)
+        # Use model for hierarchical relevance scoring
+        prompt = f"""
+        Given the search query, rank these memories by relevance.
+        Return the indices of the {n} most relevant memories in order of relevance.
         
-        # Filter by relevance if query provided
-        if query:
-            memory_texts = [
-                f"Memory {i} ({mem['source']}): {str(mem['data'])[:500]}" 
-                for i, mem in enumerate(memories)
-            ]
-            
-            prompt = str({
-                "task": "Filter these memory items by relevance to the query and return the indices of relevant items.",
-                "query": query,
-                "memory_items": memory_texts,
-                "format": "Return a JSON array of indices, e.g. [2, 5, 0]"
-            })
-            
-            try:
-                result = self.model.forward(prompt, **kwargs)
-                
-                # Parse the result
-                import re
-                json_match = re.search(r'\[.*\]', result, re.DOTALL)
-                if json_match:
-                    try:
-                        indices = json.loads(json_match.group(0))
-                        memories = [memories[i] for i in indices if i < len(memories)]
-                    except (json.JSONDecodeError, TypeError, IndexError):
-                        pass
-            except Exception:
-                pass
+        Query: {query}
         
-        # Generate summary
-        memory_texts = [
-            f"Memory {i+1} ({mem['source']}): {str(mem['data'])}" 
-            for i, mem in enumerate(memories)
-        ]
+        Memories:
+        """
         
-        prompt = str({
-            "task": "Summarize these memory items into a coherent sum.",
-            "memory_items": memory_texts,
-            "query": query if query else "Summarize recent important information",
-            "format": "Return a concise summary that captures the key information."
-        })
+        for i, mem in enumerate(memories):
+            prompt += f"\n{i}. Key: {mem['key']}, Content: {str(mem['content'])[:200]}..."
+        
+        prompt += f"\n\nReturn ONLY a JSON list of the {n} most relevant memory indices: [index1, index2, ...]\n"
         
         try:
-            summary = self.model.forward(prompt, **kwargs)
-            return summary
+            response = self.model.forward(prompt, temperature=0.3)
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\[.*?\]', response)
+            if json_match:
+                indices = json.loads(json_match.group())
+                # Return the selected memories
+                return [memories[i] for i in indices if i < len(memories)][:n]
         except Exception as e:
-            return f"Error generating summary: {e}"
-
+            c.print(f"Error in hierarchical search: {e}", color='yellow')
+            # Fallback to simple sorting by timestamp
+            memories.sort(key=lambda x: x['timestamp'], reverse=True)
+            return memories[:n]
     
+    def summarize_memories(self, query: Optional[str] = None, memory_type: str = 'all') -> str:
+        """
+        Generate a summary of memories, optionally filtered by query.
+        """
+        if query:
+            memories = self.search_memories(query, n=10, memory_type=memory_type)
+        else:
+            memories = self.search_memories('', n=20, memory_type=memory_type)
+        
+        if not memories:
+            return "No memories found."
+        
+        prompt = "Summarize these memories into a coherent overview:\n\n"
+        for mem in memories:
+            prompt += f"- {mem['key']}: {str(mem['content'])[:200]}...\n"
+        
+        prompt += "\nProvide a concise summary:"
+        
+        summary = self.model.forward(prompt, temperature=0.5)
+        return summary
+    
+    def clear_short_term(self) -> Dict[str, Any]:
+        """
+        Clear all short-term memories.
+        """
+        count = len(self.short_term_memory)
+        self.short_term_memory.clear()
+        self.memory_timestamps.clear()
+        return {'success': True, 'cleared': count}
+    
+    def migrate_to_long_term(self, key: str) -> Dict[str, Any]:
+        """
+        Move a memory from short-term to long-term storage.
+        """
+        if key in self.short_term_memory:
+            memory = self.short_term_memory[key]
+            self.store.put(f'long_term/{key}', memory)
+            del self.short_term_memory[key]
+            del self.memory_timestamps[key]
+            return {'success': True, 'key': key, 'migrated': True}
+        return {'success': False, 'error': 'Memory not found in short-term storage'}
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about memory usage.
+        """
+        short_term_count = len(self.short_term_memory)
+        short_term_chars = sum(len(str(m['content'])) for m in self.short_term_memory.values())
+        long_term_count = len(self.store.ls('long_term/'))
+        
+        return {
+            'short_term': {
+                'count': short_term_count,
+                'characters': short_term_chars,
+                'capacity': self.short_term_chars,
+                'usage_percent': (short_term_chars / self.short_term_chars) * 100
+            },
+            'long_term': {
+                'count': long_term_count
+            }
+        }
+    
+    def forward(self, action: str = 'search', **kwargs) -> Any:
+        """
+        Main interface for the memory module.
+        
+        Actions:
+        - add: Add a memory (requires: key, content, memory_type)
+        - get: Get a specific memory (requires: key, memory_type)
+        - search: Search memories (requires: query, n, memory_type)
+        - summarize: Summarize memories (optional: query, memory_type)
+        - stats: Get memory statistics
+        - clear: Clear short-term memory
+        - migrate: Migrate memory to long-term (requires: key)
+        """
+        if action == 'add':
+            return self.add_memory(**kwargs)
+        elif action == 'get':
+            return self.get_memory(**kwargs)
+        elif action == 'search':
+            return self.search_memories(**kwargs)
+        elif action == 'summarize':
+            return self.summarize_memories(**kwargs)
+        elif action == 'stats':
+            return self.get_memory_stats()
+        elif action == 'clear':
+            return self.clear_short_term()
+        elif action == 'migrate':
+            return self.migrate_to_long_term(**kwargs)
+        else:
+            return {'error': f'Unknown action: {action}'}

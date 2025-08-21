@@ -21,7 +21,7 @@ class SelectFiles:
     def forward(self,  
               path: Union[List[str], Dict[Any, str]] = './',  
               query: str = 'most relevant', 
-              n: int = 3, 
+              n: int = 10, 
               mod=None,
               content: bool = True,
                **kwargs) -> List[str]:
@@ -34,7 +34,7 @@ class SelectFiles:
             n=n,
             **kwargs
         )
-        results =  [os.path.expanduser(option[1]) for option in results]
+        results =  [os.path.expanduser(file) for file in results]
         if content:
             results = {f:self.get_text(f) for f in results}
         return results

@@ -72,7 +72,7 @@ class SelectFiles:
             - IT NEEDS TO BE JSON
         """
         anchors = ["<START_JSON>", "</END_JSON>"]
-        output_format = f"{anchors[0]}(data:LIST(DICT(idx:INT, score:INT)))){anchors[1]}"
+        output_format = f"{anchors[0]}(data:LIST(LIST(idx:INT, score:INT)))){anchors[1]}"
 
         prompt = f"""
             --PARAMS--
@@ -111,6 +111,7 @@ class SelectFiles:
                 json_str = output
             if verbose:
                 print("\nParsing response...", color="cyan")
+            print(f"Raw output: {json_str}", color="red")
             result = json.loads(json_str)
 
         except json.JSONDecodeError as e:
@@ -126,10 +127,10 @@ class SelectFiles:
         if isinstance(result, list):
             result = {"data": result}
         for item in result["data"]:
-            if isinstance(item, dict) and "idx" in item and "score" in item:
-                idx, score = item["idx"], item["score"]
+            if isinstance(item, list) and len(item) == 2:
+                idx, score = item
                 if score >= threshold and idx in idx2options:
-                    filtered_options.append((idx, idx2options[idx]))         
+                    filtered_options.append( idx2options[idx])         
         if verbose:
             print(f"Found {filtered_options} relevant options", color="green")
         # Allow user to select files by index if requested
